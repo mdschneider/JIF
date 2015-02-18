@@ -46,6 +46,8 @@ class GalSimGalParams(object):
             self.e = 0.3
             self.beta = np.pi/4.
             self.n_params = 4
+        elif galaxy_model == "Spergel":
+            raise NotImplementedError()
         elif galaxy_model == "Sersic":
             self.gal_flux = 1.e5
             self.n = 3.4
@@ -64,12 +66,28 @@ class GalSimGalParams(object):
             self.e_disk = 0.25
             self.beta_bulge = np.pi/4.
             self.beta_disk = 3. * np.pi/4.
-            self.n_params = 10          
+            self.n_params = 10
         else:
             raise AttributeError("Unimplemented galaxy model")
 
     def num_params(self):
         return self.n_params
+
+    def get_params(self):
+        """
+        Return an array of parameter values.
+        """
+        if self.galaxy_model == "Gaussian":
+            return np.array([self.gal_flux, self.gal_sigma, self.e, self.beta])
+        elif self.galaxy_model == "Spergel":
+            raise NotImplementedError()
+        elif self.galaxy_model == "Sersic":
+            return np.array([self.gal_flux, self.n, self.hlr, self.e, self.beta])
+        elif self.galaxy_model == "BulgeDisk":
+            return np.array([self.gal_flux, self.bulge_n, self.disk_n, self.bulge_re, self.disk_r0, 
+            self.bulge_frac, self.e_bulge, self.e_disk, self.beta_bulge, self.beta_disk])
+        else:
+            raise AttributeError("Unimplemented galaxy model")
 
 
 class GalSimGalaxyModel(object):
@@ -106,6 +124,12 @@ class GalSimGalaxyModel(object):
         """
         return NotImplementedError()
 
+    def get_params(self):
+        """
+        Return a list of model parameter values.
+        """
+        return self.params.get_params()
+
     def get_psf(self):
         lam_over_diam = self.wavelength / self.primary_diam_meters
         lam_over_diam *= 206265. # arcsec
@@ -121,7 +145,9 @@ class GalSimGalaxyModel(object):
         if self.galaxy_model == "Gaussian":
             gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
             gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
-            gal = gal.shear(gal_shape)            
+            gal = gal.shear(gal_shape)
+        elif self.galaxy_model == "Spergel":
+            raise NotImplementedError()
         elif self.galaxy_model == "Sersic":
             gal = galsim.Sersic(n=self.params.n, half_light_radius=self.params.hlr,
                 flux=self.params.gal_flux)
@@ -149,6 +175,7 @@ class GalSimGalaxyModel(object):
         return None
 
     def plot_image(self, file_name, ngrid=None):
+        import matplotlib.pyplot as plt
         if ngrid is not None:
             out_image = galsim.Image(ngrid, ngrid)
         else:
@@ -166,3 +193,36 @@ class GalSimGalaxyModel(object):
         print 'HSM reports that the image has observed shape and size:'
         print '    e1 = %.3f, e2 = %.3f, sigma = %.3f (pixels)' % (results.observed_shape.e1,
                     results.observed_shape.e2, results.moments_sigma)
+
+
+def make_test_images():
+    """
+    Use the GalSimGalaxyModel class to make test images of a galaxy for LSST and WFIRST.
+    """
+    import h5py
+
+    print "Making test images for LSST and WFIRST"
+    lsst = GalSimGalaxyModel(pixel_scale=0.2, noise=lsst_noise(82357), galaxy_model="Sersic",
+        wavelength=500.e-9, primary_diam_meters=8.4, atmosphere=True)
+    lsst.save_image("test_lsst_image.fits")
+    lsst.plot_image("test_lsst_image.png", ngrid=64)
+
+    wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357), galaxy_model="Sersic",
+        wavelength=1.e-6, primary_diam_meters=2.4, atmosphere=False)
+    wfirst.save_image("test_wfirst_image.fits")
+    wfirst.plot_image("test_wfirst_image.png", ngrid=64)
+
+    lsst_data = lsst.get_image(galsim.Image(64, 64), add_noise=True).array
+    wfirst_data = wfirst.get_image(galsim.Image(64, 64), add_noise=True).array
+
+    ### Save a file with joint image data for input to the Roaster
+    f = h5py.File('test_image_data.h5', 'w')
+    cutout = f.create_group("cutout")
+    dat1 = cutout.create_dataset('image1', data=lsst_data)
+    dat2 = cutout.create_dataset('image2', data=wfirst_data)
+    f.close()
+
+
+if __name__ == "__main__":
+    make_test_images()
+

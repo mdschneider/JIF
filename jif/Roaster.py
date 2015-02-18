@@ -13,6 +13,7 @@ import numpy as np
 import h5py
 import emcee
 import galsim_galaxy
+import galsim
 
 import logging
 
@@ -34,20 +35,20 @@ class EmptyPrior(object):
 
 
 class Roaster(object):
-	"""
-	Draw samples of source model parameters via MCMC.
-	"""
-	def __init__(self, pix_noise_var, src_model=None, lnprior_omega=None):
-		self.pix_noise_var = pix_noise_var
-		self.src_model = src_model
-		if lnprior_omega is None:
-			self.lnprior_omega = EmptyPrior()
-		else:
-			self.lnprior_omega = lnprior_omega
-	
-	def Load(self, infiles):
-		"""
-		Load image cutouts from files.
+    """
+    Draw samples of source model parameters via MCMC.
+    """
+    def __init__(self, pix_noise_var, src_model=None, lnprior_omega=None):
+        self.pix_noise_var = pix_noise_var
+        self.src_model = src_model
+        if lnprior_omega is None:
+            self.lnprior_omega = EmptyPrior()
+        else:
+            self.lnprior_omega = lnprior_omega
+    
+    def Load(self, infiles):
+        """
+        Load image cutouts from files.
 
         The input file should contain: 
             1. Pixel data for a cutout of N galaxies
@@ -62,26 +63,27 @@ class Roaster(object):
             2. centroid position (x,y)
             3. flux
 
-		@param infiles 	List of input filenames to load.
-		"""
-		### TODO: set self.nx, self.ny from input data pixel grid dimensions
-		pass
+        @param infiles  List of input filenames to load.
+        """
+        ### TODO: ingest test image file produced by galsim_galaxy script
+        ### TODO: set self.nx, self.ny from input data pixel grid dimensions
+        raise NotImplementedError()
 
-	def lnprior(self, omega):
-		return NotImplementedError()
+    def lnprior(self, omega):
+        return NotImplementedError()
 
-	def lnlike(self, omega, *args, **kwargs):
+    def lnlike(self, omega, *args, **kwargs):
         """
         Evaluate the log-likelihood function for joint pixel data for all 
         galaxies in a blended group given all available imaging and epochs.
         """
-		self.gal_model.set_params(omega)
-		out_image = galsim.Image(self.nx, self.ny)
-		model = self.src_model.get_image(out_image).array
-		return -0.5 * np.sum((self.data - model) ** 2) / self.pix_noise_var
+        self.src_model.set_params(omega)
+        out_image = galsim.Image(self.nx, self.ny)
+        model = self.src_model.get_image(out_image).array
+        return -0.5 * np.sum((self.data - model) ** 2) / self.pix_noise_var
 
-	def __call__(self, omega, *args, **kwargs):
-		return self.lnlike(omega, *args, **kwargs) + self.lnprior(omega)
+    def __call__(self, omega, *args, **kwargs):
+        return self.lnlike(omega, *args, **kwargs) + self.lnprior(omega)
 
 # ---------------------------------------------------------------------------------------
 # MCMC routines
@@ -91,7 +93,7 @@ def walker_ball(omega, spread, nwalkers):
 
 
 def do_sampling(args, roaster):
-    omega_interim = roaster.model.get_params()
+    omega_interim = roaster.src_model.get_params()
 
     nvars = len(omega_interim)
     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
@@ -162,11 +164,11 @@ def main():
 
     logging.debug('--- Roaster started')
 
-    pix_noise_var = galsim_galaxy.wfirst_noise(-1)
-
+    noise_model = galsim_galaxy.wfirst_noise(-1)
+    pix_noise_var = noise_model.getVariance()
 
     roaster = Roaster(pix_noise_var=pix_noise_var, 
-    	src_model=galsim_galaxy.GalSimGalaxyModel())
+        src_model=galsim_galaxy.GalSimGalaxyModel(noise=noise_model))
     roaster.Load(args.infiles)
 
     do_sampling(args, roaster)
