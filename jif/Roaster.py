@@ -21,7 +21,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 # Print log messages to file:
-#logging.basicConfig(filename='log_Roaster.py.txt',
+#logging.basicConfig(filename='logs/Roaster.log',
 #                     level=logging.DEBUG,
 #                     format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -47,7 +47,20 @@ class Roaster(object):
 	
 	def Load(self, infiles):
 		"""
-		Load image cutouts from files
+		Load image cutouts from files.
+
+        The input file should contain: 
+            1. Pixel data for a cutout of N galaxies
+            2. A segmentation mask for the cutout
+            3. The pixel noise model (e.g., variance per pixel)
+            4. The WCS information for the image
+            5. Background model(s)
+        This information should be replicated for each epoch and/or instrument.
+
+        Each source in a blend group should contain information on:
+            1. a, b, theta (ellipticity semi-major and semi-minor axes, orientation angle)
+            2. centroid position (x,y)
+            3. flux
 
 		@param infiles 	List of input filenames to load.
 		"""
@@ -58,6 +71,10 @@ class Roaster(object):
 		return NotImplementedError()
 
 	def lnlike(self, omega, *args, **kwargs):
+        """
+        Evaluate the log-likelihood function for joint pixel data for all 
+        galaxies in a blended group given all available imaging and epochs.
+        """
 		self.gal_model.set_params(omega)
 		out_image = galsim.Image(self.nx, self.ny)
 		model = self.src_model.get_image(out_image).array
@@ -124,7 +141,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Draw interim samples of source model parameters via MCMC.')
     parser.add_argument("infiles",
-                        help="input image files to reap", nargs='+')    
+                        help="input image files to roast", nargs='+')    
     parser.add_argument("-o", "--outfile", default="../output/roasting/roaster_out.h5",
                         help="output HDF5 to record posterior samples and loglikes."
                              +"(Default: `out.h5`)")
@@ -143,7 +160,7 @@ def main():
     args = parser.parse_args()
     np.random.seed(args.seed)
 
-    logging.debug('Roaster started')
+    logging.debug('--- Roaster started')
 
     pix_noise_var = galsim_galaxy.wfirst_noise(-1)
 
@@ -154,7 +171,7 @@ def main():
 
     do_sampling(args, roaster)
 
-    logging.debug('Roaster finished')
+    logging.debug('--- Roaster finished')
     return 0
 
 
