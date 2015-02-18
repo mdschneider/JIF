@@ -215,12 +215,30 @@ def make_test_images():
     lsst_data = lsst.get_image(galsim.Image(64, 64), add_noise=True).array
     wfirst_data = wfirst.get_image(galsim.Image(64, 64), add_noise=True).array
 
+    # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster
     f = h5py.File('test_image_data.h5', 'w')
-    cutout = f.create_group("cutout")
-    dat1 = cutout.create_dataset('image1', data=lsst_data)
-    dat2 = cutout.create_dataset('image2', data=wfirst_data)
+
+    ### Instrument/epoch 1
+    cutout1 = f.create_group("cutout1")
+    dat1 = cutout1.create_dataset('pixel_data', data=lsst_data)
+    ### TODO: Add segmentation mask
+    noise1 = cutout1.create_dataset('noise_model', data=lsst.noise.getVariance())
+    ### TODO: add WCS information
+    ### TODO: add background model(s)
+    cutout1.attrs['instrument'] = 'LSST'   
+
+    ### Instrument/epoch 2
+    cutout2 = f.create_group("cutout2")
+    dat2 = cutout2.create_dataset('pixel_data', data=wfirst_data)
+    ### TODO: Add segmentation mask
+    noise2 = cutout2.create_dataset('noise_model', data=wfirst.noise.getVariance())
+    ### TODO: add WCS information
+    ### TODO: add background model(s)
+    cutout2.attrs['instrument'] = 'WFIRST'
+
     f.close()
+    # -------------------------------------------------------------------------    
 
 
 if __name__ == "__main__":

@@ -37,18 +37,21 @@ class EmptyPrior(object):
 class Roaster(object):
     """
     Draw samples of source model parameters via MCMC.
+
+    @param data_format  Format for the input data file.
     """
-    def __init__(self, pix_noise_var, src_model=None, lnprior_omega=None):
-        self.pix_noise_var = pix_noise_var
+    def __init__(self, src_model=None, lnprior_omega=None, 
+                 data_format='test_galsim_galaxy'):
         self.src_model = src_model
         if lnprior_omega is None:
             self.lnprior_omega = EmptyPrior()
         else:
             self.lnprior_omega = lnprior_omega
+        self.data_format = data_format
     
-    def Load(self, infiles):
+    def Load(self, infile):
         """
-        Load image cutouts from files.
+        Load image cutouts from file.
 
         The input file should contain: 
             1. Pixel data for a cutout of N galaxies
@@ -62,15 +65,32 @@ class Roaster(object):
             1. a, b, theta (ellipticity semi-major and semi-minor axes, orientation angle)
             2. centroid position (x,y)
             3. flux
+        These values will be used to initialize any model-fitting (e.g., MCMC) algorithm.
 
         @param infiles  List of input filenames to load.
         """
         ### TODO: ingest test image file produced by galsim_galaxy script
         ### TODO: set self.nx, self.ny from input data pixel grid dimensions
-        raise NotImplementedError()
+        logging.info("<Roaster> Loading image data")
+        if self.data_format == "test_galsim_galaxy":
+            f = h5py.File(infile, 'r')
+            num_cutouts = len(f)
+            self.pix_data = []
+            self.pix_noise_var = []
+            self.instruments = []
+            for icutout in xrange(num_cutouts):
+                cutout = f['cutout%d' % (icutout+1)]
+                self.pix_data.append(cutout['pixel_data'])
+                self.pix_noise_var.append(cutout['noise_model'])
+                self.instruments.append(cutout.attrs['instrument'])
+            f.close()
+            print "Have data for instruments:", self.instruments
+        else:
+            raise AttributeError("Unsupported input data format to Roaster")
+        logging.debug("<Roaster> Finished loading data")
 
     def lnprior(self, omega):
-        return NotImplementedError()
+        return self.lnprior_omega(omega)
 
     def lnlike(self, omega, *args, **kwargs):
         """
@@ -167,9 +187,8 @@ def main():
     noise_model = galsim_galaxy.wfirst_noise(-1)
     pix_noise_var = noise_model.getVariance()
 
-    roaster = Roaster(pix_noise_var=pix_noise_var, 
-        src_model=galsim_galaxy.GalSimGalaxyModel(noise=noise_model))
-    roaster.Load(args.infiles)
+    roaster = Roaster(src_model=galsim_galaxy.GalSimGalaxyModel(noise=noise_model))
+    roaster.Load(args.infiles[0])
 
     do_sampling(args, roaster)
 
