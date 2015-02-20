@@ -6,7 +6,7 @@ This is currently some rough code with the objective of taking an image and gene
 Harvesting is basically the reduction proceedure performed by the DM stack pipeline (or similarly Source Extractor). The important output being:
 
 * A catalog of objects with basic properties (location, flux, size, etc.)
-* A segmentation map (to determine groups; CHECKIMAGE_TYPE SEGMENTATION option of sextractor)
+* A segmentation map (to determine groups; CHECKIMAGE_TYPE SEGMENTATION option of sextractor), actually note that the Sextractor segmentation image will not work since it already breaks appart blended objects. Thus we will need to make our own segementation image.
 * A background map (CHECKIMAGE_TYPE BACKGROUND option of sextractor)
 * A noise map (CHECKIMAGE_TYPE BACKGROUND_RMS option of sextractor)
 * A background subtracted image (CHECKIMAGE_TYPE -BACKGROUND option of sextractor)
@@ -48,4 +48,7 @@ So I think what I will do is:
 Since the current objective is to quickly hack together something so that the Roaster can be tested, the following is a to do list where action items are meant to ultimately remedy the shortcuts taken.
 
 - [ ] 
+
+# Detailed Analysis Notes
+Used convolveHST.py to make '../../TestData/cl0916_f814w_drz_sci_convolved.fits'
 
