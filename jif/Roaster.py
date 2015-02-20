@@ -38,16 +38,28 @@ class Roaster(object):
     """
     Draw samples of source model parameters via MCMC.
 
+    We allow for 2 types of multiplicity in the data:
+        (a) Multiple epochs or instruments observing the same source
+        (b) Multiple sources in a single 'cutout' (e.g., for blended sources)
+    For scenario (a), the likelihood is a product of the likelihoods for each epoch or instrument.
+    For scenario (b), we need a list of source models that generate a model image that is 
+    fed to the likelihood function for a single epoch or instrument.
+
+    @param src_models   List of models for sources in an image
     @param data_format  Format for the input data file.
+    @param debug        Save debugging outputs (including model images per step?)
     """
-    def __init__(self, src_model=None, lnprior_omega=None, 
-                 data_format='test_galsim_galaxy'):
-        self.src_model = src_model
+    def __init__(self, lnprior_omega=None, 
+                 data_format='test_galsim_galaxy', debug=False):
         if lnprior_omega is None:
             self.lnprior_omega = EmptyPrior()
         else:
             self.lnprior_omega = lnprior_omega
         self.data_format = data_format
+        self.debug = debug
+
+        ### Count the number of calls to self.lnlike
+        self.istep = 0
     
     def Load(self, infile):
         """
@@ -69,25 +81,54 @@ class Roaster(object):
 
         @param infiles  List of input filenames to load.
         """
-        ### TODO: ingest test image file produced by galsim_galaxy script
         ### TODO: set self.nx, self.ny from input data pixel grid dimensions
         logging.info("<Roaster> Loading image data")
         if self.data_format == "test_galsim_galaxy":
             f = h5py.File(infile, 'r')
-            num_cutouts = len(f)
+            self.num_epochs = len(f)
+            self.num_sources = f.attrs['num_sources']
+
             self.pix_data = []
             self.pix_noise_var = []
             self.instruments = []
-            for icutout in xrange(num_cutouts):
-                cutout = f['cutout%d' % (icutout+1)]
-                self.pix_data.append(cutout['pixel_data'])
+            pixel_scales = []
+            wavelengths = []
+            primary_diams = []
+            atmospheres = []
+            for i in xrange(self.num_epochs):
+                cutout = f['cutout%d' % (i+1)]
+                self.pix_data.append(np.array(cutout['pixel_data']))
                 self.pix_noise_var.append(cutout['noise_model'])
                 self.instruments.append(cutout.attrs['instrument'])
-            f.close()
+                pixel_scales.append(cutout.attrs['pixel_scale'])
+                wavelengths.append(cutout.attrs['wavelength'])
+                primary_diams.append(cutout.attrs['primary_diam'])
+                atmospheres.append(cutout.attrs['atmosphere'])
             print "Have data for instruments:", self.instruments
         else:
             raise AttributeError("Unsupported input data format to Roaster")
+
+        self.nx = np.zeros(self.num_epochs, dtype=int)
+        self.ny = np.zeros(self.num_epochs, dtype=int)
+        for i, dat in enumerate(self.pix_data):
+            self.nx[i], self.ny[i] = dat.shape
+
+        self.src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="Sersic",
+                                pixel_scale=pixel_scales[iepochs], 
+                                wavelength=wavelengths[iepochs],
+                                primary_diam_meters=primary_diams[iepochs],
+                                atmosphere=atmospheres[iepochs]) 
+                            for iepochs in xrange(self.num_epochs)] 
+                           for isrcs in xrange(self.num_sources)]
+
         logging.debug("<Roaster> Finished loading data")
+        return None
+
+    def get_params(self):
+        """
+        Make a flat array of model parameters for all sources
+        """
+        return np.array([m[0].get_params() for m in self.src_models]).ravel()
 
     def lnprior(self, omega):
         return self.lnprior_omega(omega)
@@ -96,11 +137,34 @@ class Roaster(object):
         """
         Evaluate the log-likelihood function for joint pixel data for all 
         galaxies in a blended group given all available imaging and epochs.
+
+        See GalSim/examples/demo5.py for how to add multiple sources to a single image.
         """
-        self.src_model.set_params(omega)
-        out_image = galsim.Image(self.nx, self.ny)
-        model = self.src_model.get_image(out_image).array
-        return -0.5 * np.sum((self.data - model) ** 2) / self.pix_noise_var
+        self.istep += 1
+        for isrcs in xrange(self.num_sources):
+            for iepochs in xrange(self.num_epochs):
+                ### FIXME: set different parameters for different sources
+                self.src_models[isrcs][iepochs].set_params(omega)
+        lnlike = 0.0
+        for iepochs in xrange(self.num_epochs):
+            model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs], 
+                scale=self.src_models[0][iepochs].pixel_scale)
+
+            for isrcs in xrange(self.num_sources):
+                ### Draw every source using the full output array
+                b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
+                sub_image = model_image[b]
+                model = self.src_models[isrcs][iepochs].get_image(sub_image)
+
+            if self.debug:
+                model_image_file_name = os.path.join('debug', 
+                    'model_image_iepoch%d_istep%d.fits' % (iepochs, self.istep))
+                model_image.write(model_image_file_name)
+                logging.debug('Wrote image to %r', model_image_file_name)
+
+            lnlike += (-0.5 * np.sum((self.pix_data[iepochs] - model_image.array) ** 2) / 
+                self.pix_noise_var[iepochs])
+        return lnlike
 
     def __call__(self, omega, *args, **kwargs):
         return self.lnlike(omega, *args, **kwargs) + self.lnprior(omega)
@@ -113,7 +177,7 @@ def walker_ball(omega, spread, nwalkers):
 
 
 def do_sampling(args, roaster):
-    omega_interim = roaster.src_model.get_params()
+    omega_interim = roaster.get_params()
 
     nvars = len(omega_interim)
     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
@@ -177,7 +241,8 @@ def main():
                         help="Number of burn-in steps (Default: 50)")
     parser.add_argument("--nthreads", default=1, type=int,
                         help="Number of threads to use (Default: 8)")
-    parser.add_argument("--quiet", action="store_true")    
+    parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
     np.random.seed(args.seed)
@@ -187,7 +252,7 @@ def main():
     noise_model = galsim_galaxy.wfirst_noise(-1)
     pix_noise_var = noise_model.getVariance()
 
-    roaster = Roaster(src_model=galsim_galaxy.GalSimGalaxyModel(noise=noise_model))
+    roaster = Roaster(debug=args.debug)
     roaster.Load(args.infiles[0])
 
     do_sampling(args, roaster)

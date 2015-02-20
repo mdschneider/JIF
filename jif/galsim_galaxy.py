@@ -97,7 +97,7 @@ class GalSimGalaxyModel(object):
     Mimics GalSim examples/demo1.py
     """
     def __init__(self,
-                 psf_sigma=0.5, 
+                 psf_sigma=0.5, ### Not used
                  pixel_scale=0.2, 
                  noise=None,
                  galaxy_model="Gaussian",
@@ -218,6 +218,7 @@ def make_test_images():
     # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster
     f = h5py.File('test_image_data.h5', 'w')
+    f.attrs['num_sources'] = 1 ### Assert a fixed number of sources for all epochs
 
     ### Instrument/epoch 1
     cutout1 = f.create_group("cutout1")
@@ -226,7 +227,11 @@ def make_test_images():
     noise1 = cutout1.create_dataset('noise_model', data=lsst.noise.getVariance())
     ### TODO: add WCS information
     ### TODO: add background model(s)
-    cutout1.attrs['instrument'] = 'LSST'   
+    cutout1.attrs['instrument'] = 'LSST'
+    cutout1.attrs['pixel_scale'] = 0.2
+    cutout1.attrs['wavelength'] = 500.e-9
+    cutout1.attrs['primary_diam'] = 8.4
+    cutout1.attrs['atmosphere'] = True
 
     ### Instrument/epoch 2
     cutout2 = f.create_group("cutout2")
@@ -236,6 +241,10 @@ def make_test_images():
     ### TODO: add WCS information
     ### TODO: add background model(s)
     cutout2.attrs['instrument'] = 'WFIRST'
+    cutout2.attrs['pixel_scale'] = 0.11
+    cutout2.attrs['wavelength'] = 1.e-6
+    cutout2.attrs['primary_diam'] = 2.4
+    cutout2.attrs['atmosphere'] = False
 
     f.close()
     # -------------------------------------------------------------------------    
