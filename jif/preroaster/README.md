@@ -25,6 +25,24 @@ The basic shelling proceedure is as follows:
 # Current Proceedure
 Since I am just trying to hack together something so that the Harvestor can be tested I will note here exactly what I am doing and where these steps fall short of our ultimate objective.
 
+Ideally I would:
+
+* Run sextractor on both the Subaru and HST image outputting the aformentioned files in the Harvesting section
+* Use the Subaru segmentation fits file to define group membership and postage stamps in both the Subaru and HST data.
+
+There are several reasons I don't want to do this at this stage. 
+
+* At the start I would like to avoid the complexities of using the segmentation map in one image to define it in another image, similarly for the resulting postage stamps.
+* By using the same image for the space and ground (but with the ground convolved with some "seeing") it should provide for an easier initial comparison of the roaster results.
+
+So I think what I will do is:
+
+1. Run Sextractor on the HST F814W image to create the necessary Harvester outputs.
+2. Convolve the HST F814 image with a Gaussian approximating the Subaru seeing (this image will represent a ground based image).
+3. Run Sextractor on this image to generate the necessary Harvester outputs.
+4. Use the "ground" segmentation map to determine groups.
+5. Save the results in two different hdf5 files.
+
 
 #To Do
 Since the current objective is to quickly hack together something so that the Roaster can be tested, the following is a to do list where action items are meant to ultimately remedy the shortcuts taken.
