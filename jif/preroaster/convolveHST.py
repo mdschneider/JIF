@@ -6,8 +6,6 @@ ipython notebook PercolationTheory Exploratory Note.ipynb.
 import pyfits
 from scipy import ndimage
 from scipy.ndimage import measurements, filters
-import skimage
-from skimage import filter
 
 ### Input
 # HST fits image (can be downloaded from http://mercury.physics.ucdavis.edu/JIF/TestData/)
