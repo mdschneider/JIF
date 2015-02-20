@@ -47,8 +47,16 @@ So I think what I will do is:
 #To Do
 Since the current objective is to quickly hack together something so that the Roaster can be tested, the following is a to do list where action items are meant to ultimately remedy the shortcuts taken.
 
-- [ ] 
+- [ ] Determine better way to exclude blank regions around edge from the percolation analysis (currently there in an unflexible hack emplimented).
+- [ ] Modify header of convolved image to include details about the convolution process. 
+- [ ] Come up with a better naming convention for files (especially postage stamps)
 
 # Detailed Analysis Notes
 Used convolveHST.py to make '../../TestData/cl0916_f814w_drz_sci_convolved.fits'
+
+ran the following sextractor commands
+> sex ../../TestData/cl0916_f814w_drz_sci.fits -c HST.sex
+
+> sex ../../TestData/cl0916_f814w_drz_sci_convolved.fits -c HS
+T_convolved.sex
 
