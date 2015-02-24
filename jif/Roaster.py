@@ -130,6 +130,14 @@ class Roaster(object):
         """
         return np.array([m[0].get_params() for m in self.src_models]).ravel()
 
+    def set_params(self, p):
+        for isrcs in xrange(self.num_sources):
+            imin = isrcs * self.num_sources
+            imax = (isrcs + 1) * self.num_sources
+            for iepochs in xrange(self.num_epochs):
+                self.src_models[isrcs][iepochs].set_params(p[imin:imax])
+        return None
+
     def lnprior(self, omega):
         return self.lnprior_omega(omega)
 
@@ -141,10 +149,8 @@ class Roaster(object):
         See GalSim/examples/demo5.py for how to add multiple sources to a single image.
         """
         self.istep += 1
-        for isrcs in xrange(self.num_sources):
-            for iepochs in xrange(self.num_epochs):
-                ### FIXME: set different parameters for different sources
-                self.src_models[isrcs][iepochs].set_params(omega)
+        self.set_params(omega)
+
         lnlike = 0.0
         for iepochs in xrange(self.num_epochs):
             model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs], 
@@ -160,7 +166,7 @@ class Roaster(object):
                 model_image_file_name = os.path.join('debug', 
                     'model_image_iepoch%d_istep%d.fits' % (iepochs, self.istep))
                 model_image.write(model_image_file_name)
-                logging.debug('Wrote image to %r', model_image_file_name)
+                logging.debug('Wrote model image to %r', model_image_file_name)
 
             lnlike += (-0.5 * np.sum((self.pix_data[iepochs] - model_image.array) ** 2) / 
                 self.pix_noise_var[iepochs])
@@ -222,6 +228,7 @@ def write_results(args, pps, lnps):
     f.attrs["nburn"] = args.nburn
     f.close()
     return None
+
 # ---------------------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(
