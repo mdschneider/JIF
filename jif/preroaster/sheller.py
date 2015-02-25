@@ -213,36 +213,35 @@ dt = data_cat0.dtype
 # Determine the rectangular bounds of each of the identified segments
 stamps = measurements.find_objects(img0_seg)
 # Loop through the segements saving associated postage stamps
+print 'Making stamps for segment:'
 for i in range(N_img0_seg):
+    print '{0} of {1}'.format(i+1,N_img0_seg)
     # get the pixel coordinates bounding the local group
     stamp_i = stamps[i]
     
-    # Create datasets for this group
+    # Create groups for this segment
     group_name_s = 'space/observation/sextractor/groups/'+str(i)
     group_name_g = 'ground/observation/sextractor/groups/'+str(i)
     
+    s_obs_sex_grp_i = f.create_group(group_name_s)    
+    g_obs_sex_grp_i = f.create_group(group_name_g)
+    
     # Ground Datasets
     # Create the image-background dataset
-    dsname = group_name_g+'image'
-    f.create_dataset(dsname, data=data_img0_minback[stamp_i])
+    g_obs_sex_grp_i.create_dataset('image', data=data_img0_minback[stamp_i])
     # Create the rms noise dataset
-    dsname = group_name_g+'noise'
-    f.create_dataset(dsname, data=data_img0_rms[stamp_i])
+    g_obs_sex_grp_i.create_dataset('noise', data=data_img0_rms[stamp_i])
     # Create the local group segment mask dataset
-    dsname = group_name_g+'segmask'
-    f.create_dataset(dsname, data=mask_img0[stamp_i])
+    g_obs_sex_grp_i.create_dataset('segmask', data=mask_img0[stamp_i])
     
     # Space Datasets
     # Create the image-background dataset
-    dsname = group_name_s+'image'
-    f.create_dataset(dsname, data=data_img1_minback[stamp_i])
+    s_obs_sex_grp_i.create_dataset('image', data=data_img1_minback[stamp_i])
     # Create the rms noise dataset
-    dsname = group_name_s+'noise'
-    f.create_dataset(dsname, data=data_img1_rms[stamp_i])
+    s_obs_sex_grp_i.create_dataset('noise', data=data_img1_rms[stamp_i])
     # Create the local group segment mask dataset, 
     # for now just the same as the ground 
-    dsname = group_name_s+'segmask'
-    f.create_dataset(dsname, data=mask_img0[stamp_i])
+    s_obs_sex_grp_i.create_dataset('segmask', data=mask_img0[stamp_i])
     
     # Determine which objects from the sextractor analysis are within the 
     # postage stamp
@@ -263,11 +262,8 @@ for i in range(N_img0_seg):
     # Save the object properties for those objects within the stamp bounds
     # note that this might not work, since the fits table may need to be
     # processed a bit more to get it in the correc format
-    dsname = group_name_g+'stamp_objprops'
-    f.create_dataset(dsname, data = data_cat0[mask_stamp_0])
-    
-    dsname = group_name_s+'stamp_objprops'
-    f.create_dataset(dsname, data = data_cat1[mask_stamp_1])
+    g_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_cat0[mask_stamp_0])
+    s_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_cat1[mask_stamp_1])
     
     # Determine which objects from the sextractor analysis are within the 
     # segmentation region 
@@ -280,15 +276,13 @@ for i in range(N_img0_seg):
                                    numpy.in1d(y_round_1, Y[mask_pixels_seg]))
     N_seg_1 = numpy.sum(mask_seg_1)
 
-    dsname = group_name_g+'seg_objprops'
     # create a compound dataset with the column labels and dtypes
     # note that some of this may not be necessary since the data_cat0 is a
     # recarray, thus we might be able to just plug it in the create_dataset
-    ds_temp = f.create_dataset(dsname, (N_seg_0,), dtype = dt)
+    ds_temp = g_obs_sex_grp_i.create_dataset('seg_objprops', (N_seg_0,), dtype = dt)
     ds_temp[...] = data_cat0[mask_seg_0]
 
-    dsname = group_name_s+'seg_objprops'
-    ds_temp = f.create_dataset(dsname, (N_seg_1,), dtype = dt)
+    ds_temp = s_obs_sex_grp_i.create_dataset('seg_objprops', (N_seg_1,), dtype = dt)
     ds_temp[...] = data_cat1[mask_seg_1]
 
 f.close()
