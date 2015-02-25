@@ -106,15 +106,19 @@ class GalSimGalaxyModel(object):
                  atmosphere=False): 
         self.psf_sigma = psf_sigma
         self.pixel_scale = pixel_scale
-        if noise is None:
-            noise = galsim.GaussianNoise(sigma=30.)
+        # if noise is None:
+        #     noise = galsim.GaussianNoise(sigma=30.)
         self.noise = noise
         self.galaxy_model = galaxy_model
         self.wavelength = wavelength
         self.primary_diam_meters = primary_diam_meters
         self.atmosphere = atmosphere
 
-        self.params = GalSimGalParams(galaxy_model=galaxy_model)
+        # self.params = GalSimGalParams(galaxy_model=galaxy_model)
+        self.params = np.core.records.array([(1.e5, 3.4, 1.8, 0.3, np.pi/4)],
+            dtype=[('gal_flux', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'),
+                   ('beta', '<f8')])
+        self.n_params = 5
 
     def set_params(self, p):
         """
@@ -128,7 +132,7 @@ class GalSimGalaxyModel(object):
         """
         Return a list of model parameter values.
         """
-        return self.params.get_params()
+        return self.params.view('<f8')
 
     def get_psf(self):
         lam_over_diam = self.wavelength / self.primary_diam_meters
@@ -149,9 +153,9 @@ class GalSimGalaxyModel(object):
         elif self.galaxy_model == "Spergel":
             raise NotImplementedError()
         elif self.galaxy_model == "Sersic":
-            gal = galsim.Sersic(n=self.params.n, half_light_radius=self.params.hlr,
-                flux=self.params.gal_flux)
-            gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
+            gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
+                flux=self.params[0].gal_flux)
+            gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
             gal = gal.shear(gal_shape)            
         elif self.galaxy_model == "BulgeDisk":
             bulge = galsim.Sersic(n=self.params.bulge_n, half_light_radius=self.params.bulge_re)
@@ -166,7 +170,10 @@ class GalSimGalaxyModel(object):
         # wcs = galsim.PixelScale(self.pixel_scale)
         image = final.drawImage(image=out_image, scale=self.pixel_scale)
         if add_noise:
-            image.addNoise(self.noise)
+            if self.noise is not None:
+                image.addNoise(self.noise)
+            else:
+                raise AttributeError("A GalSim noise model must be specified to add noise to an image.")
         return image
 
     def save_image(self, file_name):

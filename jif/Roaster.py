@@ -9,6 +9,7 @@ Draw samples of source model parameters given the pixel data for image cutouts.
 import argparse
 import sys
 import os.path
+import copy
 import numpy as np
 import h5py
 import emcee
@@ -25,6 +26,11 @@ logging.basicConfig(level=logging.DEBUG,
 #logging.basicConfig(filename='logs/Roaster.log',
 #                     level=logging.DEBUG,
 #                     format='%(asctime)s - %(levelname)s - %(message)s')
+
+
+# Store the pixel data as global (module scope) variables so emcee mutlithreading doesn't need to
+# repeatedly pickle these all the time.
+pixel_data = []
 
 
 class EmptyPrior(object):
@@ -45,7 +51,7 @@ class Roaster(object):
     For scenario (b), we need a list of source models that generate a model image that is 
     fed to the likelihood function for a single epoch or instrument.
 
-    @param src_models   List of models for sources in an image
+    @lnprior_omega      Prior class for the galaxy model parameters
     @param data_format  Format for the input data file.
     @param debug        Save debugging outputs (including model images per step?)
     """
@@ -81,14 +87,14 @@ class Roaster(object):
 
         @param infiles  List of input filenames to load.
         """
-        ### TODO: set self.nx, self.ny from input data pixel grid dimensions
+        global pixel_data
         logging.info("<Roaster> Loading image data")
         if self.data_format == "test_galsim_galaxy":
             f = h5py.File(infile, 'r')
-            self.num_epochs = len(f)
+            self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
             self.num_sources = f.attrs['num_sources']
 
-            self.pix_data = []
+            # self.pix_data = []
             self.pix_noise_var = []
             self.instruments = []
             pixel_scales = []
@@ -97,7 +103,12 @@ class Roaster(object):
             atmospheres = []
             for i in xrange(self.num_epochs):
                 cutout = f['cutout%d' % (i+1)]
-                self.pix_data.append(np.array(cutout['pixel_data']))
+                dat = cutout['pixel_data']
+                print i, "dat shape:", dat.shape
+                print "\t", np.array(dat).shape
+                pixel_data.append(np.copy(np.array(dat)))
+                # pixel_data.append(np.core.records.array(np.array(dat), dtype=float, shape=dat.shape))
+                # pixel_data.append(np.array(cutout['pixel_data']))
                 self.pix_noise_var.append(cutout['noise_model'])
                 self.instruments.append(cutout.attrs['instrument'])
                 pixel_scales.append(cutout.attrs['pixel_scale'])
@@ -110,7 +121,8 @@ class Roaster(object):
 
         self.nx = np.zeros(self.num_epochs, dtype=int)
         self.ny = np.zeros(self.num_epochs, dtype=int)
-        for i, dat in enumerate(self.pix_data):
+        for i in xrange(self.num_epochs):
+            dat = f['cutout%d'%(i+1)]['pixel_data']
             self.nx[i], self.ny[i] = dat.shape
 
         self.src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="Sersic",
@@ -122,6 +134,7 @@ class Roaster(object):
                            for isrcs in xrange(self.num_sources)]
 
         logging.debug("<Roaster> Finished loading data")
+        print "\npixel data shapes:", [dat.shape for dat in pixel_data]
         return None
 
     def get_params(self):
@@ -168,7 +181,7 @@ class Roaster(object):
                 model_image.write(model_image_file_name)
                 logging.debug('Wrote model image to %r', model_image_file_name)
 
-            lnlike += (-0.5 * np.sum((self.pix_data[iepochs] - model_image.array) ** 2) / 
+            lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image.array) ** 2) / 
                 self.pix_noise_var[iepochs])
         return lnlike
 
@@ -184,10 +197,12 @@ def walker_ball(omega, spread, nwalkers):
 
 def do_sampling(args, roaster):
     omega_interim = roaster.get_params()
+    print "omega_interim:", omega_interim
 
     nvars = len(omega_interim)
     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
 
+    logging.debug("Initializing parameters for MCMC to yield finite posterior values")
     while not all([np.isfinite(roaster(p)) for p in p0]):
         p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
     sampler = emcee.EnsembleSampler(args.nwalkers,
@@ -195,12 +210,12 @@ def do_sampling(args, roaster):
                                     roaster,
                                     threads=args.nthreads)
     nburn = max([1,args.nburn])
-    print "Burning"
+    logging.info("Burning")
     pp, lnp, rstate = sampler.run_mcmc(p0, nburn)
     sampler.reset()
     pps = []
     lnps = []
-    print "Sampling"
+    logging.info("Sampling")
     for i in range(args.nsamples):
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         if not args.quiet:
@@ -215,7 +230,7 @@ def do_sampling(args, roaster):
 
 
 def write_results(args, pps, lnps):
-    print "<Reaper> Writing MCMC results to %s" % args.outfile
+    logging.info("Writing MCMC results to %s" % args.outfile)
     f = h5py.File(args.outfile, 'w')
     if "post" in f:
         del f["post"]
@@ -237,7 +252,7 @@ def main():
                         help="input image files to roast", nargs='+')    
     parser.add_argument("-o", "--outfile", default="../output/roasting/roaster_out.h5",
                         help="output HDF5 to record posterior samples and loglikes."
-                             +"(Default: `out.h5`)")
+                             +"(Default: `roaster_out.h5`)")
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
     parser.add_argument("--nsamples", default=250, type=int,
@@ -256,11 +271,12 @@ def main():
 
     logging.debug('--- Roaster started')
 
-    noise_model = galsim_galaxy.wfirst_noise(-1)
-    pix_noise_var = noise_model.getVariance()
-
     roaster = Roaster(debug=args.debug)
     roaster.Load(args.infiles[0])
+
+    print "\n", roaster.__dict__, "\n"
+
+    print "\nsource models:",roaster.src_models[0][0].__dict__, "\n"
 
     do_sampling(args, roaster)
 
