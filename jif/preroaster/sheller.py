@@ -262,28 +262,34 @@ for i in range(N_img0_seg):
     # Save the object properties for those objects within the stamp bounds
     # note that this might not work, since the fits table may need to be
     # processed a bit more to get it in the correc format
-    g_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_cat0[mask_stamp_0])
-    s_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_cat1[mask_stamp_1])
+    data_stamp0 = data_cat0[mask_stamp_0]
+    data_stamp1 = data_cat1[mask_stamp_1]
+    g_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_stamp0)
+    s_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_stamp1)
     
     # Determine which objects from the sextractor analysis are within the 
-    # segmentation region 
+    # segmentation region
     mask_pixels_seg = img0_seg == i+1 # identify pixels belonging to i^th seg
-    mask_seg_0 = numpy.logical_and(numpy.in1d(x_round_0, X[mask_pixels_seg]),
-                                   numpy.in1d(y_round_0, Y[mask_pixels_seg]))
+    mask_seg_0 = numpy.logical_and(numpy.in1d(x_round_0[mask_stamp_0],
+                                              X[mask_pixels_seg]),
+                                   numpy.in1d(y_round_0[mask_stamp_0],
+                                              Y[mask_pixels_seg]))
     N_seg_0 = numpy.sum(mask_seg_0)
     
-    mask_seg_1 = numpy.logical_and(numpy.in1d(x_round_1, X[mask_pixels_seg]),
-                                   numpy.in1d(y_round_1, Y[mask_pixels_seg]))
+    mask_seg_1 = numpy.logical_and(numpy.in1d(x_round_1[mask_stamp_1],
+                                              X[mask_pixels_seg]),
+                                   numpy.in1d(y_round_1[mask_stamp_1],
+                                              Y[mask_pixels_seg]))
     N_seg_1 = numpy.sum(mask_seg_1)
 
     # create a compound dataset with the column labels and dtypes
     # note that some of this may not be necessary since the data_cat0 is a
     # recarray, thus we might be able to just plug it in the create_dataset
     ds_temp = g_obs_sex_grp_i.create_dataset('seg_objprops', (N_seg_0,), dtype = dt)
-    ds_temp[...] = data_cat0[mask_seg_0]
+    ds_temp[...] = data_stamp0[mask_seg_0]
 
     ds_temp = s_obs_sex_grp_i.create_dataset('seg_objprops', (N_seg_1,), dtype = dt)
-    ds_temp[...] = data_cat1[mask_seg_1]
+    ds_temp[...] = data_stamp1[mask_seg_1]
 
 f.close()
 
