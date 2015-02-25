@@ -50,6 +50,11 @@ Since the current objective is to quickly hack together something so that the Ro
 - [ ] Determine better way to exclude blank regions around edge from the percolation analysis (currently there in an unflexible hack emplimented).
 - [ ] Modify header of convolved image to include details about the convolution process. 
 - [ ] Come up with a better naming convention for files (especially postage stamps)
+- [ ] Build WCS code to take hdf5 metadata and [build a WCS structure programmatically](http://astropy.readthedocs.org/en/latest/wcs/) since we won't be able to read in a header from a fits file into astropy.wcs
+- [ ] Consider using region references instead of making postage stamp data arrays. [see e.g.](http://docs.h5py.org/en/latest/refs.html)
+- [ ] Save the full field images to the hdf5 data structure. I am currently skipping this step since it will reduce the file size and the roaster only needs postage stamps.
+- [ ] Convert flat fits header info into better hdf5 structure. e.g. turn cd matrix values into and actual array.
+- [ ] Preprocess some of the fits headers rather than just copying them over.
 
 # Detailed Analysis Notes
 Used convolveHST.py to make '../../TestData/cl0916_f814w_drz_sci_convolved.fits'
