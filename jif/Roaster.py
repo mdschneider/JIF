@@ -31,6 +31,7 @@ logging.basicConfig(level=logging.DEBUG,
 # Store the pixel data as global (module scope) variables so emcee mutlithreading doesn't need to
 # repeatedly pickle these all the time.
 pixel_data = []
+src_models = []
 
 
 class EmptyPrior(object):
@@ -88,6 +89,8 @@ class Roaster(object):
         @param infiles  List of input filenames to load.
         """
         global pixel_data
+        global src_models
+
         logging.info("<Roaster> Loading image data")
         if self.data_format == "test_galsim_galaxy":
             f = h5py.File(infile, 'r')
@@ -106,7 +109,7 @@ class Roaster(object):
                 dat = cutout['pixel_data']
                 print i, "dat shape:", dat.shape
                 print "\t", np.array(dat).shape
-                pixel_data.append(np.copy(np.array(dat)))
+                pixel_data.append(np.array(dat))
                 # pixel_data.append(np.core.records.array(np.array(dat), dtype=float, shape=dat.shape))
                 # pixel_data.append(np.array(cutout['pixel_data']))
                 self.pix_noise_var.append(cutout['noise_model'])
@@ -125,7 +128,7 @@ class Roaster(object):
             dat = f['cutout%d'%(i+1)]['pixel_data']
             self.nx[i], self.ny[i] = dat.shape
 
-        self.src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="Sersic",
+        src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="Sersic",
                                 pixel_scale=pixel_scales[iepochs], 
                                 wavelength=wavelengths[iepochs],
                                 primary_diam_meters=primary_diams[iepochs],
@@ -141,14 +144,14 @@ class Roaster(object):
         """
         Make a flat array of model parameters for all sources
         """
-        return np.array([m[0].get_params() for m in self.src_models]).ravel()
+        return np.array([m[0].get_params() for m in src_models]).ravel()
 
     def set_params(self, p):
         for isrcs in xrange(self.num_sources):
             imin = isrcs * self.num_sources
             imax = (isrcs + 1) * self.num_sources
             for iepochs in xrange(self.num_epochs):
-                self.src_models[isrcs][iepochs].set_params(p[imin:imax])
+                src_models[isrcs][iepochs].set_params(p[imin:imax])
         return None
 
     def lnprior(self, omega):
@@ -167,13 +170,13 @@ class Roaster(object):
         lnlike = 0.0
         for iepochs in xrange(self.num_epochs):
             model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs], 
-                scale=self.src_models[0][iepochs].pixel_scale)
+                scale=src_models[0][iepochs].pixel_scale)
 
             for isrcs in xrange(self.num_sources):
                 ### Draw every source using the full output array
                 b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
                 sub_image = model_image[b]
-                model = self.src_models[isrcs][iepochs].get_image(sub_image)
+                model = src_models[isrcs][iepochs].get_image(sub_image)
 
             if self.debug:
                 model_image_file_name = os.path.join('debug', 
@@ -274,9 +277,9 @@ def main():
     roaster = Roaster(debug=args.debug)
     roaster.Load(args.infiles[0])
 
-    print "\n", roaster.__dict__, "\n"
+    print "\nRoaster:", roaster.__dict__, "\n"
 
-    print "\nsource models:",roaster.src_models[0][0].__dict__, "\n"
+    print "\nsource models:",src_models[0][0].__dict__, "\n"
 
     do_sampling(args, roaster)
 
