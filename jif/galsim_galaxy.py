@@ -9,6 +9,8 @@ Wrapper for GalSim galaxy models to use in MCMC.
 import numpy as np
 import galsim
 
+k_galparams_type_sersic = [('gal_flux', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'), ('beta', '<f8')]
+
 def lsst_noise(random_seed):
     """
     See GalSim/examples/lsst.yaml
@@ -116,8 +118,7 @@ class GalSimGalaxyModel(object):
 
         # self.params = GalSimGalParams(galaxy_model=galaxy_model)
         self.params = np.core.records.array([(1.e5, 3.4, 1.8, 0.3, np.pi/4)],
-            dtype=[('gal_flux', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'),
-                   ('beta', '<f8')])
+            dtype=k_galparams_type_sersic)
         self.n_params = 5
 
     def set_params(self, p):
@@ -126,7 +127,8 @@ class GalSimGalaxyModel(object):
 
         For use in emcee.
         """
-        return NotImplementedError()
+        self.params = np.core.records.array(p, dtype=k_galparams_type_sersic)
+        return None
 
     def get_params(self):
         """

@@ -131,19 +131,41 @@ class Roaster(object):
 
         self.params = np.zeros(self.num_epochs, dtype=float)
 
-        src_models = [toymodel(self.nx[i], self.ny[i], 12, 18) 
-                      for i in xrange(self.num_epochs)]                      
+        # src_models = [toymodel(self.nx[i], self.ny[i], 12, 18) 
+        #               for i in xrange(self.num_epochs)]
+        src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="Sersic",
+                                pixel_scale=pixel_scales[iepochs], 
+                                wavelength=wavelengths[iepochs],
+                                primary_diam_meters=primary_diams[iepochs],
+                                atmosphere=atmospheres[iepochs]) 
+                            for iepochs in xrange(self.num_epochs)] 
+                           for isrcs in xrange(self.num_sources)]
+        self.n_params = src_models[0][0].n_params
         logging.debug("<Roaster> Finished loading data")
         print "\npixel data shapes:", [dat.shape for dat in pixel_data]
         return None
 
+    # def get_params(self):
+    #     return self.params
+
+    # def set_params(self, p):
+    #     for iepochs in xrange(self.num_epochs):
+    #         self.params[iepochs] = p[iepochs]
+    #         src_models[iepochs].set_params(p[iepochs])
+
     def get_params(self):
-        return self.params
+        """
+        Make a flat array of model parameters for all sources
+        """
+        return np.array([m[0].get_params() for m in src_models]).ravel()
 
     def set_params(self, p):
-        for iepochs in xrange(self.num_epochs):
-            self.params[iepochs] = p[iepochs]
-            src_models[iepochs].set_params(p[iepochs])
+        for isrcs in xrange(self.num_sources):
+            imin = isrcs * self.num_sources
+            imax = (isrcs + 1) * self.num_sources
+            for iepochs in xrange(self.num_epochs):
+                src_models[isrcs][iepochs].set_params(p[imin:imax])
+        return None
 
     def lnlike(self, omega, *args, **kwargs):
         self.istep += 1
@@ -151,8 +173,15 @@ class Roaster(object):
 
         lnlike = 0.0
         for iepochs in xrange(self.num_epochs):
-            model_image = src_models[iepochs].get_image()
-            lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image) ** 2) / pix_noise_var[iepochs])
+            model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs], 
+                scale=src_models[0][iepochs].pixel_scale)
+            isrcs=0
+            b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
+            sub_image = model_image[b]
+            model = src_models[isrcs][iepochs].get_image(sub_image)
+
+            # model_image = src_models[iepochs].get_image()
+            lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image.array) ** 2) / pix_noise_var[iepochs])
         return lnlike
 
     def __call__(self, omega, *args, **kwargs):

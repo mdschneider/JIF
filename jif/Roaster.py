@@ -136,7 +136,7 @@ class Roaster(object):
                                 atmosphere=atmospheres[iepochs]) 
                             for iepochs in xrange(self.num_epochs)] 
                            for isrcs in xrange(self.num_sources)]
-
+        self.n_params = src_models[0][0].n_params
         logging.debug("<Roaster> Finished loading data")
         print "\npixel data shapes:", [dat.shape for dat in pixel_data]
         return None
@@ -149,8 +149,8 @@ class Roaster(object):
 
     def set_params(self, p):
         for isrcs in xrange(self.num_sources):
-            imin = isrcs * self.num_sources
-            imax = (isrcs + 1) * self.num_sources
+            imin = isrcs * self.n_params
+            imax = (isrcs + 1) * self.n_params
             for iepochs in xrange(self.num_epochs):
                 src_models[isrcs][iepochs].set_params(p[imin:imax])
         return None
