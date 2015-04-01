@@ -32,6 +32,8 @@ logging.basicConfig(level=logging.DEBUG,
 # Store the pixel data as global (module scope) variables so emcee mutlithreading doesn't need to
 # repeatedly pickle these all the time.
 pixel_data = []
+pix_noise_var = []
+src_models = []
 
 
 class EmptyPrior(object):
@@ -39,6 +41,122 @@ class EmptyPrior(object):
         pass
     def __call__(self, *args):
         return 0.0
+        
+
+class Roaster(object):
+    """
+    Draw samples of source model parameters via MCMC.
+
+    We allow for 2 types of multiplicity in the data:
+        (a) Multiple epochs or instruments observing the same source
+        (b) Multiple sources in a single 'cutout' (e.g., for blended sources)
+    For scenario (a), the likelihood is a product of the likelihoods for each epoch or instrument.
+    For scenario (b), we need a list of source models that generate a model image that is 
+    fed to the likelihood function for a single epoch or instrument.
+
+    @lnprior_omega      Prior class for the galaxy model parameters
+    @param data_format  Format for the input data file.
+    @param debug        Save debugging outputs (including model images per step?)
+    """
+    def __init__(self, lnprior_omega=None,
+                 data_format='test_galsim_galaxy', debug=False):
+        if lnprior_omega is None:
+            self.lnprior_omega = EmptyPrior()
+        else:
+            self.lnprior_omega = lnprior_omega
+        self.data_format = data_format
+        self.debug = debug
+
+        ### Count the number of calls to self.lnlike
+        self.istep = 0        
+
+    def Load(self, infile):
+        """
+        Load image cutouts from file.
+
+        The input file should contain: 
+            1. Pixel data for a cutout of N galaxies
+            2. A segmentation mask for the cutout
+            3. The pixel noise model (e.g., variance per pixel)
+            4. The WCS information for the image
+            5. Background model(s)
+        This information should be replicated for each epoch and/or instrument.
+
+        Each source in a blend group should contain information on:
+            1. a, b, theta (ellipticity semi-major and semi-minor axes, orientation angle)
+            2. centroid position (x,y)
+            3. flux
+        These values will be used to initialize any model-fitting (e.g., MCMC) algorithm.
+
+        @param infiles  List of input filenames to load.
+        """        
+        global pixel_data
+        global pix_noise_var
+        global src_models
+
+        logging.info("<Roaster> Loading image data")
+        if self.data_format == "test_galsim_galaxy":
+            f = h5py.File(infile, 'r')
+            self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
+            self.num_sources = f.attrs['num_sources']
+
+            ### Get stuff we need to initialize the source models
+            instruments = []
+            pixel_scales = []
+            wavelengths = []
+            primary_diams = []
+            atmospheres = []
+
+            for i in xrange(self.num_epochs):
+                cutout = f['cutout%d' % (i+1)]
+                dat = cutout['pixel_data']
+                print i, "dat shape:", dat.shape
+                print "\t", np.array(dat).shape
+                pixel_data.append(np.array(dat))
+                pix_noise_var.append(cutout['noise_model'])
+                instruments.append(cutout.attrs['instrument'])
+                pixel_scales.append(cutout.attrs['pixel_scale'])
+                wavelengths.append(cutout.attrs['wavelength'])
+                primary_diams.append(cutout.attrs['primary_diam'])
+                atmospheres.append(cutout.attrs['atmosphere'])
+            print "Have data for instruments:", instruments                
+        else:
+            raise AttributeError("Unsupported input data format to Roaster")
+
+        self.nx = np.zeros(self.num_epochs, dtype=int)
+        self.ny = np.zeros(self.num_epochs, dtype=int)
+        for i in xrange(self.num_epochs):
+            dat = f['cutout%d'%(i+1)]['pixel_data']
+            self.nx[i], self.ny[i] = dat.shape        
+
+        self.params = np.zeros(self.num_epochs, dtype=float)
+
+        src_models = [toymodel(self.nx[i], self.ny[i], 12, 18) 
+                      for i in xrange(self.num_epochs)]                      
+        logging.debug("<Roaster> Finished loading data")
+        print "\npixel data shapes:", [dat.shape for dat in pixel_data]
+        return None
+
+    def get_params(self):
+        return self.params
+
+    def set_params(self, p):
+        for iepochs in xrange(self.num_epochs):
+            self.params[iepochs] = p[iepochs]
+            src_models[iepochs].set_params(p[iepochs])
+
+    def lnlike(self, omega, *args, **kwargs):
+        self.istep += 1
+        self.set_params(omega)
+
+        lnlike = 0.0
+        for iepochs in xrange(self.num_epochs):
+            model_image = src_models[iepochs].get_image()
+            lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image) ** 2) / pix_noise_var[iepochs])
+        return lnlike
+
+    def __call__(self, omega, *args, **kwargs):
+        return self.lnlike(omega, *args, **kwargs)
 
 
 class toymodel(object):
@@ -57,67 +175,6 @@ class toymodel(object):
 
     def get_image(self):
         return self.model_image
-        
-
-class Roaster(object):
-    """
-    Draw samples of source model parameters via MCMC.
-
-    We allow for 2 types of multiplicity in the data:
-        (a) Multiple epochs or instruments observing the same source
-        (b) Multiple sources in a single 'cutout' (e.g., for blended sources)
-    For scenario (a), the likelihood is a product of the likelihoods for each epoch or instrument.
-    For scenario (b), we need a list of source models that generate a model image that is 
-    fed to the likelihood function for a single epoch or instrument.
-
-    @param debug        Save debugging outputs (including model images per step?)
-    """
-    def __init__(self, debug=False):
-        self.debug = debug
-
-        self.num_epochs = 1
-        self.npix = 64
-        self.params = np.zeros(self.num_epochs, dtype=float)
-
-    def Load(self, infile=None):
-        global pixel_data
-
-        f = h5py.File(infile, 'r')
-        i = 0
-        cutout = f['cutout%d' % (i+1)]
-        dat = cutout['pixel_data']
-        pixel_data.append(np.array(dat))
-
-        # pixel_data.append(np.zeros((self.npix,self.npix), dtype=float))
-        # pixel_data[0][12:18, 12:18] = 1.0
-        self.nx = [self.npix]
-        self.ny = [self.npix]
-
-        self.src_models = [toymodel(self.nx[i], self.ny[i], 12, 18) 
-                           for i in xrange(self.num_epochs)]
-        return None
-
-    def get_params(self):
-        return self.params
-
-    def set_params(self, p):
-        for iepochs in xrange(self.num_epochs):
-            self.params[iepochs] = p[iepochs]
-            self.src_models[iepochs].set_params(p[iepochs])
-
-    def lnlike(self, omega, *args, **kwargs):
-        self.set_params(omega)
-
-        lnlike = 0.0
-        for iepochs in xrange(self.num_epochs):
-            model_image = self.src_models[iepochs].get_image()
-            lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image) ** 2))
-        return lnlike
-
-    def __call__(self, omega, *args, **kwargs):
-        return self.lnlike(omega, *args, **kwargs)
-
-
 # ---------------------------------------------------------------------------------------
 # MCMC routines
 # ---------------------------------------------------------------------------------------

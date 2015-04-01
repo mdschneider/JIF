@@ -4,6 +4,7 @@
 Roaster.py
 
 Draw samples of source model parameters given the pixel data for image cutouts.
+April 1, 2015
 """
 
 import argparse
@@ -31,6 +32,7 @@ logging.basicConfig(level=logging.DEBUG,
 # Store the pixel data as global (module scope) variables so emcee mutlithreading doesn't need to
 # repeatedly pickle these all the time.
 pixel_data = []
+pix_noise_var = []
 src_models = []
 
 
@@ -89,6 +91,7 @@ class Roaster(object):
         @param infiles  List of input filenames to load.
         """
         global pixel_data
+        global pix_noise_var
         global src_models
 
         logging.info("<Roaster> Loading image data")
@@ -97,9 +100,7 @@ class Roaster(object):
             self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
             self.num_sources = f.attrs['num_sources']
 
-            # self.pix_data = []
-            self.pix_noise_var = []
-            self.instruments = []
+            instruments = []
             pixel_scales = []
             wavelengths = []
             primary_diams = []
@@ -112,13 +113,13 @@ class Roaster(object):
                 pixel_data.append(np.array(dat))
                 # pixel_data.append(np.core.records.array(np.array(dat), dtype=float, shape=dat.shape))
                 # pixel_data.append(np.array(cutout['pixel_data']))
-                self.pix_noise_var.append(cutout['noise_model'])
-                self.instruments.append(cutout.attrs['instrument'])
+                pix_noise_var.append(cutout['noise_model'])
+                instruments.append(cutout.attrs['instrument'])
                 pixel_scales.append(cutout.attrs['pixel_scale'])
                 wavelengths.append(cutout.attrs['wavelength'])
                 primary_diams.append(cutout.attrs['primary_diam'])
                 atmospheres.append(cutout.attrs['atmosphere'])
-            print "Have data for instruments:", self.instruments
+            print "Have data for instruments:", instruments
         else:
             raise AttributeError("Unsupported input data format to Roaster")
 
@@ -185,7 +186,7 @@ class Roaster(object):
                 logging.debug('Wrote model image to %r', model_image_file_name)
 
             lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image.array) ** 2) / 
-                self.pix_noise_var[iepochs])
+                pix_noise_var[iepochs])
         return lnlike
 
     def __call__(self, omega, *args, **kwargs):
