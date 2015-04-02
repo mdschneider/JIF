@@ -9,7 +9,12 @@ Wrapper for GalSim galaxy models to use in MCMC.
 import numpy as np
 import galsim
 
-k_galparams_type_sersic = [('gal_flux', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'), ('beta', '<f8')]
+
+k_galparams_type_sersic = [('gal_flux', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
+                           ('beta', '<f8')]
+k_galparams_type_spergel = [('gal_flux', '<f8'), ('nu', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
+                            ('beta', '<f8')]
+
 
 def lsst_noise(random_seed):
     """
@@ -38,58 +43,58 @@ def wfirst_noise(random_seed):
         sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
 
 
-class GalSimGalParams(object):
-    """Parameters for GalSim galaxies"""
-    def __init__(self, galaxy_model="Gaussian"):
-        self.galaxy_model = galaxy_model
-        if galaxy_model == "Gaussian":
-            self.gal_flux = 1.e5
-            self.gal_sigma = 2.
-            self.e = 0.3
-            self.beta = np.pi/4.
-            self.n_params = 4
-        elif galaxy_model == "Spergel":
-            raise NotImplementedError()
-        elif galaxy_model == "Sersic":
-            self.gal_flux = 1.e5
-            self.n = 3.4
-            self.hlr = 1.8
-            self.e = 0.3
-            self.beta = np.pi/4.
-            self.n_params = 5
-        elif galaxy_model == "BulgeDisk":
-            self.gal_flux = 1.e5
-            self.bulge_n = 3.4
-            self.disk_n = 1.5
-            self.bulge_re = 2.3
-            self.disk_r0 = 0.85
-            self.bulge_frac = 0.0 #0.3
-            self.e_bulge = 0.01
-            self.e_disk = 0.25
-            self.beta_bulge = np.pi/4.
-            self.beta_disk = 3. * np.pi/4.
-            self.n_params = 10
-        else:
-            raise AttributeError("Unimplemented galaxy model")
+# class GalSimGalParams(object):
+#     """Parameters for GalSim galaxies"""
+#     def __init__(self, galaxy_model="Gaussian"):
+#         self.galaxy_model = galaxy_model
+#         if galaxy_model == "Gaussian":
+#             self.gal_flux = 1.e5
+#             self.gal_sigma = 2.
+#             self.e = 0.3
+#             self.beta = np.pi/4.
+#             self.n_params = 4
+#         elif galaxy_model == "Spergel":
+#             raise NotImplementedError()
+#         elif galaxy_model == "Sersic":
+#             self.gal_flux = 1.e5
+#             self.n = 3.4
+#             self.hlr = 1.8
+#             self.e = 0.3
+#             self.beta = np.pi/4.
+#             self.n_params = 5
+#         elif galaxy_model == "BulgeDisk":
+#             self.gal_flux = 1.e5
+#             self.bulge_n = 3.4
+#             self.disk_n = 1.5
+#             self.bulge_re = 2.3
+#             self.disk_r0 = 0.85
+#             self.bulge_frac = 0.0 #0.3
+#             self.e_bulge = 0.01
+#             self.e_disk = 0.25
+#             self.beta_bulge = np.pi/4.
+#             self.beta_disk = 3. * np.pi/4.
+#             self.n_params = 10
+#         else:
+#             raise AttributeError("Unimplemented galaxy model")
 
-    def num_params(self):
-        return self.n_params
+#     def num_params(self):
+#         return self.n_params
 
-    def get_params(self):
-        """
-        Return an array of parameter values.
-        """
-        if self.galaxy_model == "Gaussian":
-            return np.array([self.gal_flux, self.gal_sigma, self.e, self.beta])
-        elif self.galaxy_model == "Spergel":
-            raise NotImplementedError()
-        elif self.galaxy_model == "Sersic":
-            return np.array([self.gal_flux, self.n, self.hlr, self.e, self.beta])
-        elif self.galaxy_model == "BulgeDisk":
-            return np.array([self.gal_flux, self.bulge_n, self.disk_n, self.bulge_re, self.disk_r0, 
-            self.bulge_frac, self.e_bulge, self.e_disk, self.beta_bulge, self.beta_disk])
-        else:
-            raise AttributeError("Unimplemented galaxy model")
+#     def get_params(self):
+#         """
+#         Return an array of parameter values.
+#         """
+#         if self.galaxy_model == "Gaussian":
+#             return np.array([self.gal_flux, self.gal_sigma, self.e, self.beta])
+#         elif self.galaxy_model == "Spergel":
+#             raise NotImplementedError()
+#         elif self.galaxy_model == "Sersic":
+#             return np.array([self.gal_flux, self.n, self.hlr, self.e, self.beta])
+#         elif self.galaxy_model == "BulgeDisk":
+#             return np.array([self.gal_flux, self.bulge_n, self.disk_n, self.bulge_re, self.disk_r0, 
+#             self.bulge_frac, self.e_bulge, self.e_disk, self.beta_bulge, self.beta_disk])
+#         else:
+#             raise AttributeError("Unimplemented galaxy model")
 
 
 class GalSimGalaxyModel(object):
@@ -117,10 +122,20 @@ class GalSimGalaxyModel(object):
         self.atmosphere = atmosphere
 
         # self.params = GalSimGalParams(galaxy_model=galaxy_model)
-        self.params = np.core.records.array([(1.e5, 3.4, 1.8, 0.3, np.pi/4)],
-            dtype=k_galparams_type_sersic)
-        self.paramnames = ['gal_flux', 'n', 'hlr', 'e','beta',]
-        self.n_params = 5
+        if galaxy_model == "Sersic":
+            self.params = np.core.records.array([(1.e5, 3.4, 1.8, 0.3, np.pi/4)],
+                dtype=k_galparams_type_sersic)
+            self.paramtypes = k_galparams_type_sersic
+            self.paramnames = ['gal_flux', 'n', 'hlr', 'e','beta',]
+            self.n_params = 5
+        elif galaxy_model == "Spergel":
+            self.params = np.core.records.array([(1.e5, -0.3, 1.8, 0.3, np.pi/4)],
+                dtype=k_galparams_type_spergel)
+            self.paramtypes = k_galparams_type_spergel
+            self.paramnames = ['gal_flux', 'nu', 'hlr', 'e', 'beta']
+            self.n_params = 5
+        else:
+            raise AttributeError("Unimplemented galaxy model")
 
         self.gsparams = galsim.GSParams(
             folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
@@ -136,7 +151,7 @@ class GalSimGalaxyModel(object):
 
         For use in emcee.
         """
-        self.params = np.core.records.array(p, dtype=k_galparams_type_sersic)
+        self.params = np.core.records.array(p, dtype=self.paramtypes)
         return None
 
     def get_params(self):
@@ -162,7 +177,10 @@ class GalSimGalaxyModel(object):
             gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
             gal = gal.shear(gal_shape)
         elif self.galaxy_model == "Spergel":
-            raise NotImplementedError()
+            gal = galsim.Spergel(nu=self.params[0].nu, half_light_radius=self.params[0].hlr,
+                flux=self.params[0].gal_flux, gsparams=self.gsparams)
+            gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
+            gal = gal.shear(gal_shape)            
         elif self.galaxy_model == "Sersic":
             gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
                 flux=self.params[0].gal_flux, gsparams=self.gsparams)
@@ -205,7 +223,8 @@ class GalSimGalaxyModel(object):
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
-        im = ax.matshow(self.get_image(out_image, add_noise=True).array, cmap=plt.get_cmap('coolwarm')) #, vmin=-350, vmax=350)
+        im = ax.matshow(self.get_image(out_image, add_noise=True).array, 
+            cmap=plt.get_cmap('coolwarm')) #, vmin=-350, vmax=350)
         fig.colorbar(im)
         fig.savefig(file_name)
         return None
@@ -224,12 +243,12 @@ def make_test_images():
     import h5py
 
     print "Making test images for LSST and WFIRST"
-    lsst = GalSimGalaxyModel(pixel_scale=0.2, noise=lsst_noise(82357), galaxy_model="Sersic",
+    lsst = GalSimGalaxyModel(pixel_scale=0.2, noise=lsst_noise(82357), galaxy_model="Spergel",
         wavelength=500.e-9, primary_diam_meters=8.4, atmosphere=True)
     lsst.save_image("test_lsst_image.fits")
     lsst.plot_image("test_lsst_image.png", ngrid=64)
 
-    wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357), galaxy_model="Sersic",
+    wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357), galaxy_model="Spergel",
         wavelength=1.e-6, primary_diam_meters=2.4, atmosphere=False)
     wfirst.save_image("test_wfirst_image.fits")
     wfirst.plot_image("test_wfirst_image.png", ngrid=64)

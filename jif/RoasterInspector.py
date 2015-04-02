@@ -42,8 +42,9 @@ class RoasterInspector(object):
         # Triangle plot
         fig = triangle.corner(np.vstack(self.data[-self.args.keeplast:,...]),
                               labels=self.paramnames, truths=self.args.truths)
-        fig.savefig(''.join([self.args.outprefix, 
-            "roaster_inspector_triangle.png"]))
+        outfile = ''.join([self.args.outprefix, "roaster_inspector_triangle.png"])
+        print "Saving {}".format(outfile)
+        fig.savefig(outfile)
 
         # Walkers plot
 
@@ -63,8 +64,9 @@ class RoasterInspector(object):
         ax.plot(self.logprob)
         ax.set_ylabel('ln(prob)')
         fig.tight_layout()
-        fig.savefig(''.join([self.args.outprefix, 
-            'roaster_inspector_walkers.png']))
+        outfile = ''.join([self.args.outprefix, 'roaster_inspector_walkers.png'])
+        print "Saving {}".format(outfile)
+        fig.savefig(outfile)
 
 
 if __name__ == '__main__':

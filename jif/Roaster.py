@@ -129,7 +129,7 @@ class Roaster(object):
             dat = f['cutout%d'%(i+1)]['pixel_data']
             self.nx[i], self.ny[i] = dat.shape
 
-        src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="Sersic",
+        src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="Spergel",
                                 pixel_scale=pixel_scales[iepochs], 
                                 wavelength=wavelengths[iepochs],
                                 primary_diam_meters=primary_diams[iepochs],
