@@ -119,7 +119,16 @@ class GalSimGalaxyModel(object):
         # self.params = GalSimGalParams(galaxy_model=galaxy_model)
         self.params = np.core.records.array([(1.e5, 3.4, 1.8, 0.3, np.pi/4)],
             dtype=k_galparams_type_sersic)
+        self.paramnames = ['gal_flux', 'n', 'hlr', 'e','beta',]
         self.n_params = 5
+
+        self.gsparams = galsim.GSParams(
+            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
+            maxk_threshold=2.e-2,    # k-values less than this may be excluded off edge of FFT
+            xvalue_accuracy=1.e-2,   # approximations in real space aim to be this accurate
+            kvalue_accuracy=1.e-2,   # approximations in fourier space aim to be this accurate
+            shoot_accuracy=1.e-2,    # approximations in photon shooting aim to be this accurate
+            minimum_fft_size=16)     # minimum size of ffts
 
     def set_params(self, p):
         """
@@ -139,9 +148,9 @@ class GalSimGalaxyModel(object):
     def get_psf(self):
         lam_over_diam = self.wavelength / self.primary_diam_meters
         lam_over_diam *= 206265. # arcsec
-        optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1.)
+        optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1., gsparams=self.gsparams)
         if self.atmosphere:
-            atmos = galsim.Kolmogorov(lam_over_r0=9.e-8)
+            atmos = galsim.Kolmogorov(lam_over_r0=9.e-8, gsparams=self.gsparams)
             psf = galsim.Convolve([atmos, optics])
         else:
             psf = optics
@@ -156,7 +165,7 @@ class GalSimGalaxyModel(object):
             raise NotImplementedError()
         elif self.galaxy_model == "Sersic":
             gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
-                flux=self.params[0].gal_flux)
+                flux=self.params[0].gal_flux, gsparams=self.gsparams)
             gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
             gal = gal.shear(gal_shape)            
         elif self.galaxy_model == "BulgeDisk":
@@ -169,13 +178,17 @@ class GalSimGalaxyModel(object):
         else:
             raise AttributeError("Unimplemented galaxy model")
         final = galsim.Convolve([gal, self.get_psf()])
-        # wcs = galsim.PixelScale(self.pixel_scale)
-        image = final.drawImage(image=out_image, scale=self.pixel_scale)
-        if add_noise:
-            if self.noise is not None:
-                image.addNoise(self.noise)
-            else:
-                raise AttributeError("A GalSim noise model must be specified to add noise to an image.")
+        # wcs = galsim.PixelScale(self.pixel_scale)'
+        try:
+            image = final.drawImage(image=out_image, scale=self.pixel_scale)
+            if add_noise:
+                if self.noise is not None:
+                    image.addNoise(self.noise)
+                else:
+                    raise AttributeError("A GalSim noise model must be specified to add noise to an image.")
+        except RuntimeError:
+            print "Trying to make an image that's too big."
+            image = None                    
         return image
 
     def save_image(self, file_name):

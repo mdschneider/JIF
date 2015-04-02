@@ -179,14 +179,17 @@ class Roaster(object):
                 sub_image = model_image[b]
                 model = src_models[isrcs][iepochs].get_image(sub_image)
 
-            if self.debug:
-                model_image_file_name = os.path.join('debug', 
-                    'model_image_iepoch%d_istep%d.fits' % (iepochs, self.istep))
-                model_image.write(model_image_file_name)
-                logging.debug('Wrote model image to %r', model_image_file_name)
+            if model is None:
+                lnlike = -np.inf
+            else:
+                if self.debug:
+                    model_image_file_name = os.path.join('debug', 
+                        'model_image_iepoch%d_istep%d.fits' % (iepochs, self.istep))
+                    model_image.write(model_image_file_name)
+                    logging.debug('Wrote model image to %r', model_image_file_name)
 
-            lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image.array) ** 2) / 
-                pix_noise_var[iepochs])
+                lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image.array) ** 2) / 
+                    pix_noise_var[iepochs])
         return lnlike
 
     def __call__(self, omega, *args, **kwargs):
@@ -239,8 +242,7 @@ def write_results(args, pps, lnps):
     if "post" in f:
         del f["post"]
     post = f.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
-    paramnames = ['x0', 'y0', 'phi0', 'ell0', 'L', 'psfwidth']
-    post.attrs['paramnames'] = paramnames
+    post.attrs['paramnames'] = src_models[0][0].paramnames
     if "logprobs" in f:
         del f["logprobs"]
     logprobs = f.create_dataset("logprobs", data=np.vstack(lnps))
