@@ -5,8 +5,9 @@ galsim_galaxy.py
 
 Wrapper for GalSim galaxy models to use in MCMC.
 """
-
+import os
 import numpy as np
+from operator import add
 import galsim
 
 
@@ -48,60 +49,6 @@ def wfirst_noise(random_seed):
     return galsim.CCDNoise(rng, gain=2.1, 
         read_noise=(read_noise_e_rms / gain) ** 2,
         sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
-
-
-# class GalSimGalParams(object):
-#     """Parameters for GalSim galaxies"""
-#     def __init__(self, galaxy_model="Gaussian"):
-#         self.galaxy_model = galaxy_model
-#         if galaxy_model == "Gaussian":
-#             self.gal_flux = 1.e5
-#             self.gal_sigma = 2.
-#             self.e = 0.3
-#             self.beta = np.pi/4.
-#             self.n_params = 4
-#         elif galaxy_model == "Spergel":
-#             raise NotImplementedError()
-#         elif galaxy_model == "Sersic":
-#             self.gal_flux = 1.e5
-#             self.n = 3.4
-#             self.hlr = 1.8
-#             self.e = 0.3
-#             self.beta = np.pi/4.
-#             self.n_params = 5
-#         elif galaxy_model == "BulgeDisk":
-#             self.gal_flux = 1.e5
-#             self.bulge_n = 3.4
-#             self.disk_n = 1.5
-#             self.bulge_re = 2.3
-#             self.disk_r0 = 0.85
-#             self.bulge_frac = 0.0 #0.3
-#             self.e_bulge = 0.01
-#             self.e_disk = 0.25
-#             self.beta_bulge = np.pi/4.
-#             self.beta_disk = 3. * np.pi/4.
-#             self.n_params = 10
-#         else:
-#             raise AttributeError("Unimplemented galaxy model")
-
-#     def num_params(self):
-#         return self.n_params
-
-#     def get_params(self):
-#         """
-#         Return an array of parameter values.
-#         """
-#         if self.galaxy_model == "Gaussian":
-#             return np.array([self.gal_flux, self.gal_sigma, self.e, self.beta])
-#         elif self.galaxy_model == "Spergel":
-#             raise NotImplementedError()
-#         elif self.galaxy_model == "Sersic":
-#             return np.array([self.gal_flux, self.n, self.hlr, self.e, self.beta])
-#         elif self.galaxy_model == "BulgeDisk":
-#             return np.array([self.gal_flux, self.bulge_n, self.disk_n, self.bulge_re, self.disk_r0, 
-#             self.bulge_frac, self.e_bulge, self.e_disk, self.beta_bulge, self.beta_disk])
-#         else:
-#             raise AttributeError("Unimplemented galaxy model")
 
 
 class GalSimGalaxyModel(object):
@@ -164,6 +111,8 @@ class GalSimGalaxyModel(object):
 
         Copied from GalSim demo12.py
         """
+        path, filename = os.path.split(__file__)
+        datapath = os.path.abspath(os.path.join(path, "../input/"))
         self.SEDs = {}
         for SED_name in k_SED_names:
             SED_filename = os.path.join(datapath, '{0}.sed'.format(SED_name))
@@ -200,9 +149,10 @@ class GalSimGalaxyModel(object):
         """
         Get the GalSim SED object given the SED parameters and redshift
         """
-        for i, SED_name in enumerate(k_SED_names):
-            self.SEDs[SED_name].withFluxDensity(target_flux_density=self.params[0].flux_sed1, wavelength=500)
-            self.SEDs[SED_name].atredshift(self.params[0].redshift)
+        SEDs = [self.SEDs[SED_name].withFluxDensity(target_flux_density=self.params[0].flux_sed1, 
+                                    wavelength=500).atRedshift(self.params[0].redshift)
+                for SED_name in self.SEDs]
+        return reduce(add, SEDs)
 
     def get_image(self, out_image=None, add_noise=False):
         if self.galaxy_model == "Gaussian":
@@ -213,7 +163,8 @@ class GalSimGalaxyModel(object):
         elif self.galaxy_model == "Spergel":
 
             mono_gal = galsim.Spergel(nu=self.params[0].nu, half_light_radius=self.params[0].hlr,
-                flux=self.params[0].gal_flux, gsparams=self.gsparams)
+                # flux=self.params[0].gal_flux, 
+                gsparams=self.gsparams)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
 
