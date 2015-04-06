@@ -240,6 +240,7 @@ def make_test_images():
     """
     Use the GalSimGalaxyModel class to make test images of a galaxy for LSST and WFIRST.
     """
+    import os
     import h5py
 
     print "Making test images for LSST and WFIRST"
@@ -258,7 +259,7 @@ def make_test_images():
 
     # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster
-    f = h5py.File('test_image_data.h5', 'w')
+    f = h5py.File(os.path.join(os.path.dirname(__file__), '../TestData/test_image_data.h5'), 'w')
     f.attrs['num_sources'] = 1 ### Assert a fixed number of sources for all epochs
 
     ### Instrument/epoch 1
