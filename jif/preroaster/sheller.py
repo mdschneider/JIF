@@ -104,12 +104,12 @@ f = h5py.File('spaceground.hdf5',mode='w')
 g = f.create_group('ground')
 g_obs = f.create_group('ground/observation')
 g_obs_sex = f.create_group('ground/observation/sextractor')
-g_obs_sex_grp = f.create_group('ground/observation/sextractor/groups')
+g_obs_sex_grp = f.create_group('ground/observation/sextractor/segments')
 
 s = f.create_group('space')
 s_obs = f.create_group('space/observation')
 s_obs_sex = f.create_group('space/observation/sextractor')
-s_obs_sex_grp = f.create_group('space/observation/sextractor/groups')
+s_obs_sex_grp = f.create_group('space/observation/sextractor/segments')
 
 
 # Save some basic metadata, later this will be copied from the fits headers
@@ -267,8 +267,8 @@ for i in range(N_img0_seg):
     stamp_i = stamps[i]
     
     # Create groups for this segment
-    group_name_s = 'space/observation/sextractor/groups/'+str(i)
-    group_name_g = 'ground/observation/sextractor/groups/'+str(i)
+    group_name_s = 'space/observation/sextractor/segments/'+str(i)
+    group_name_g = 'ground/observation/sextractor/segments/'+str(i)
     
     s_obs_sex_grp_i = f.create_group(group_name_s)    
     g_obs_sex_grp_i = f.create_group(group_name_g)
