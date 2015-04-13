@@ -251,8 +251,7 @@ y_round_1 = numpy.round(data_cat1.field('YWIN_IMAGE')) - y_bounds[0]
 
 # define pixel coordinate arrays to determine segment pixel (x,y) locations
 N_x, N_y = numpy.shape(img0_seg) # image pixel dimensions
-# Not entirely sure about this convention may need to make X, Y
-Y, X = numpy.meshgrid(range(N_y), range(N_x))
+X, Y = numpy.meshgrid(range(N_y), range(N_x))
 
 # Save the fits catalog dtype tuple so that it can be used in the creation
 # of hdf5 compound arrays
@@ -293,8 +292,9 @@ for i in range(N_img0_seg):
     
     # Determine which objects from the sextractor analysis are within the 
     # postage stamp
-    stamp_i_xbounds = stamp_i[0]
-    stamp_i_ybounds = stamp_i[1]
+    # first slice is x-coord, and 0th slice is y-coord
+    stamp_i_xbounds = stamp_i[1]
+    stamp_i_ybounds = stamp_i[0]
     mask_stamp_0 = numpy.logical_and(numpy.logical_and(x_round_0>=stamp_i_xbounds.start,
                                                        x_round_0<=stamp_i_xbounds.stop),
                                      numpy.logical_and(y_round_0>=stamp_i_ybounds.start,
