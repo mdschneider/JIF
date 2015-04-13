@@ -96,6 +96,21 @@ s_obs_sex_grp = f.create_group('space/observation/sextractor/groups')
 
 
 # Save some basic metadata, later this will be copied from the fits headers
+s.attrs['telescope'] = 'HST'
+s.attrs['instrument'] = 'ACS'
+s.attrs['detector'] = 'WFC'
+s.attrs['pixel scale (arcsec per pixel)'] = 0.05
+# note that the following few attributes should really be in s_obs group rather than s
+s.attrs['filter'] = 'F814W'
+s.attrs['primary mirror diameter (meters)'] = 2.4
+s.attrs['atmosphere on'] = 'no'
+s.attrs['crpix'] = numpy.array([[6142.33544921875],
+                                [1764.46228027344]])
+s.attrs['crval'] = numpy.array([[139.076115042054],
+                                [29.8330615113333]])
+s.attrs['cd'] = numpy.array([[9.489339000000001E-06,-1.0141681E-05],
+                             [-1.0141681E-05,-9.489339000000001E-06]])
+# copy some metadata from the fits header
 s.attrs['TELESCOP'] = 'HST' # telescope name
 s.attrs['INSTRUME'] = 'ACS' # instrument name
 s.attrs['DETECTOR'] = 'WFC' # detector name
@@ -115,8 +130,22 @@ s.attrs['LTV1']  = 0.0 # offset in X to subsection start
 s.attrs['LTV2']  = 0.0 # offset in Y to subsection start                
 s.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X               
 s.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
-s.attrs['atmosphere on'] = 'no'
 
+
+g.attrs['telescope'] = 'fauxSubaru'
+g.attrs['instrument'] = 'ACS'
+g.attrs['detector'] = 'WFC'
+g.attrs['pixel scale (arcsec per pixel)'] = 0.05
+g.attrs['filter'] = 'F814W'
+g.attrs['primary mirror diameter (meters)'] = 2.4
+g.attrs['atmosphere on'] = 'yes'
+g.attrs['crpix'] = numpy.array([[6142.33544921875],
+                                [1764.46228027344]])
+g.attrs['crval'] = numpy.array([[139.076115042054],
+                                [29.8330615113333]])
+g.attrs['cd'] = numpy.array([[9.489339000000001E-06,-1.0141681E-05],
+                             [-1.0141681E-05,-9.489339000000001E-06]])
+# copy some metadata from the fits header
 g.attrs['TELESCOP'] = 'HST' # telescope name
 g.attrs['INSTRUME'] = 'ACS' # instrument name
 g.attrs['DETECTOR'] = 'WFC' # detector name
@@ -136,7 +165,7 @@ g.attrs['LTV1']  = 0.0 # offset in X to subsection start
 g.attrs['LTV2']  = 0.0 # offset in Y to subsection start                
 g.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X               
 g.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
-g.attrs['atmosphere on'] = 'yes'
+
 
 
 # To do: write full field images to the data structure.
