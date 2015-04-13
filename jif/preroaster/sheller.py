@@ -50,6 +50,11 @@ struc = [[0,1,0],
          [1,1,1],
          [0,1,0]]
 
+# since there is a lot of junk at the edges of the image lets cut this out
+# by defining min and max bounds for a relatively clean area of the image
+x_bounds = (550,8050)
+y_bounds = (650,4150)
+
 ## Program
 # load the "ground" fits images
 fits_img0_image = pyfits.open(img0_image_name)
@@ -80,6 +85,18 @@ data_img1_minback = fits_img1_minback[0].data
 data_img1_rms = fits_img1_rms[0].data
 data_img1_segmentation = fits_img1_segmentation[0].data
 data_cat1 = fits_cat1[2].data
+
+# since there is a lot of junk at the edge of the field let's cut that out
+# define pixel coordinate arrays to determine segment pixel (x,y) locations
+mask_clean = (slice(y_bounds[0],y_bounds[1]),slice(x_bounds[0],x_bounds[1]))
+data_img0_image = data_img0_image[mask_clean]
+data_img0_minback = data_img0_minback[mask_clean]
+data_img0_rms = data_img0_rms[mask_clean]
+data_img0_segmentation = data_img0_segmentation[mask_clean]
+data_img1_image = data_img1_image[mask_clean]
+data_img1_minback = data_img1_minback[mask_clean]
+data_img1_rms = data_img1_rms[mask_clean]
+data_img1_segmentation = data_img1_segmentation[mask_clean]
 
 # Setup the hdf5 data structure
 f = h5py.File('spaceground.hdf5',mode='w')
@@ -224,10 +241,12 @@ def fitshead2hdfattrib(fitsfile,hdfdset):
 # coordinates to the nearest integer pixel value. Since objects should should
 # be well within the segmentation region this rounding shouldn't cause any
 # objects to be lost. (we could think about growing the segmentation region)
-x_round_0 = numpy.round(data_cat0.field('XWIN_IMAGE'))
-y_round_0 = numpy.round(data_cat0.field('YWIN_IMAGE'))
-x_round_1 = numpy.round(data_cat1.field('XWIN_IMAGE'))
-y_round_1 = numpy.round(data_cat1.field('YWIN_IMAGE'))
+# the x_bound and y_bound terms are to correct for the fact that the image
+# boarders have been cut off but this was not done for sextractor
+x_round_0 = numpy.round(data_cat0.field('XWIN_IMAGE')) - x_bounds[0]
+y_round_0 = numpy.round(data_cat0.field('YWIN_IMAGE')) - y_bounds[0]
+x_round_1 = numpy.round(data_cat1.field('XWIN_IMAGE')) - x_bounds[0]
+y_round_1 = numpy.round(data_cat1.field('YWIN_IMAGE')) - y_bounds[0]
 
 
 # define pixel coordinate arrays to determine segment pixel (x,y) locations
