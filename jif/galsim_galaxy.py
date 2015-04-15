@@ -276,30 +276,38 @@ def make_test_images():
     f.attrs['num_sources'] = 1 ### Assert a fixed number of sources for all epochs
 
     ### Instrument/epoch 1
-    cutout1 = f.create_group("cutout1")
-    dat1 = cutout1.create_dataset('pixel_data', data=lsst_data)
+    g_obs_sex_seg_i = f.create_group("ground/observation/sextractor/segments/0")
+    g_obs_sex_seg_i.create_dataset('image', data=lsst_data)
+    ### TODO: Add object property data like that that might come out of DMstack or sextractor
+    # currently a hack to allow roaster to determine number of objects the
+    # same as is done for the data processed by sheller
+    g_obs_sex_seg_i.create_dataset('stamp_objprops', data=0)    
     ### TODO: Add segmentation mask
-    noise1 = cutout1.create_dataset('noise_model', data=lsst.noise.getVariance())
+    g_obs_sex_seg_i.create_dataset('noise', data=lsst.noise.getVariance())
     ### TODO: add WCS information
     ### TODO: add background model(s)
-    cutout1.attrs['instrument'] = 'LSST'
-    cutout1.attrs['pixel_scale'] = 0.2
-    cutout1.attrs['filter_central'] = 500.e-9
-    cutout1.attrs['primary_diam'] = 8.4
-    cutout1.attrs['atmosphere'] = True
+    g.attrs['telescope'] = 'LSST'
+    g.attrs['pixel_scale'] = 0.2
+    s_obs.attrs['filter_central'] = 500.e-9
+    g.attrs['primary_diam'] = 8.4
+    g.attrs['atmosphere'] = True
 
     ### Instrument/epoch 2
-    cutout2 = f.create_group("cutout2")
-    dat2 = cutout2.create_dataset('pixel_data', data=wfirst_data)
+    s_obs_sex_seg_i = f.create_group("space/observation/sextractor/segments/0")
+    s_obs_sex_seg_i.create_dataset('image', data=wfirst_data)
+    ### TODO: Add object property data like that that might come out of DMstack or sextractor
+    # currently a hack to allow roaster to determine number of objects the
+    # same as is done for the data processed by sheller
+    s_obs_sex_seg_i.create_dataset('stamp_objprops', data=0)
     ### TODO: Add segmentation mask
-    noise2 = cutout2.create_dataset('noise_model', data=wfirst.noise.getVariance())
+    s_obs_sex_seg_i.create_dataset('noise', data=wfirst.noise.getVariance())
     ### TODO: add WCS information
     ### TODO: add background model(s)
-    cutout2.attrs['instrument'] = 'WFIRST'
-    cutout2.attrs['pixel_scale'] = 0.11
-    cutout2.attrs['filter_central'] = 1.e-6
-    cutout2.attrs['primary_diam'] = 2.4
-    cutout2.attrs['atmosphere'] = False
+    s.attrs['instrument'] = 'WFIRST'
+    s.attrs['pixel_scale'] = 0.11
+    s_obs.attrs['filter_central'] = 1.e-6
+    s.attrs['primary_diam'] = 2.4
+    s.attrs['atmosphere'] = False
 
     f.close()
     # -------------------------------------------------------------------------    
