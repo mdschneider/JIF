@@ -38,7 +38,8 @@ def plot(file_name,segment,output_name=None):
     # adjust y size of figure
     x_size = 12
     y_size = x_size * s_img.shape[0] / s_img.shape[1] / 3 * 1.25
-    
+    # note that some of the following will have to be changed when we start
+    # considering objects on differnt pixels scales and orientations
     fig, (ax0,ax1,ax2) = plt.subplots(1, 3, sharey=True, figsize=(x_size,y_size))
     # plot the data
     ax0.imshow(s_img, origin='lower', interpolation='nearest')
@@ -48,6 +49,10 @@ def plot(file_name,segment,output_name=None):
     ax0.set_title('Space Data')
     ax1.set_title('Ground Data')
     ax2.set_title('Segment Mask')
+    ax0.set_ylabel('y [pixels]')
+    ax0.set_xlabel('x [pixels]')
+    ax1.set_xlabel('x [pixels]')
+    ax2.set_xlabel('x [pixels]')    
     
     # correct imshow sizes
     ax0.set_adjustable('box-forced')
