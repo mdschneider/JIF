@@ -113,75 +113,89 @@ s_obs_sex_grp = f.create_group('space/observation/sextractor/segments')
 
 
 # Save some basic metadata, later this will be copied from the fits headers
+# instrument specific
 s.attrs['telescope'] = 'HST'
+s.attrs['primary_diam'] = 2.4
 s.attrs['instrument'] = 'ACS'
 s.attrs['detector'] = 'WFC'
-s.attrs['pixel scale (arcsec per pixel)'] = 0.05
-# note that the following few attributes should really be in s_obs group rather than s
-s.attrs['filter'] = 'F814W'
-s.attrs['primary mirror diameter (meters)'] = 2.4
-s.attrs['atmosphere on'] = 'no'
-s.attrs['crpix'] = numpy.array([[6142.33544921875],
-                                [1764.46228027344]])
-s.attrs['crval'] = numpy.array([[139.076115042054],
-                                [29.8330615113333]])
-s.attrs['cd'] = numpy.array([[9.489339000000001E-06,-1.0141681E-05],
-                             [-1.0141681E-05,-9.489339000000001E-06]])
+s.attrs['pixel_scale'] = 0.05
+s.attrs['atmosphere'] = False
+# observation specific
+s_obs.attrs['filter'] = 'F814W'
+# note that we should just have a group for filter curves with datasets
+# containing througput as a function of wavelength
+s_obs.attrs['filter_central'] = 805.98e-9 #meters
+s_obs.attrs['filter_mean'] = 808.74e-9 #meters
+s_obs.attrs['filter_peak'] = 746.02e-9 #meters
+s_obs.attrs['filter_fwhm'] = 154.16e-9 #meters
+s_obs.attrs['filter_range'] = 287e-9 #meters
+s_obs.attrs['crpix'] = numpy.array([[6142.33544921875],
+                                    [1764.46228027344]])
+s_obs.attrs['crval'] = numpy.array([[139.076115042054],
+                                    [29.8330615113333]])
+s_obs.attrs['cd'] = numpy.array([[9.489339000000001E-06,-1.0141681E-05],
+                                 [-1.0141681E-05,-9.489339000000001E-06]])
 # copy some metadata from the fits header
-s.attrs['TELESCOP'] = 'HST' # telescope name
-s.attrs['INSTRUME'] = 'ACS' # instrument name
-s.attrs['DETECTOR'] = 'WFC' # detector name
-s.attrs['FILTER1'] = 'CLEAR1L' # a clear filter
-s.attrs['FILTER2'] = 'F814W' # non-clear filter
-s.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel                
-s.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel                
-s.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel            
-s.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel           
-s.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis         
-s.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis        
-s.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x     
-s.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y      
-s.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x     
-s.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y   
-s.attrs['LTV1']  = 0.0 # offset in X to subsection start                
-s.attrs['LTV2']  = 0.0 # offset in Y to subsection start                
-s.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X               
-s.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
+s_obs.attrs['TELESCOP'] = 'HST' # telescope name
+s_obs.attrs['INSTRUME'] = 'ACS' # instrument name
+s_obs.attrs['DETECTOR'] = 'WFC' # detector name
+s_obs.attrs['FILTER1'] = 'CLEAR1L' # a clear filter
+s_obs.attrs['FILTER2'] = 'F814W' # non-clear filter
+s_obs.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel                
+s_obs.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel                
+s_obs.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel            
+s_obs.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel           
+s_obs.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis         
+s_obs.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis        
+s_obs.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x     
+s_obs.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y      
+s_obs.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x     
+s_obs.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y   
+s_obs.attrs['LTV1']  = 0.0 # offset in X to subsection start                
+s_obs.attrs['LTV2']  = 0.0 # offset in Y to subsection start                
+s_obs.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X               
+s_obs.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
 
-
+# ground based attributes
+# instrument specific
 g.attrs['telescope'] = 'fauxSubaru'
+g.attrs['primary_diam'] = 2.4
 g.attrs['instrument'] = 'ACS'
 g.attrs['detector'] = 'WFC'
-g.attrs['pixel scale (arcsec per pixel)'] = 0.05
-g.attrs['filter'] = 'F814W'
-g.attrs['primary mirror diameter (meters)'] = 2.4
-g.attrs['atmosphere on'] = 'yes'
-g.attrs['crpix'] = numpy.array([[6142.33544921875],
-                                [1764.46228027344]])
-g.attrs['crval'] = numpy.array([[139.076115042054],
-                                [29.8330615113333]])
-g.attrs['cd'] = numpy.array([[9.489339000000001E-06,-1.0141681E-05],
-                             [-1.0141681E-05,-9.489339000000001E-06]])
+g.attrs['pixel_scale'] = 0.05
+g.attrs['atmosphere'] = True
+# observation specific
+g_obs.attrs['filter_central'] = 805.98e-9 #meters
+g_obs.attrs['filter_mean'] = 808.74e-9 #meters
+g_obs.attrs['filter_peak'] = 746.02e-9 #meters
+g_obs.attrs['filter_fwhm'] = 154.16e-9 #meters
+g_obs.attrs['filter_range'] = 287e-9 #meters
+g_obs.attrs['crpix'] = numpy.array([[6142.33544921875],
+                                    [1764.46228027344]])
+g_obs.attrs['crval'] = numpy.array([[139.076115042054],
+                                    [29.8330615113333]])
+g_obs.attrs['cd'] = numpy.array([[9.489339000000001E-06,-1.0141681E-05],
+                                 [-1.0141681E-05,-9.489339000000001E-06]])
 # copy some metadata from the fits header
-g.attrs['TELESCOP'] = 'HST' # telescope name
-g.attrs['INSTRUME'] = 'ACS' # instrument name
-g.attrs['DETECTOR'] = 'WFC' # detector name
-g.attrs['FILTER1'] = 'CLEAR1L' # a clear filter
-g.attrs['FILTER2'] = 'F814W' # non-clear filter
-g.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel                
-g.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel                
-g.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel            
-g.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel           
-g.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis         
-g.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis        
-g.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x     
-g.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y      
-g.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x     
-g.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y   
-g.attrs['LTV1']  = 0.0 # offset in X to subsection start                
-g.attrs['LTV2']  = 0.0 # offset in Y to subsection start                
-g.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X               
-g.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
+g_obs.attrs['TELESCOP'] = 'HST' # telescope name
+g_obs.attrs['INSTRUME'] = 'ACS' # instrument name
+g_obs.attrs['DETECTOR'] = 'WFC' # detector name
+g_obs.attrs['FILTER1'] = 'CLEAR1L' # a clear filter
+g_obs.attrs['FILTER2'] = 'F814W' # non-clear filter
+g_obs.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel                
+g_obs.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel                
+g_obs.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel            
+g_obs.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel           
+g_obs.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis         
+g_obs.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis        
+g_obs.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x     
+g_obs.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y      
+g_obs.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x     
+g_obs.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y   
+g_obs.attrs['LTV1']  = 0.0 # offset in X to subsection start                
+g_obs.attrs['LTV2']  = 0.0 # offset in Y to subsection start                
+g_obs.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X               
+g_obs.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
 
 
 

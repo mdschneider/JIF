@@ -116,7 +116,7 @@ class Roaster(object):
                 pix_noise_var.append(cutout['noise_model'])
                 instruments.append(cutout.attrs['instrument'])
                 pixel_scales.append(cutout.attrs['pixel_scale'])
-                wavelengths.append(cutout.attrs['wavelength'])
+                wavelengths.append(cutout.attrs['filter_central'])
                 primary_diams.append(cutout.attrs['primary_diam'])
                 atmospheres.append(cutout.attrs['atmosphere'])
             print "Have data for instruments:", instruments

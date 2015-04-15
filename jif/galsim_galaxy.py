@@ -260,6 +260,19 @@ def make_test_images():
     # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster
     f = h5py.File(os.path.join(os.path.dirname(__file__), '../TestData/test_image_data.h5'), 'w')
+    
+    # Define the (sub)groups
+    g = f.create_group('ground')
+    g_obs = f.create_group('ground/observation')
+    g_obs_sex = f.create_group('ground/observation/sextractor')
+    g_obs_sex_seg = f.create_group('ground/observation/sextractor/segments')
+    
+    s = f.create_group('space')
+    s_obs = f.create_group('space/observation')
+    s_obs_sex = f.create_group('space/observation/sextractor')
+    s_obs_sex_seg = f.create_group('space/observation/sextractor/segments')
+    
+    
     f.attrs['num_sources'] = 1 ### Assert a fixed number of sources for all epochs
 
     ### Instrument/epoch 1
@@ -271,7 +284,7 @@ def make_test_images():
     ### TODO: add background model(s)
     cutout1.attrs['instrument'] = 'LSST'
     cutout1.attrs['pixel_scale'] = 0.2
-    cutout1.attrs['wavelength'] = 500.e-9
+    cutout1.attrs['filter_central'] = 500.e-9
     cutout1.attrs['primary_diam'] = 8.4
     cutout1.attrs['atmosphere'] = True
 
@@ -284,7 +297,7 @@ def make_test_images():
     ### TODO: add background model(s)
     cutout2.attrs['instrument'] = 'WFIRST'
     cutout2.attrs['pixel_scale'] = 0.11
-    cutout2.attrs['wavelength'] = 1.e-6
+    cutout2.attrs['filter_central'] = 1.e-6
     cutout2.attrs['primary_diam'] = 2.4
     cutout2.attrs['atmosphere'] = False
 
