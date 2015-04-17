@@ -98,7 +98,6 @@ class Roaster(object):
         if self.data_format == "test_galsim_galaxy":
             f = h5py.File(infile, 'r')
             self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
-            self.num_sources = f.attrs['num_sources']
 
             instruments = []
             pixel_scales = []
