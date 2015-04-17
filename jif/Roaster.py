@@ -70,9 +70,10 @@ class Roaster(object):
         ### Count the number of calls to self.lnlike
         self.istep = 0
     
-    def Load(self, infile):
+    def Load(self, infile, segment=None):
         """
-        Load image cutouts from file.
+        Load image cutouts from file for the given segment, where segment is
+        an integer reference.
 
         The input file should contain: 
             1. Pixel data for a cutout of N galaxies
@@ -98,6 +99,7 @@ class Roaster(object):
         if self.data_format == "test_galsim_galaxy":
             f = h5py.File(infile, 'r')
             self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
+            self.num_sources = f['space/observation/sextractor/segments/0/stamp_objprops'].shape[0]
 
             instruments = []
             pixel_scales = []
@@ -105,27 +107,81 @@ class Roaster(object):
             primary_diams = []
             atmospheres = []
             for i in xrange(self.num_epochs):
-                cutout = f['cutout%d' % (i+1)]
-                dat = cutout['pixel_data']
+                ### Make this option more generic
+                # setup df5 paths
+                # define the parent branch (i.e. telescope)
+                if i == 0:
+                    # define the ground data paths
+                    branch = 'ground'
+                if i == 1:
+                    branch = 'space'
+                telescope = f[branch]
+                seg = f[branch+'/observation/sextractor/segments/0']
+                obs = f[branch+'/observation']
+                
+                dat = seg['image']
                 print i, "dat shape:", dat.shape
-                print "\t", np.array(dat).shape
+                print "\t", np.array(dat).shape ### not sure why this is here; duplicates previous line
                 pixel_data.append(np.array(dat))
                 # pixel_data.append(np.core.records.array(np.array(dat), dtype=float, shape=dat.shape))
                 # pixel_data.append(np.array(cutout['pixel_data']))
-                pix_noise_var.append(cutout['noise_model'])
-                instruments.append(cutout.attrs['instrument'])
-                pixel_scales.append(cutout.attrs['pixel_scale'])
-                wavelengths.append(cutout.attrs['filter_central'])
-                primary_diams.append(cutout.attrs['primary_diam'])
-                atmospheres.append(cutout.attrs['atmosphere'])
+                pix_noise_var.append(seg['noise'])
+                instruments.append(telescope.attrs['instrument'])
+                pixel_scales.append(telescope.attrs['pixel_scale'])
+                wavelengths.append(obs.attrs['filter_central'])
+                primary_diams.append(telescope.attrs['primary_diam'])
+                atmospheres.append(telescope.attrs['atmosphere'])
             print "Have data for instruments:", instruments
         else:
-            raise AttributeError("Unsupported input data format to Roaster")
+            if segment == None:
+                logging.info("<Roaster> Must specify a segment number as an integer")
+            f = h5py.File(infile, 'r')
+            self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
+            self.num_sources = f['space/observation/sextractor/segments/'+str(segment)+'/stamp_objprops'].shape[0]
+
+            instruments = []
+            pixel_scales = []
+            wavelengths = []
+            primary_diams = []
+            atmospheres = []
+            for i in xrange(self.num_epochs):
+                ### Make this option more generic
+                # setup df5 paths
+                # define the parent branch (i.e. telescope)
+                if i == 0:
+                    # define the ground data paths
+                    branch = 'ground'
+                if i == 1:
+                    branch = 'space'
+                telescope = f[branch]
+                seg = f[branch+'/observation/sextractor/segments/'+str(segment)]
+                obs = f[branch+'/observation']
+                
+                dat = seg['image']
+                print i, "dat shape:", dat.shape
+                print "\t", np.array(dat).shape ### not sure why this is here; duplicates previous line
+                pixel_data.append(np.array(dat))
+                # pixel_data.append(np.core.records.array(np.array(dat), dtype=float, shape=dat.shape))
+                # pixel_data.append(np.array(cutout['pixel_data']))
+                pix_noise_var.append(seg['noise'])
+                instruments.append(telescope.attrs['instrument'])
+                pixel_scales.append(telescope.attrs['pixel_scale'])
+                wavelengths.append(obs.attrs['filter_central'])
+                primary_diams.append(telescope.attrs['primary_diam'])
+                atmospheres.append(telescope.attrs['atmosphere'])
+            print "Have data for instruments:", instruments
+
 
         self.nx = np.zeros(self.num_epochs, dtype=int)
         self.ny = np.zeros(self.num_epochs, dtype=int)
         for i in xrange(self.num_epochs):
-            dat = f['cutout%d'%(i+1)]['pixel_data']
+            ### Make this option more generic
+            if i == 0:
+                # define the ground data paths
+                branch = 'ground'
+            if i == 1:
+                branch = 'space'
+            dat = f[branch+'/observation/sextractor/segments/'+str(segment)+'/image']
             self.nx[i], self.ny[i] = dat.shape
 
         src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="Spergel",
