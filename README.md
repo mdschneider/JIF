@@ -26,6 +26,7 @@ joint modeling becomes even more acute.
 - Our image models are built around the [GalSim](https://github.com/GalSim-developers/GalSim/wiki) image simulation framework.
 - For parameter inference, we use [emcee](http://dan.iel.fm/emcee/current/) (and probably other samplers TBD).
 - The sources (and source groups) we extract from raw imaging are stored in [HDF5](http://www.hdfgroup.org/HDF5/) file formats, with a custom grouping.
+- For part of the results visualization we use [triangle](https://github.com/dfm/triangle.py).
  
 ## Test Analysis
 
