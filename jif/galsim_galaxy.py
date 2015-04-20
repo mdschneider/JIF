@@ -281,14 +281,14 @@ def make_test_images():
     ### TODO: Add object property data like that that might come out of DMstack or sextractor
     # currently a hack to allow roaster to determine number of objects the
     # same as is done for the data processed by sheller
-    g_obs_sex_seg_i.create_dataset('stamp_objprops', data=0)    
+    g_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))    
     ### TODO: Add segmentation mask
     g_obs_sex_seg_i.create_dataset('noise', data=lsst.noise.getVariance())
     ### TODO: add WCS information
     ### TODO: add background model(s)
     g.attrs['telescope'] = 'LSST'
     g.attrs['pixel_scale'] = 0.2
-    s_obs.attrs['filter_central'] = 500.e-9
+    g_obs.attrs['filter_central'] = 500.e-9
     g.attrs['primary_diam'] = 8.4
     g.attrs['atmosphere'] = True
 
@@ -298,12 +298,12 @@ def make_test_images():
     ### TODO: Add object property data like that that might come out of DMstack or sextractor
     # currently a hack to allow roaster to determine number of objects the
     # same as is done for the data processed by sheller
-    s_obs_sex_seg_i.create_dataset('stamp_objprops', data=0)
+    s_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))
     ### TODO: Add segmentation mask
     s_obs_sex_seg_i.create_dataset('noise', data=wfirst.noise.getVariance())
     ### TODO: add WCS information
     ### TODO: add background model(s)
-    s.attrs['instrument'] = 'WFIRST'
+    s.attrs['telescope'] = 'WFIRST'
     s.attrs['pixel_scale'] = 0.11
     s_obs.attrs['filter_central'] = 1.e-6
     s.attrs['primary_diam'] = 2.4

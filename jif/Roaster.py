@@ -99,7 +99,8 @@ class Roaster(object):
         if self.data_format == "test_galsim_galaxy":
             f = h5py.File(infile, 'r')
             self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
-            self.num_sources = f['space/observation/sextractor/segments/0/stamp_objprops'].shape[0]
+            segment = 0
+            self.num_sources = f['space/observation/sextractor/segments/'+str(segment)+'/stamp_objprops'].shape[0]
 
             instruments = []
             pixel_scales = []
@@ -116,7 +117,7 @@ class Roaster(object):
                 if i == 1:
                     branch = 'space'
                 telescope = f[branch]
-                seg = f[branch+'/observation/sextractor/segments/0']
+                seg = f[branch+'/observation/sextractor/segments/'+str(segment)]
                 obs = f[branch+'/observation']
                 
                 dat = seg['image']
@@ -126,7 +127,7 @@ class Roaster(object):
                 # pixel_data.append(np.core.records.array(np.array(dat), dtype=float, shape=dat.shape))
                 # pixel_data.append(np.array(cutout['pixel_data']))
                 pix_noise_var.append(seg['noise'])
-                instruments.append(telescope.attrs['instrument'])
+                instruments.append(telescope.attrs['telescope'])
                 pixel_scales.append(telescope.attrs['pixel_scale'])
                 wavelengths.append(obs.attrs['filter_central'])
                 primary_diams.append(telescope.attrs['primary_diam'])
