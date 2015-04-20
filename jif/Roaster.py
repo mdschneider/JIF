@@ -119,14 +119,14 @@ class Roaster(object):
                 telescope = f[branch]
                 seg = f[branch+'/observation/sextractor/segments/'+str(segment)]
                 obs = f[branch+'/observation']
-                
                 dat = seg['image']
+                noise = seg['noise']
                 print i, "dat shape:", dat.shape
                 print "\t", np.array(dat).shape ### not sure why this is here; duplicates previous line
                 pixel_data.append(np.array(dat))
                 # pixel_data.append(np.core.records.array(np.array(dat), dtype=float, shape=dat.shape))
                 # pixel_data.append(np.array(cutout['pixel_data']))
-                pix_noise_var.append(seg['noise'])
+                pix_noise_var.append(noise.attrs['variance'])
                 instruments.append(telescope.attrs['telescope'])
                 pixel_scales.append(telescope.attrs['pixel_scale'])
                 wavelengths.append(obs.attrs['filter_central'])

@@ -283,7 +283,13 @@ def make_test_images():
     # same as is done for the data processed by sheller
     g_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))    
     ### TODO: Add segmentation mask
-    g_obs_sex_seg_i.create_dataset('noise', data=lsst.noise.getVariance())
+    # the real data will create a dataset that is an image of the noise
+    # for the galsim_galaxy only a single value characterizing the 
+    # variance is generated
+    g_obs_sex_seg_i_noise = g_obs_sex_seg_i.create_dataset('noise', data=lsst.noise.getVariance())
+    # for consistency with real data, also assign this to the noise dataset
+    # attribute
+    g_obs_sex_seg_i_noise.attrs['variance'] = lsst.noise.getVariance()
     ### TODO: add WCS information
     ### TODO: add background model(s)
     g.attrs['telescope'] = 'LSST'
@@ -291,6 +297,7 @@ def make_test_images():
     g_obs.attrs['filter_central'] = 500.e-9
     g.attrs['primary_diam'] = 8.4
     g.attrs['atmosphere'] = True
+    
 
     ### Instrument/epoch 2
     s_obs_sex_seg_i = f.create_group("space/observation/sextractor/segments/0")
@@ -300,7 +307,13 @@ def make_test_images():
     # same as is done for the data processed by sheller
     s_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))
     ### TODO: Add segmentation mask
-    s_obs_sex_seg_i.create_dataset('noise', data=wfirst.noise.getVariance())
+    # the real data will create a dataset that is an image of the noise
+    # for the galsim_galaxy only a single value characterizing the 
+    # variance is generated
+    s_obs_sex_seg_i_noise = s_obs_sex_seg_i.create_dataset('noise', data=wfirst.noise.getVariance())
+    # for consistency with real data, also assign this to the noise dataset
+    # attribute
+    s_obs_sex_seg_i_noise.attrs['variance'] = lsst.noise.getVariance()
     ### TODO: add WCS information
     ### TODO: add background model(s)
     s.attrs['telescope'] = 'WFIRST'

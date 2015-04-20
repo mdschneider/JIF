@@ -291,7 +291,9 @@ for i in range(N_img0_seg):
     # Create the image-background dataset
     g_obs_sex_grp_i.create_dataset('image', data=data_img0_minback[stamp_i])
     # Create the rms noise dataset
-    g_obs_sex_grp_i.create_dataset('noise', data=data_img0_rms[stamp_i])
+    g_obs_sex_grp_i_noise = g_obs_sex_grp_i.create_dataset('noise', data=data_img0_rms[stamp_i])
+    # estimate the varinace of this noise image and save as attribute
+    g_obs_sex_grp_i_noise.attrs['variance'] = numpy.median(g_obs_sex_grp_i_noise)**2
     # Create the local group segment mask dataset
     g_obs_sex_grp_i.create_dataset('segmask', data=mask_img0[stamp_i])
     
@@ -299,7 +301,9 @@ for i in range(N_img0_seg):
     # Create the image-background dataset
     s_obs_sex_grp_i.create_dataset('image', data=data_img1_minback[stamp_i])
     # Create the rms noise dataset
-    s_obs_sex_grp_i.create_dataset('noise', data=data_img1_rms[stamp_i])
+    s_obs_sex_grp_i_noise = s_obs_sex_grp_i.create_dataset('noise', data=data_img1_rms[stamp_i])
+    # estimate the varinace of this noise image and save as attribute
+    s_obs_sex_grp_i_noise.attrs['variance'] = numpy.median(s_obs_sex_grp_i_noise)**2
     # Create the local group segment mask dataset, 
     # for now just the same as the ground 
     s_obs_sex_grp_i.create_dataset('segmask', data=mask_img0[stamp_i])
