@@ -14,15 +14,26 @@ import galsim
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
 k_filter_names = 'ugrizy'
 
-k_galparams_type_sersic = [('redshift', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
-                           ('beta', '<f8'),
-                           ('flux_sed1', '<f8'), ('flux_sed2', '<f8'),
-                           ('flux_sed3', '<f8'), ('flux_sed4', '<f8')]
+k_spergel_paramnames = ['nu', 'hlr', 'e', 'beta']
 
-k_galparams_type_spergel = [('redshift', '<f8'), ('nu', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
-                            ('beta', '<f8'),
-                            ('flux_sed1', '<f8'), ('flux_sed2', '<f8'),
-                            ('flux_sed3', '<f8'), ('flux_sed4', '<f8')]
+
+### Numpy composite object types for the model parameters for galaxy images under different
+### modeling assumptions.
+k_galparams_type_sersic = [('redshift', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
+                           ('beta', '<f8')]
+k_galparams_type_sersic += [('flux_sed{:d}'.format(i+1), '<f8') for i in xrange(len(k_SED_names))]
+
+k_galparams_type_spergel = [('redshift', '<f8')] + [(p, '<f8') for p in k_spergel_paramnames]
+k_galparams_type_spergel += [('flux_sed{:d}'.format(i+1), '<f8') for i in xrange(len(k_SED_names))]
+
+k_galparams_type_bulgedisk = [('redshift', '<f8')]
+k_galparams_type_bulgedisk += [('{}_bulge'.format(p), '<f8') for p in k_spergel_paramnames]
+k_galparams_type_bulgedisk += [('{}_disk'.format(p), '<f8') for p in k_spergel_paramnames]
+k_galparams_type_bulgedisk += [('flux_sed{:d}_bulge'.format(i+1), '<f8') 
+    for i in xrange(len(k_SED_names))]
+k_galparams_type_bulgedisk += [('flux_sed{:d}_disk'.format(i+1), '<f8') 
+    for i in xrange(len(k_SED_names))]
+
 
 
 def lsst_noise(random_seed):
@@ -82,18 +93,24 @@ class GalSimGalaxyModel(object):
             self.params = np.core.records.array([(1., 3.4, 1.8, 0.3, np.pi/4, 1.e5, 0., 0., 0.)],
                 dtype=k_galparams_type_sersic)
             self.paramtypes = k_galparams_type_sersic
-            self.paramnames = ['redshift', 'n', 'hlr', 'e','beta', 
-                'flux_sed1', 'flux_sed2', 'flux_sed3', 'flux_sed4']
-            self.n_params = len(self.paramnames)
+            self.paramnames = [p[0] for p in k_galparams_type_sersic]
         elif galaxy_model == "Spergel":
             self.params = np.core.records.array([(1., -0.3, 1.8, 0.3, np.pi/4, 1.e5, 0., 0., 0.)],
                 dtype=k_galparams_type_spergel)
             self.paramtypes = k_galparams_type_spergel
-            self.paramnames = ['redshift', 'nu', 'hlr', 'e', 'beta', 
-                'flux_sed1', 'flux_sed2', 'flux_sed3', 'flux_sed4']
-            self.n_params = len(self.paramnames)
+            self.paramnames = [p[0] for p in k_galparams_type_spergel]
+        elif galaxy_model == "BulgeDisk":
+            self.params = np.core.records.array([(1., 
+                0.5, 0.6, 0.05, 0.0,
+                -0.6, 1.8, 0.3, np.pi/4,
+                2.e3, 0., 0., 0.,
+                0., 1.e3, 0., 0.)],
+                dtype=k_galparams_type_bulgedisk)
+            self.paramtypes = k_galparams_type_bulgedisk
+            self.paramnames = [p[0] for p in k_galparams_type_bulgedisk]
         else:
             raise AttributeError("Unimplemented galaxy model")
+        self.n_params = len(self.paramnames)
 
         ### Set GalSim SED model parameters
         self._load_sed_files()
@@ -163,13 +180,15 @@ class GalSimGalaxyModel(object):
             psf = optics
         return psf
 
-    def get_SED(self):
+    def get_SED(self, gal_comp='', flux_ref_wavelength=500):
         """
         Get the GalSim SED object given the SED parameters and redshift.
         """
+        if len(gal_comp) > 0:
+            gal_comp = '_' + gal_comp
         SEDs = [self.SEDs[SED_name].withFluxDensity(
-            target_flux_density=self.params[0]['flux_sed{:d}'.format(i+1)], 
-            wavelength=500).atRedshift(self.params[0].redshift)
+            target_flux_density=self.params[0]['flux_sed{:d}{}'.format(i+1, gal_comp)],
+            wavelength=flux_ref_wavelength).atRedshift(self.params[0].redshift)
                 for i, SED_name in enumerate(self.SEDs)]
         return reduce(add, SEDs)
 
@@ -199,19 +218,34 @@ class GalSimGalaxyModel(object):
             gal = gal.shear(gal_shape)            
 
         elif self.galaxy_model == "BulgeDisk":
-            bulge = galsim.Sersic(n=self.params.bulge_n, half_light_radius=self.params.bulge_re)
-            bulge = bulge.shear(g=self.params.e_bulge, beta=self.params.beta_bulge*galsim.radians)
-            disk = galsim.Sersic(n=self.params.disk_n, half_light_radius=self.params.disk_r0)
-            disk = disk.shear(g=self.params.e_disk, beta=self.params.beta_disk*galsim.radians)
-            gal = self.params.bulge_frac * bulge + (1 - self.params.bulge_frac) * disk
-            gal = gal.withFlux(self.params.gal_flux)
+            mono_bulge = galsim.Spergel(nu=self.params[0].nu_bulge, 
+                half_light_radius=self.params[0].hlr_bulge,
+                gsparams=self.gsparams)
+            SED_bulge = self.get_SED(gal_comp='bulge')
+            bulge = galsim.Chromatic(mono_bulge, SED_bulge)
+            bulge_shape = galsim.Shear(g=self.params[0].e_bulge, 
+                beta=self.params[0].beta_bulge*galsim.radians)
+            bulge = bulge.shear(bulge_shape)
+
+            mono_disk = galsim.Spergel(nu=self.params[0].nu_disk, 
+                half_light_radius=self.params[0].hlr_disk,
+                gsparams=self.gsparams)
+            SED_disk = self.get_SED(gal_comp='disk')
+            disk = galsim.Chromatic(mono_disk, SED_disk)
+            disk_shape = galsim.Shear(g=self.params[0].e_disk, 
+                beta=self.params[0].beta_disk*galsim.radians)
+            disk = disk.shear(disk_shape)            
+
+            # gal = self.params[0].bulge_frac * bulge + (1 - self.params[0].bulge_frac) * disk
+            gal = bulge + disk
 
         else:
             raise AttributeError("Unimplemented galaxy model")
         final = galsim.Convolve([gal, self.get_psf()])
         # wcs = galsim.PixelScale(self.pixel_scale)'
         try:
-            image = final.drawImage(self.filters[filter_name], image=out_image, scale=self.pixel_scale)
+            image = final.drawImage(self.filters[filter_name], 
+                image=out_image, scale=self.pixel_scale)
             if add_noise:
                 if self.noise is not None:
                     image.addNoise(self.noise)
@@ -223,12 +257,12 @@ class GalSimGalaxyModel(object):
             image = None                    
         return image
 
-    def save_image(self, file_name):
-        image = self.get_image()
+    def save_image(self, file_name, filter_name='r'):
+        image = self.get_image(filter_name=filter_name)
         image.write(file_name)
         return None
 
-    def plot_image(self, file_name, ngrid=None):
+    def plot_image(self, file_name, ngrid=None, filter_name='r'):
         import matplotlib.pyplot as plt
         if ngrid is not None:
             out_image = galsim.Image(ngrid, ngrid)
@@ -237,7 +271,7 @@ class GalSimGalaxyModel(object):
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
-        im = ax.matshow(self.get_image(out_image, add_noise=True).array, 
+        im = ax.matshow(self.get_image(out_image, add_noise=True, filter_name=filter_name).array, 
             cmap=plt.get_cmap('coolwarm')) #, vmin=-350, vmax=350)
         fig.colorbar(im)
         fig.savefig(file_name)
@@ -258,18 +292,20 @@ def make_test_images():
     import h5py
 
     print "Making test images for LSST and WFIRST"
-    lsst = GalSimGalaxyModel(pixel_scale=0.2, noise=lsst_noise(82357), galaxy_model="Spergel",
+    lsst = GalSimGalaxyModel(pixel_scale=0.2, noise=lsst_noise(82357),
+        galaxy_model="BulgeDisk",
         wavelength=500.e-9, primary_diam_meters=8.4, atmosphere=True)
-    lsst.save_image("test_lsst_image.fits")
-    lsst.plot_image("test_lsst_image.png", ngrid=64)
+    lsst.save_image("../TestData/test_lsst_image.fits", filter_name='r')
+    lsst.plot_image("../TestData/test_lsst_image.png", ngrid=64, filter_name='r')
 
-    wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357), galaxy_model="Spergel",
+    wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357),
+        galaxy_model="BulgeDisk",
         wavelength=1.e-6, primary_diam_meters=2.4, atmosphere=False)
-    wfirst.save_image("test_wfirst_image.fits")
-    wfirst.plot_image("test_wfirst_image.png", ngrid=64)
+    wfirst.save_image("../TestData/test_wfirst_image.fits", filter_name='y')
+    wfirst.plot_image("../TestData/test_wfirst_image.png", ngrid=64, filter_name='y')
 
-    lsst_data = lsst.get_image(galsim.Image(64, 64), add_noise=True).array
-    wfirst_data = wfirst.get_image(galsim.Image(64, 64), add_noise=True).array
+    lsst_data = lsst.get_image(galsim.Image(64, 64), add_noise=True, filter_name='r').array
+    wfirst_data = wfirst.get_image(galsim.Image(64, 64), add_noise=True, filter_name='y').array
 
     # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster
