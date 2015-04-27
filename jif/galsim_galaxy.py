@@ -12,6 +12,7 @@ import galsim
 
 
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
+k_filter_names = 'ugrizy'
 
 k_galparams_type_sersic = [('redshift', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
                            ('beta', '<f8'),
@@ -78,14 +79,14 @@ class GalSimGalaxyModel(object):
         ### Set GalSim galaxy model parameters
         # self.params = GalSimGalParams(galaxy_model=galaxy_model)
         if galaxy_model == "Sersic":
-            self.params = np.core.records.array([(1.e5, 3.4, 1.8, 0.3, np.pi/4, 1., 0., 0., 0.)],
+            self.params = np.core.records.array([(1., 3.4, 1.8, 0.3, np.pi/4, 1.e5, 0., 0., 0.)],
                 dtype=k_galparams_type_sersic)
             self.paramtypes = k_galparams_type_sersic
             self.paramnames = ['redshift', 'n', 'hlr', 'e','beta', 
                 'flux_sed1', 'flux_sed2', 'flux_sed3', 'flux_sed4']
             self.n_params = len(self.paramnames)
         elif galaxy_model == "Spergel":
-            self.params = np.core.records.array([(1.e5, -0.3, 1.8, 0.3, np.pi/4, 1., 0., 0., 0.)],
+            self.params = np.core.records.array([(1., -0.3, 1.8, 0.3, np.pi/4, 1.e5, 0., 0., 0.)],
                 dtype=k_galparams_type_spergel)
             self.paramtypes = k_galparams_type_spergel
             self.paramnames = ['redshift', 'nu', 'hlr', 'e', 'beta', 
@@ -96,6 +97,8 @@ class GalSimGalaxyModel(object):
 
         ### Set GalSim SED model parameters
         self._load_sed_files()
+        ### Load the filters that can be used to draw galaxy images
+        self._load_filter_files()
 
         self.gsparams = galsim.GSParams(
             folding_threshold=1.e-2, # maximum fractional flux that may be folded around edge of FFT
@@ -119,9 +122,24 @@ class GalSimGalaxyModel(object):
             self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang')
         return None
 
+    def _load_filter_files(self):
+        """
+        Load filters for drawing chromatic objects.
+
+        Copied from GalSim demo12.py
+        """
+        path, filename = os.path.split(__file__)
+        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        self.filters = {}
+        for filter_name in k_filter_names:
+            filter_filename = os.path.join(datapath, 'LSST_{0}.dat'.format(filter_name))
+            self.filters[filter_name] = galsim.Bandpass(filter_filename)
+            self.filters[filter_name] = self.filters[filter_name].thin(rel_err=1e-4)
+        return None
+
     def set_params(self, p):
         """
-        Take a list of parameters and set local variables
+        Take a list of parameters and set local variables.
 
         For use in emcee.
         """
@@ -147,33 +165,36 @@ class GalSimGalaxyModel(object):
 
     def get_SED(self):
         """
-        Get the GalSim SED object given the SED parameters and redshift
+        Get the GalSim SED object given the SED parameters and redshift.
         """
-        SEDs = [self.SEDs[SED_name].withFluxDensity(target_flux_density=self.params[0].flux_sed1, 
-                                    wavelength=500).atRedshift(self.params[0].redshift)
-                for SED_name in self.SEDs]
+        SEDs = [self.SEDs[SED_name].withFluxDensity(
+            target_flux_density=self.params[0]['flux_sed{:d}'.format(i+1)], 
+            wavelength=500).atRedshift(self.params[0].redshift)
+                for i, SED_name in enumerate(self.SEDs)]
         return reduce(add, SEDs)
 
-    def get_image(self, out_image=None, add_noise=False):
+    def get_image(self, out_image=None, add_noise=False, filter_name='r'):
         if self.galaxy_model == "Gaussian":
-            gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
-            gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
-            gal = gal.shear(gal_shape)
+            # gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
+            # gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
+            # gal = gal.shear(gal_shape)
+            raise AttributeError("Unimplemented galaxy model")
 
         elif self.galaxy_model == "Spergel":
-
             mono_gal = galsim.Spergel(nu=self.params[0].nu, half_light_radius=self.params[0].hlr,
                 # flux=self.params[0].gal_flux, 
                 gsparams=self.gsparams)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
-
             gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
             gal = gal.shear(gal_shape)
 
         elif self.galaxy_model == "Sersic":
-            gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
-                flux=self.params[0].gal_flux, gsparams=self.gsparams)
+            mono_gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
+                # flux=self.params[0].gal_flux, 
+                gsparams=self.gsparams)
+            SED = self.get_SED()
+            gal = galsim.Chromatic(mono_gal, SED)
             gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
             gal = gal.shear(gal_shape)            
 
@@ -190,12 +211,13 @@ class GalSimGalaxyModel(object):
         final = galsim.Convolve([gal, self.get_psf()])
         # wcs = galsim.PixelScale(self.pixel_scale)'
         try:
-            image = final.drawImage(image=out_image, scale=self.pixel_scale)
+            image = final.drawImage(self.filters[filter_name], image=out_image, scale=self.pixel_scale)
             if add_noise:
                 if self.noise is not None:
                     image.addNoise(self.noise)
                 else:
-                    raise AttributeError("A GalSim noise model must be specified to add noise to an image.")
+                    raise AttributeError("A GalSim noise model must be specified to add noise to an\
+                        image.")
         except RuntimeError:
             print "Trying to make an image that's too big."
             image = None                    
