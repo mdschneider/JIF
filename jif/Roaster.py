@@ -185,7 +185,7 @@ class Roaster(object):
             dat = f[branch+'/observation/sextractor/segments/'+str(segment)+'/image']
             self.nx[i], self.ny[i] = dat.shape
 
-        src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="Spergel",
+        src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="BulgeDisk",
                                 pixel_scale=pixel_scales[iepochs], 
                                 wavelength=wavelengths[iepochs],
                                 primary_diam_meters=primary_diams[iepochs],
@@ -204,12 +204,14 @@ class Roaster(object):
         return np.array([m[0].get_params() for m in src_models]).ravel()
 
     def set_params(self, p):
+        valid_params = True
         for isrcs in xrange(self.num_sources):
             imin = isrcs * self.n_params
             imax = (isrcs + 1) * self.n_params
             for iepochs in xrange(self.num_epochs):
                 src_models[isrcs][iepochs].set_params(p[imin:imax])
-        return None
+                valid_params *= src_models[isrcs][iepochs].validate_params()
+        return valid_params
 
     def lnprior(self, omega):
         return self.lnprior_omega(omega)
@@ -222,30 +224,33 @@ class Roaster(object):
         See GalSim/examples/demo5.py for how to add multiple sources to a single image.
         """
         self.istep += 1
-        self.set_params(omega)
+        valid_params = self.set_params(omega)
 
-        lnlike = 0.0
-        for iepochs in xrange(self.num_epochs):
-            model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs], 
-                scale=src_models[0][iepochs].pixel_scale)
+        if valid_params:
+            lnlike = 0.0
+            for iepochs in xrange(self.num_epochs):
+                model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs], 
+                    scale=src_models[0][iepochs].pixel_scale)
 
-            for isrcs in xrange(self.num_sources):
-                ### Draw every source using the full output array
-                b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
-                sub_image = model_image[b]
-                model = src_models[isrcs][iepochs].get_image(sub_image)
+                for isrcs in xrange(self.num_sources):
+                    ### Draw every source using the full output array
+                    b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
+                    sub_image = model_image[b]
+                    model = src_models[isrcs][iepochs].get_image(sub_image)
 
-            if model is None:
-                lnlike = -np.inf
-            else:
-                if self.debug:
-                    model_image_file_name = os.path.join('debug', 
-                        'model_image_iepoch%d_istep%d.fits' % (iepochs, self.istep))
-                    model_image.write(model_image_file_name)
-                    logging.debug('Wrote model image to %r', model_image_file_name)
+                if model is None:
+                    lnlike = -np.inf
+                else:
+                    if self.debug:
+                        model_image_file_name = os.path.join('debug', 
+                            'model_image_iepoch%d_istep%d.fits' % (iepochs, self.istep))
+                        model_image.write(model_image_file_name)
+                        logging.debug('Wrote model image to %r', model_image_file_name)
 
-                lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image.array) ** 2) / 
-                    pix_noise_var[iepochs])
+                    lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image.array) ** 2) / 
+                        pix_noise_var[iepochs])
+        else:
+            lnlike = -np.inf
         return lnlike
 
     def __call__(self, omega, *args, **kwargs):

@@ -103,8 +103,8 @@ class GalSimGalaxyModel(object):
             self.params = np.core.records.array([(1., 
                 0.5, 0.6, 0.05, 0.0,
                 -0.6, 1.8, 0.3, np.pi/4,
-                2.e3, 0., 0., 0.,
-                0., 1.e3, 0., 0.)],
+                2.e4, 0., 0., 0.,
+                0., 1.e4, 0., 0.)],
                 dtype=k_galparams_type_bulgedisk)
             self.paramtypes = k_galparams_type_bulgedisk
             self.paramnames = [p[0] for p in k_galparams_type_bulgedisk]
@@ -168,6 +168,27 @@ class GalSimGalaxyModel(object):
         Return a list of model parameter values.
         """
         return self.params.view('<f8')
+
+    def validate_params(self):
+        """
+        Check that all model parameters take values inside allowed ranges.
+        """
+        valid_params = True
+        if self.galaxy_model == "Sersic" or self.galaxy_model == "Spergel":
+            if self.params[0].e < 0. or self.params[0].e > 1.:
+                valid_params *= False
+        if self.galaxy_model == "Spergel":
+            if self.params[0].nu < -0.85 or self.params[0].nu > 0.5:
+                valid_params *= False
+        if self.galaxy_model == "BulgeDisk":
+            if (self.params[0].e_bulge < 0. or self.params[0].e_bulge > 1. or
+                self.params[0].e_disk < 0. or self.params[0].e_disk > 1.):
+                valid_params *= False
+            if (self.params[0].nu_bulge < -0.85 or self.params[0].nu_bulge > 0.8 or
+                self.params[0].nu_disk < -0.85 or self.params[0].nu_disk > 0.8):
+                valid_params *= False
+                print self.params[0]
+        return valid_params
 
     def get_psf(self):
         lam_over_diam = self.wavelength / self.primary_diam_meters
