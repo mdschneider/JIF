@@ -5,15 +5,24 @@ galsim_galaxy.py
 
 Wrapper for GalSim galaxy models to use in MCMC.
 """
-
+import os
 import numpy as np
+from operator import add
 import galsim
 
 
-k_galparams_type_sersic = [('gal_flux', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
-                           ('beta', '<f8')]
-k_galparams_type_spergel = [('gal_flux', '<f8'), ('nu', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
-                            ('beta', '<f8')]
+k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
+k_filter_names = 'ugrizy'
+
+k_galparams_type_sersic = [('redshift', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
+                           ('beta', '<f8'),
+                           ('flux_sed1', '<f8'), ('flux_sed2', '<f8'),
+                           ('flux_sed3', '<f8'), ('flux_sed4', '<f8')]
+
+k_galparams_type_spergel = [('redshift', '<f8'), ('nu', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
+                            ('beta', '<f8'),
+                            ('flux_sed1', '<f8'), ('flux_sed2', '<f8'),
+                            ('flux_sed3', '<f8'), ('flux_sed4', '<f8')]
 
 
 def lsst_noise(random_seed):
@@ -43,60 +52,6 @@ def wfirst_noise(random_seed):
         sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
 
 
-# class GalSimGalParams(object):
-#     """Parameters for GalSim galaxies"""
-#     def __init__(self, galaxy_model="Gaussian"):
-#         self.galaxy_model = galaxy_model
-#         if galaxy_model == "Gaussian":
-#             self.gal_flux = 1.e5
-#             self.gal_sigma = 2.
-#             self.e = 0.3
-#             self.beta = np.pi/4.
-#             self.n_params = 4
-#         elif galaxy_model == "Spergel":
-#             raise NotImplementedError()
-#         elif galaxy_model == "Sersic":
-#             self.gal_flux = 1.e5
-#             self.n = 3.4
-#             self.hlr = 1.8
-#             self.e = 0.3
-#             self.beta = np.pi/4.
-#             self.n_params = 5
-#         elif galaxy_model == "BulgeDisk":
-#             self.gal_flux = 1.e5
-#             self.bulge_n = 3.4
-#             self.disk_n = 1.5
-#             self.bulge_re = 2.3
-#             self.disk_r0 = 0.85
-#             self.bulge_frac = 0.0 #0.3
-#             self.e_bulge = 0.01
-#             self.e_disk = 0.25
-#             self.beta_bulge = np.pi/4.
-#             self.beta_disk = 3. * np.pi/4.
-#             self.n_params = 10
-#         else:
-#             raise AttributeError("Unimplemented galaxy model")
-
-#     def num_params(self):
-#         return self.n_params
-
-#     def get_params(self):
-#         """
-#         Return an array of parameter values.
-#         """
-#         if self.galaxy_model == "Gaussian":
-#             return np.array([self.gal_flux, self.gal_sigma, self.e, self.beta])
-#         elif self.galaxy_model == "Spergel":
-#             raise NotImplementedError()
-#         elif self.galaxy_model == "Sersic":
-#             return np.array([self.gal_flux, self.n, self.hlr, self.e, self.beta])
-#         elif self.galaxy_model == "BulgeDisk":
-#             return np.array([self.gal_flux, self.bulge_n, self.disk_n, self.bulge_re, self.disk_r0, 
-#             self.bulge_frac, self.e_bulge, self.e_disk, self.beta_bulge, self.beta_disk])
-#         else:
-#             raise AttributeError("Unimplemented galaxy model")
-
-
 class GalSimGalaxyModel(object):
     """
     Parametric galaxy model from GalSim for MCMC.
@@ -121,33 +76,70 @@ class GalSimGalaxyModel(object):
         self.primary_diam_meters = primary_diam_meters
         self.atmosphere = atmosphere
 
+        ### Set GalSim galaxy model parameters
         # self.params = GalSimGalParams(galaxy_model=galaxy_model)
         if galaxy_model == "Sersic":
-            self.params = np.core.records.array([(1.e5, 3.4, 1.8, 0.3, np.pi/4)],
+            self.params = np.core.records.array([(1., 3.4, 1.8, 0.3, np.pi/4, 1.e5, 0., 0., 0.)],
                 dtype=k_galparams_type_sersic)
             self.paramtypes = k_galparams_type_sersic
-            self.paramnames = ['gal_flux', 'n', 'hlr', 'e','beta',]
-            self.n_params = 5
+            self.paramnames = ['redshift', 'n', 'hlr', 'e','beta', 
+                'flux_sed1', 'flux_sed2', 'flux_sed3', 'flux_sed4']
+            self.n_params = len(self.paramnames)
         elif galaxy_model == "Spergel":
-            self.params = np.core.records.array([(1.e5, -0.3, 1.8, 0.3, np.pi/4)],
+            self.params = np.core.records.array([(1., -0.3, 1.8, 0.3, np.pi/4, 1.e5, 0., 0., 0.)],
                 dtype=k_galparams_type_spergel)
             self.paramtypes = k_galparams_type_spergel
-            self.paramnames = ['gal_flux', 'nu', 'hlr', 'e', 'beta']
-            self.n_params = 5
+            self.paramnames = ['redshift', 'nu', 'hlr', 'e', 'beta', 
+                'flux_sed1', 'flux_sed2', 'flux_sed3', 'flux_sed4']
+            self.n_params = len(self.paramnames)
         else:
             raise AttributeError("Unimplemented galaxy model")
 
+        ### Set GalSim SED model parameters
+        self._load_sed_files()
+        ### Load the filters that can be used to draw galaxy images
+        self._load_filter_files()
+
         self.gsparams = galsim.GSParams(
-            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
+            folding_threshold=1.e-2, # maximum fractional flux that may be folded around edge of FFT
             maxk_threshold=2.e-2,    # k-values less than this may be excluded off edge of FFT
             xvalue_accuracy=1.e-2,   # approximations in real space aim to be this accurate
             kvalue_accuracy=1.e-2,   # approximations in fourier space aim to be this accurate
             shoot_accuracy=1.e-2,    # approximations in photon shooting aim to be this accurate
             minimum_fft_size=16)     # minimum size of ffts
 
+    def _load_sed_files(self):
+        """
+        Load SED templates from files.
+
+        Copied from GalSim demo12.py
+        """
+        path, filename = os.path.split(__file__)
+        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        self.SEDs = {}
+        for SED_name in k_SED_names:
+            SED_filename = os.path.join(datapath, '{0}.sed'.format(SED_name))
+            self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang')
+        return None
+
+    def _load_filter_files(self):
+        """
+        Load filters for drawing chromatic objects.
+
+        Copied from GalSim demo12.py
+        """
+        path, filename = os.path.split(__file__)
+        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        self.filters = {}
+        for filter_name in k_filter_names:
+            filter_filename = os.path.join(datapath, 'LSST_{0}.dat'.format(filter_name))
+            self.filters[filter_name] = galsim.Bandpass(filter_filename)
+            self.filters[filter_name] = self.filters[filter_name].thin(rel_err=1e-4)
+        return None
+
     def set_params(self, p):
         """
-        Take a list of parameters and set local variables
+        Take a list of parameters and set local variables.
 
         For use in emcee.
         """
@@ -169,23 +161,43 @@ class GalSimGalaxyModel(object):
             psf = galsim.Convolve([atmos, optics])
         else:
             psf = optics
-        return psf        
+        return psf
 
-    def get_image(self, out_image=None, add_noise=False):
+    def get_SED(self):
+        """
+        Get the GalSim SED object given the SED parameters and redshift.
+        """
+        SEDs = [self.SEDs[SED_name].withFluxDensity(
+            target_flux_density=self.params[0]['flux_sed{:d}'.format(i+1)], 
+            wavelength=500).atRedshift(self.params[0].redshift)
+                for i, SED_name in enumerate(self.SEDs)]
+        return reduce(add, SEDs)
+
+    def get_image(self, out_image=None, add_noise=False, filter_name='r'):
         if self.galaxy_model == "Gaussian":
-            gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
-            gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
-            gal = gal.shear(gal_shape)
+            # gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
+            # gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
+            # gal = gal.shear(gal_shape)
+            raise AttributeError("Unimplemented galaxy model")
+
         elif self.galaxy_model == "Spergel":
-            gal = galsim.Spergel(nu=self.params[0].nu, half_light_radius=self.params[0].hlr,
-                flux=self.params[0].gal_flux, gsparams=self.gsparams)
+            mono_gal = galsim.Spergel(nu=self.params[0].nu, half_light_radius=self.params[0].hlr,
+                # flux=self.params[0].gal_flux, 
+                gsparams=self.gsparams)
+            SED = self.get_SED()
+            gal = galsim.Chromatic(mono_gal, SED)
             gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
-            gal = gal.shear(gal_shape)            
+            gal = gal.shear(gal_shape)
+
         elif self.galaxy_model == "Sersic":
-            gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
-                flux=self.params[0].gal_flux, gsparams=self.gsparams)
+            mono_gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
+                # flux=self.params[0].gal_flux, 
+                gsparams=self.gsparams)
+            SED = self.get_SED()
+            gal = galsim.Chromatic(mono_gal, SED)
             gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
             gal = gal.shear(gal_shape)            
+
         elif self.galaxy_model == "BulgeDisk":
             bulge = galsim.Sersic(n=self.params.bulge_n, half_light_radius=self.params.bulge_re)
             bulge = bulge.shear(g=self.params.e_bulge, beta=self.params.beta_bulge*galsim.radians)
@@ -193,17 +205,19 @@ class GalSimGalaxyModel(object):
             disk = disk.shear(g=self.params.e_disk, beta=self.params.beta_disk*galsim.radians)
             gal = self.params.bulge_frac * bulge + (1 - self.params.bulge_frac) * disk
             gal = gal.withFlux(self.params.gal_flux)
+
         else:
             raise AttributeError("Unimplemented galaxy model")
         final = galsim.Convolve([gal, self.get_psf()])
         # wcs = galsim.PixelScale(self.pixel_scale)'
         try:
-            image = final.drawImage(image=out_image, scale=self.pixel_scale)
+            image = final.drawImage(self.filters[filter_name], image=out_image, scale=self.pixel_scale)
             if add_noise:
                 if self.noise is not None:
                     image.addNoise(self.noise)
                 else:
-                    raise AttributeError("A GalSim noise model must be specified to add noise to an image.")
+                    raise AttributeError("A GalSim noise model must be specified to add noise to an\
+                        image.")
         except RuntimeError:
             print "Trying to make an image that's too big."
             image = None                    
