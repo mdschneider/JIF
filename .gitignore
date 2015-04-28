@@ -54,3 +54,6 @@ docs/_build/
 target/
 *.h5
 *.png
+*.fdb_latexmk
+*.out
+jif_paper1.pdf
