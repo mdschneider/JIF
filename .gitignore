@@ -57,3 +57,4 @@ target/
 *.fdb_latexmk
 *.out
 jif_paper1.pdf
+*.toc
