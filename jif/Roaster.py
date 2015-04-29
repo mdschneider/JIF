@@ -58,11 +58,14 @@ class Roaster(object):
     @param data_format        Format for the input data file.
     @param galaxy_model_type  Type of parametric galaxy model - see galsim_galaxy types.
                               ['Sersic', 'Spergel', 'BulgeDisk' (default)]
+    @param epoch              Select only this epoch number from the input, if provided.
+                              If not provided, then get all epochs.
     @param debug              Save debugging outputs (including model images per step?)
     """
     def __init__(self, lnprior_omega=None, 
                  data_format='test_galsim_galaxy',
                  galaxy_model_type='BulgeDisk',
+                 epoch=None,
                  debug=False):
         if lnprior_omega is None:
             self.lnprior_omega = EmptyPrior()
@@ -70,6 +73,7 @@ class Roaster(object):
             self.lnprior_omega = lnprior_omega
         self.data_format = data_format
         self.galaxy_model_type = galaxy_model_type
+        self.epoch = epoch
         self.debug = debug
 
         ### Count the number of calls to self.lnlike
@@ -102,8 +106,15 @@ class Roaster(object):
 
         logging.info("<Roaster> Loading image data")
         if self.data_format == "test_galsim_galaxy":
+            ### TODO: Get filter names from input file
+            self.filters = ['r', 'y']
+
             f = h5py.File(infile, 'r')
-            self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
+            if self.epoch is None:
+                self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
+            else:
+                self.num_epochs = 1
+            print "Num. epochs: {:d}".format(self.num_epochs)
             if segment == None:
                 segment = 0
             self.num_sources = f['space/observation/sextractor/segments/'+str(segment)+'/stamp_objprops'].shape[0]
@@ -117,11 +128,10 @@ class Roaster(object):
                 ### Make this option more generic
                 # setup df5 paths
                 # define the parent branch (i.e. telescope)
-                if i == 0:
-                    # define the ground data paths
-                    branch = 'ground'
-                if i == 1:
-                    branch = 'space'
+                if self.epoch is None:
+                    branch = ['ground', 'space'][i]
+                else:
+                    branch = ['ground', 'space'][self.epoch]
                 telescope = f[branch]
                 seg = f[branch+'/observation/sextractor/segments/'+str(segment)]
                 obs = f[branch+'/observation']
@@ -254,7 +264,8 @@ class Roaster(object):
                     ### Draw every source using the full output array
                     b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
                     sub_image = model_image[b]
-                    model = src_models[isrcs][iepochs].get_image(sub_image)
+                    model = src_models[isrcs][iepochs].get_image(sub_image, 
+                        filter_name=self.filters[iepochs])
 
                 if model is None:
                     lnlike = -np.inf
@@ -316,8 +327,13 @@ def do_sampling(args, roaster):
 
 
 def write_results(args, pps, lnps):
-    logging.info("Writing MCMC results to %s" % args.outfile)
-    f = h5py.File(args.outfile, 'w')
+    if args.epoch is None:
+        epoch_lab = ""
+    else:
+        epoch_lab = "_epoch{:d}".format(args.epoch)
+    outfile = args.outfile + epoch_lab + ".h5"
+    logging.info("Writing MCMC results to %s" % outfile)
+    f = h5py.File(outfile, 'w')
     if "post" in f:
         del f["post"]
     post = f.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
@@ -362,12 +378,19 @@ def main():
     parser.add_argument("infiles",
                         help="input image files to roast", nargs='+')
     
-    parser.add_argument("-o", "--outfile", default="../output/roasting/roaster_out.h5",
+    parser.add_argument("-o", "--outfile", default="../output/roasting/roaster_out",
                         help="output HDF5 to record posterior samples and loglikes."
-                             +"(Default: `roaster_out.h5`)")
+                             +"(Default: `roaster_out`)")
 
     parser.add_argument("--galaxy_model_type", type=str, default="BulgeDisk",
                         help="Type of parametric galaxy model (Default: 'BulgeDisk')")
+
+    parser.add_argument("--data_format", type=str, default="test_galsim_galaxy",
+                        help="Format of the input image data file (Default: 'test_galsim_galaxy')")
+
+    parser.add_argument("--epoch", type=int, default=None,
+                        help="Select only a single epoch from the input data file \
+                        (Default: None - get all epochs)")
     
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
@@ -399,9 +422,10 @@ def main():
     else:
         lnprior_omega = EmptyPrior()
 
-    roaster = Roaster(debug=args.debug, data_format='test_galsim_galaxy',
+    roaster = Roaster(debug=args.debug, data_format=args.data_format,
                       lnprior_omega=lnprior_omega, 
-                      galaxy_model_type=args.galaxy_model_type)
+                      galaxy_model_type=args.galaxy_model_type,
+                      epoch=args.epoch)
     roaster.Load(args.infiles[0])
 
     print "\nRoaster:", roaster.__dict__, "\n"

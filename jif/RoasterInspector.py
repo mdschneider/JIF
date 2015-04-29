@@ -15,7 +15,7 @@ class RoasterInspector(object):
     def __init__(self, args):
         self.args = args
         f = h5py.File(args.infile, 'r')
-        self.paramnames = f['post'].attrs['paramnames']        
+        self.paramnames = f['post'].attrs['paramnames']
         self.data = f['post'][...]
         self.logprob = f['logprobs'][...]
         self.nburn = f.attrs['nburn']        
