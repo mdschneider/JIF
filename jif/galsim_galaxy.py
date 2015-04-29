@@ -35,6 +35,9 @@ k_galparams_type_bulgedisk += [('flux_sed{:d}_disk'.format(i+1), '<f8')
     for i in xrange(len(k_SED_names))]
 
 
+### Minimum value a flux parameter can take, since these get log-transformed
+k_flux_param_minval = 1.e-12
+
 
 def lsst_noise(random_seed):
     """
@@ -73,7 +76,7 @@ class GalSimGalaxyModel(object):
                  psf_sigma=0.5, ### Not used
                  pixel_scale=0.2, 
                  noise=None,
-                 galaxy_model="Gaussian",
+                 galaxy_model="Spergel",
                  wavelength=1.e-6,
                  primary_diam_meters=2.4,
                  atmosphere=False): 
@@ -103,8 +106,8 @@ class GalSimGalaxyModel(object):
             self.params = np.core.records.array([(1., 
                 0.5, 0.6, 0.05, 0.0,
                 -0.6, 1.8, 0.3, np.pi/4,
-                2.e4, 0., 0., 0.,
-                0., 1.e4, 0., 0.)],
+                2.e4, k_flux_param_minval, k_flux_param_minval, k_flux_param_minval,
+                k_flux_param_minval, 1.e4, k_flux_param_minval, k_flux_param_minval)],
                 dtype=k_galparams_type_bulgedisk)
             self.paramtypes = k_galparams_type_bulgedisk
             self.paramnames = [p[0] for p in k_galparams_type_bulgedisk]
@@ -161,13 +164,29 @@ class GalSimGalaxyModel(object):
         For use in emcee.
         """
         self.params = np.core.records.array(p, dtype=self.paramtypes)
+        ### Transform flux variables with exp -- we sample in ln(Flux)
+        for i in xrange(len(k_SED_names)):
+            if self.galaxy_model in ["Spergel", "Sersic"]:
+                pname = 'flux_sed{:d}'.format(i+1)
+                self.params[0][pname] = np.exp(self.params[0][pname])
+            elif self.galaxy_model == "BulgeDisk":
+                pname = 'flux_sed{:d}_bulge'.format(i+1)
+                self.params[0][pname] = np.exp(self.params[0][pname])
+                pname = 'flux_sed{:d}_disk'.format(i+1)
+                self.params[0][pname] = np.exp(self.params[0][pname])
         return None
 
     def get_params(self):
         """
         Return a list of model parameter values.
         """
-        return self.params.view('<f8')
+        p = self.params.view('<f8')
+        ### Transform fluxes to ln(Flux) for MCMC sampling
+        if self.galaxy_model in ["Spergel", "Sersic"]:
+            p[5:(5+len(k_SED_names))] = np.log(p[5:(5+len(k_SED_names))])
+        elif self.galaxy_model == "BulgeDisk":
+            p[9:(9+(2*len(k_SED_names)))] = np.log(p[9:(9+2*len(k_SED_names))])
+        return p
 
     def validate_params(self):
         """
@@ -177,9 +196,15 @@ class GalSimGalaxyModel(object):
         if self.galaxy_model == "Sersic" or self.galaxy_model == "Spergel":
             if self.params[0].e < 0. or self.params[0].e > 1.:
                 valid_params *= False
+            for i in xrange(len(k_SED_names)):
+                if self.params[0]['flux_sed{:d}'.format(i+1)] <= 0.:
+                    valid_params *= False
         if self.galaxy_model == "Spergel":
             if self.params[0].nu < -0.85 or self.params[0].nu > 0.5:
                 valid_params *= False
+            for i in xrange(len(k_SED_names)):
+                if self.params[0]['flux_sed{:d}'.format(i+1)] <= 0.:
+                    valid_params *= False                
         if self.galaxy_model == "BulgeDisk":
             if (self.params[0].e_bulge < 0. or self.params[0].e_bulge > 1. or
                 self.params[0].e_disk < 0. or self.params[0].e_disk > 1.):
@@ -188,6 +213,11 @@ class GalSimGalaxyModel(object):
                 self.params[0].nu_disk < -0.85 or self.params[0].nu_disk > 0.8):
                 valid_params *= False
                 print self.params[0]
+            for i in xrange(len(k_SED_names)):
+                if self.params[0]['flux_sed{:d}_bulge'.format(i+1)] <= 0.:
+                    valid_params *= False
+                if self.params[0]['flux_sed{:d}_disk'.format(i+1)] <= 0.:
+                    valid_params *= False                    
         return valid_params
 
     def get_psf(self):

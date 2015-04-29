@@ -54,17 +54,22 @@ class Roaster(object):
     For scenario (b), we need a list of source models that generate a model image that is 
     fed to the likelihood function for a single epoch or instrument.
 
-    @lnprior_omega      Prior class for the galaxy model parameters
-    @param data_format  Format for the input data file.
-    @param debug        Save debugging outputs (including model images per step?)
+    @param lnprior_omega      Prior class for the galaxy model parameters
+    @param data_format        Format for the input data file.
+    @param galaxy_model_type  Type of parametric galaxy model - see galsim_galaxy types.
+                              ['Sersic', 'Spergel', 'BulgeDisk' (default)]
+    @param debug              Save debugging outputs (including model images per step?)
     """
     def __init__(self, lnprior_omega=None, 
-                 data_format='test_galsim_galaxy', debug=False):
+                 data_format='test_galsim_galaxy',
+                 galaxy_model_type='BulgeDisk',
+                 debug=False):
         if lnprior_omega is None:
             self.lnprior_omega = EmptyPrior()
         else:
             self.lnprior_omega = lnprior_omega
         self.data_format = data_format
+        self.galaxy_model_type = galaxy_model_type
         self.debug = debug
 
         ### Count the number of calls to self.lnlike
@@ -99,7 +104,8 @@ class Roaster(object):
         if self.data_format == "test_galsim_galaxy":
             f = h5py.File(infile, 'r')
             self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
-            segment = 0
+            if segment == None:
+                segment = 0
             self.num_sources = f['space/observation/sextractor/segments/'+str(segment)+'/stamp_objprops'].shape[0]
 
             instruments = []
@@ -185,7 +191,7 @@ class Roaster(object):
             dat = f[branch+'/observation/sextractor/segments/'+str(segment)+'/image']
             self.nx[i], self.ny[i] = dat.shape
 
-        src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model="BulgeDisk",
+        src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model=self.galaxy_model_type,
                                 pixel_scale=pixel_scales[iepochs], 
                                 wavelength=wavelengths[iepochs],
                                 primary_diam_meters=primary_diams[iepochs],
@@ -204,6 +210,12 @@ class Roaster(object):
         return np.array([m[0].get_params() for m in src_models]).ravel()
 
     def set_params(self, p):
+        """
+        Set the galaxy model parameters for all galaxies in a segment from a flattened array `p`.
+
+        `p` is assumed to be packed as [(p1_gal1, ..., pn_gal1), ..., (p1_gal_m, ..., pn_gal_m)]
+        for n parameters per galaxy and m galaxies in the segment.
+        """
         valid_params = True
         for isrcs in xrange(self.num_sources):
             imin = isrcs * self.n_params
@@ -214,7 +226,13 @@ class Roaster(object):
         return valid_params
 
     def lnprior(self, omega):
-        return self.lnprior_omega(omega)
+        ### Iterate over distinct galaxy models in the segment and evaluate the prior for each one.
+        lnp = 0.0
+        for isrcs in xrange(self.num_sources):
+            imin = isrcs * self.n_params
+            imax = (isrcs + 1) * self.n_params
+            lnp += self.lnprior_omega(omega[imin:imax])
+        return lnp
 
     def lnlike(self, omega, *args, **kwargs):
         """
@@ -312,25 +330,62 @@ def write_results(args, pps, lnps):
     return None
 
 # ---------------------------------------------------------------------------------------
+# Prior distributions for interim sampling of galaxy model parameters
+# ---------------------------------------------------------------------------------------
+class DefaultPriorBulgeDisk(object):
+    """
+    A default prior for the parameters of a bulge+disk galaxy model
+    """
+    def __init__(self, z_mean=1.0):
+        self.z_mean = z_mean
+        self.z_var = 0.05 * (1. + z_mean)
+        ### ellipticity variance for bulge/disk components
+        self.e_var_bulge = 0.05 ** 2
+        self.e_var_disk = 0.3 ** 3
+
+    def __call__(self, omega):
+        """
+        Evaluate the prior on Bulge + Disk galaxy model parameters for a single galaxy
+        """
+        ### Redshift
+        lnp = -0.5 * (omega[0] - self.z_mean) ** 2 / self.z_var
+        ### Ellipticity
+        lnp += -0.5 * (omega[3]) ** 2 / self.e_var_bulge
+        lnp += -0.5 * (omega[7]) ** 2 / self.e_var_disk
+        return lnp
+
+# ---------------------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(
         description='Draw interim samples of source model parameters via MCMC.')
+    
     parser.add_argument("infiles",
-                        help="input image files to roast", nargs='+')    
+                        help="input image files to roast", nargs='+')
+    
     parser.add_argument("-o", "--outfile", default="../output/roasting/roaster_out.h5",
                         help="output HDF5 to record posterior samples and loglikes."
                              +"(Default: `roaster_out.h5`)")
+
+    parser.add_argument("--galaxy_model_type", type=str, default="BulgeDisk",
+                        help="Type of parametric galaxy model (Default: 'BulgeDisk')")
+    
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
+    
     parser.add_argument("--nsamples", default=250, type=int,
                         help="Number of samples for each emcee walker (Default: 250)")
+    
     parser.add_argument("--nwalkers", default=64, type=int,
                         help="Number of emcee walkers (Default: 64)")
+    
     parser.add_argument("--nburn", default=50, type=int,
                         help="Number of burn-in steps (Default: 50)")
+    
     parser.add_argument("--nthreads", default=1, type=int,
                         help="Number of threads to use (Default: 8)")
+    
     parser.add_argument("--quiet", action="store_true")
+    
     parser.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
@@ -338,7 +393,15 @@ def main():
 
     logging.debug('--- Roaster started')
 
-    roaster = Roaster(debug=args.debug)
+    ### Set priors
+    if args.galaxy_model_type == "BulgeDisk":
+        lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
+    else:
+        lnprior_omega = EmptyPrior()
+
+    roaster = Roaster(debug=args.debug, data_format='test_galsim_galaxy',
+                      lnprior_omega=lnprior_omega, 
+                      galaxy_model_type=args.galaxy_model_type)
     roaster.Load(args.infiles[0])
 
     print "\nRoaster:", roaster.__dict__, "\n"
