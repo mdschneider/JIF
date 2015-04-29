@@ -234,6 +234,10 @@ class GalSimGalaxyModel(object):
     def get_SED(self, gal_comp='', flux_ref_wavelength=500):
         """
         Get the GalSim SED object given the SED parameters and redshift.
+
+        This routine passes galsim_galaxy flux parameters to the GalSim SED.withFluxDensity()
+        method. The flux parameters therefore have units of photons/nm at a reference wavelength
+        (here defined to be 500 nm) as required by GalSim.
         """
         if len(gal_comp) > 0:
             gal_comp = '_' + gal_comp
@@ -243,7 +247,7 @@ class GalSimGalaxyModel(object):
                 for i, SED_name in enumerate(self.SEDs)]
         return reduce(add, SEDs)
 
-    def get_image(self, out_image=None, add_noise=False, filter_name='r'):
+    def get_image(self, out_image=None, add_noise=False, filter_name='r', gain=1.):
         if self.galaxy_model == "Gaussian":
             # gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
             # gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
@@ -296,7 +300,7 @@ class GalSimGalaxyModel(object):
         # wcs = galsim.PixelScale(self.pixel_scale)'
         try:
             image = final.drawImage(self.filters[filter_name], 
-                image=out_image, scale=self.pixel_scale)
+                image=out_image, scale=self.pixel_scale, gain=gain)
             if add_noise:
                 if self.noise is not None:
                     image.addNoise(self.noise)
@@ -313,7 +317,7 @@ class GalSimGalaxyModel(object):
         image.write(file_name)
         return None
 
-    def plot_image(self, file_name, ngrid=None, filter_name='r'):
+    def plot_image(self, file_name, ngrid=None, filter_name='r', title=None):
         import matplotlib.pyplot as plt
         if ngrid is not None:
             out_image = galsim.Image(ngrid, ngrid)
@@ -322,9 +326,16 @@ class GalSimGalaxyModel(object):
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
-        im = ax.matshow(self.get_image(out_image, add_noise=True, filter_name=filter_name).array, 
-            cmap=plt.get_cmap('coolwarm')) #, vmin=-350, vmax=350)
-        fig.colorbar(im)
+        im = ax.imshow(self.get_image(out_image, add_noise=True, filter_name=filter_name).array / 1.e3, 
+            cmap=plt.get_cmap('coolwarm'), origin='lower',
+            interpolation='none',
+            extent=[0, ngrid*self.pixel_scale, 0, ngrid*self.pixel_scale])
+        ax.set_xlabel(r"Detector $x$-axis (arcsec.)")
+        ax.set_ylabel(r"Detector $y$-axis (arcsec.)")
+        if title is not None:
+            ax.set_title(title)
+        cbar = fig.colorbar(im)
+        cbar.set_label(r"$10^3$ photons / pixel")
         fig.savefig(file_name)
         return None
 
@@ -347,16 +358,18 @@ def make_test_images():
         galaxy_model="BulgeDisk",
         wavelength=500.e-9, primary_diam_meters=8.4, atmosphere=True)
     lsst.save_image("../TestData/test_lsst_image.fits", filter_name='r')
-    lsst.plot_image("../TestData/test_lsst_image.png", ngrid=64, filter_name='r')
+    lsst.plot_image("../TestData/test_lsst_image.png", ngrid=70, filter_name='r',
+                    title="LSST")
 
     wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357),
         galaxy_model="BulgeDisk",
         wavelength=1.e-6, primary_diam_meters=2.4, atmosphere=False)
-    wfirst.save_image("../TestData/test_wfirst_image.fits", filter_name='y')
-    wfirst.plot_image("../TestData/test_wfirst_image.png", ngrid=64, filter_name='y')
+    wfirst.save_image("../TestData/test_wfirst_image.fits", filter_name='r')
+    wfirst.plot_image("../TestData/test_wfirst_image.png", ngrid=128, filter_name='r',
+                      title="WFIRST")
 
-    lsst_data = lsst.get_image(galsim.Image(64, 64), add_noise=True, filter_name='r').array
-    wfirst_data = wfirst.get_image(galsim.Image(64, 64), add_noise=True, filter_name='y').array
+    lsst_data = lsst.get_image(galsim.Image(70, 70), add_noise=True, filter_name='r').array
+    wfirst_data = wfirst.get_image(galsim.Image(128, 128), add_noise=True, filter_name='r').array
 
     # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster

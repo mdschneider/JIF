@@ -78,6 +78,15 @@ class Roaster(object):
 
         ### Count the number of calls to self.lnlike
         self.istep = 0
+
+    def _get_branch_name(self, i):
+        branches = ['ground', 'space']
+        # define the parent branch (i.e. telescope)
+        if self.epoch is None:
+            branch = branches[i]
+        else:
+            branch = branches[self.epoch]        
+        return branch
     
     def Load(self, infile, segment=None):
         """
@@ -107,7 +116,7 @@ class Roaster(object):
         logging.info("<Roaster> Loading image data")
         if self.data_format == "test_galsim_galaxy":
             ### TODO: Get filter names from input file
-            self.filters = ['r', 'y']
+            self.filters = ['r', 'r']
 
             f = h5py.File(infile, 'r')
             if self.epoch is None:
@@ -128,10 +137,7 @@ class Roaster(object):
                 ### Make this option more generic
                 # setup df5 paths
                 # define the parent branch (i.e. telescope)
-                if self.epoch is None:
-                    branch = ['ground', 'space'][i]
-                else:
-                    branch = ['ground', 'space'][self.epoch]
+                branch = self._get_branch_name(i)
                 telescope = f[branch]
                 seg = f[branch+'/observation/sextractor/segments/'+str(segment)]
                 obs = f[branch+'/observation']
@@ -165,11 +171,7 @@ class Roaster(object):
                 ### Make this option more generic
                 # setup df5 paths
                 # define the parent branch (i.e. telescope)
-                if i == 0:
-                    # define the ground data paths
-                    branch = 'ground'
-                if i == 1:
-                    branch = 'space'
+                branch = self._get_branch_name(i)
                 telescope = f[branch]
                 seg = f[branch+'/observation/sextractor/segments/'+str(segment)]
                 obs = f[branch+'/observation']
@@ -193,11 +195,7 @@ class Roaster(object):
         self.ny = np.zeros(self.num_epochs, dtype=int)
         for i in xrange(self.num_epochs):
             ### Make this option more generic
-            if i == 0:
-                # define the ground data paths
-                branch = 'ground'
-            if i == 1:
-                branch = 'space'
+            branch = self._get_branch_name(i)
             dat = f[branch+'/observation/sextractor/segments/'+str(segment)+'/image']
             self.nx[i], self.ny[i] = dat.shape
 

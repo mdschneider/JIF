@@ -11,9 +11,11 @@ Alternatively it can be called by importing showseg and using:
 showseg.plot(filename,segment)
 """
 import sys
+import argparse
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+
 
 def plot(file_name,segment,output_name=None):
     """
@@ -67,10 +69,14 @@ def plot(file_name,segment,output_name=None):
     
     f.close()
 
-def sysargparse(arg):
-    if len(arg) != 3:
-        print "showseg: Error, the proper command line input is 'python showseg.py hdf5filename segment#'"
-    plot(arg[1], arg[2])
 
 if __name__ == "__main__":
-    sysargparse(sys.argv)
+    parser = argparse.ArgumentParser(description="Create a plot of segment pixel data.")
+
+    parser.add_argument("hdf5filename", type=str, help="Name of the input HDF5 file.")
+
+    parser.add_argument("segment_num", type=str, help="ID number of the segment to plot.")
+
+    args = parser.parse_args()
+
+    plot(args.hdf5filename, args.segment_num)
