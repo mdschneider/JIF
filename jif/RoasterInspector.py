@@ -39,10 +39,13 @@ class RoasterInspector(object):
         print "\n"
 
     def plot(self):
+        if not os.path.exists(self.args.outprefix):
+            os.makedirs(self.args.outprefix)
+
         # Triangle plot
         fig = triangle.corner(np.vstack(self.data[-self.args.keeplast:,...]),
                               labels=self.paramnames, truths=self.args.truths)
-        outfile = ''.join([self.args.outprefix, "roaster_inspector_triangle.png"])
+        outfile = os.path.join(self.args.outprefix, "roaster_inspector_triangle.png")
         print "Saving {}".format(outfile)
         fig.savefig(outfile)
 
@@ -64,7 +67,7 @@ class RoasterInspector(object):
         ax.plot(self.logprob)
         ax.set_ylabel('ln(prob)')
         fig.tight_layout()
-        outfile = ''.join([self.args.outprefix, 'roaster_inspector_walkers.png'])
+        outfile = os.path.join(self.args.outprefix, 'roaster_inspector_walkers.png')
         print "Saving {}".format(outfile)
         fig.savefig(outfile)
 

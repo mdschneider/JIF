@@ -181,7 +181,8 @@ class GalSimGalaxyModel(object):
         """
         Return a list of model parameter values.
         """
-        p = self.params.view('<f8')
+        p = self.params.view('<f8').copy()
+        # print "galsim_galaxy get_params:", p
         ### Transform fluxes to ln(Flux) for MCMC sampling
         if self.galaxy_model in ["Spergel", "Sersic"]:
             p[5:(5+len(k_SED_names))] = np.log(p[5:(5+len(k_SED_names))])

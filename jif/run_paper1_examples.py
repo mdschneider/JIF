@@ -40,16 +40,48 @@ logging.basicConfig(level=logging.DEBUG,
 #                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-### Names of the filters indexed by example numbers
-k_filters_ground = ['r', 'r', 'r', 'r', 'r', 'r']
-k_filters_space = ['r', 'y', 'r', 'y', 'r', 'y'] ### TODO: Update bands for space 
-### Roaster data format specifications indexed by example numbers
-k_data_formats = ['test_galsim_galaxy', 'test_galsim_galaxy', 'test_galsim_galaxy', 
-                  'test_galsim_galaxy', 
-                  'observed', 'observed']
-### Redshift of the galaxy for each example - TODO: add redshifts for observed galaxy examples 4,5
-k_redshifts = [1., 1., 1., 1., 0., 0.]
+# ### Names of the filters indexed by example numbers
+# k_filters_ground = ['r', 'r', 'r', 'r', 'r', 'r']
+# k_filters_space = ['r', 'y', 'r', 'y', 'r', 'y'] ### TODO: Update bands for space 
+# ### Roaster data format specifications indexed by example numbers
+# k_data_formats = ['test_galsim_galaxy', 'test_galsim_galaxy', 'test_galsim_galaxy', 
+#                   'test_galsim_galaxy', 
+#                   'observed', 'observed']
+# ### Redshift of the galaxy for each example - TODO: add redshifts for observed galaxy examples 4,5
+# k_redshifts = [1., 1., 1., 1., 0., 0.]
 
+### Indices of the galsim_galaxy Bulge+Disk model without SED parameter sampling.
+### [(nu, hlr, e, beta)_bulge, (nu, hlr, e, beta)_disk, flux_bulge, flux_disk]
+k_param_indices_no_SED = [1, 2, 3, 4, 5, 6, 7, 8, 9, 14]
+
+
+### Dictionary of settings for different examples
+examples = {
+    1: {'filter_ground': 'r',
+        'filter_space':  'r', 
+        'data_format':   'test_galsim_galaxy',
+        'redshift':      1.0,
+        'param_indices': k_param_indices_no_SED
+        },
+    2: {'filter_ground': 'r',
+        'filter_space':  'y', 
+        'data_format':   'test_galsim_galaxy',
+        'redshift':      1.0,
+        'param_indices': k_param_indices_no_SED
+        },
+    3: {'filter_ground': 'r',
+        'filter_space':  'r', 
+        'data_format':   'test_galsim_galaxy',
+        'redshift':      1.0,
+        'param_indices': None ### Sample all parameters, including SED types
+        },
+    4: {'filter_ground': 'r',
+        'filter_space':  'y', 
+        'data_format':   'test_galsim_galaxy',
+        'redshift':      1.0,
+        'param_indices': None ### Sample all parameters, including SED types
+        }                
+}
 
 class RoasterArgs(object):
     """
@@ -59,15 +91,15 @@ class RoasterArgs(object):
         self.outfile = '../output/roasting/example{:d}/roaster_out{}'.format(example_num, file_lab)
         self.epoch = epoch
         self.seed = 6199256
-        self.nsamples = 200
+        self.nsamples = 100
         self.nwalkers = 64
-        self.nburn = 50
+        self.nburn = 10
         self.nthreads = 1
         self.quiet = False
         
 
 class GPPArgs(object):
-    
+
     """
     Arguments expected by gpp_space_ground script
     """
@@ -79,7 +111,7 @@ class GPPArgs(object):
         ### True value of the parameter
         self.truth = 0.3
         ### Drop nburn samples from the start of each Roaster chain
-        self.nburn = 100
+        self.nburn = 10
 
 
 def main():
@@ -87,52 +119,64 @@ def main():
         description='Run the example scenarios for JIF paper 1.')
     
     parser.add_argument('--example_num', type=int, default=1,
-                        help='Index of the example to run.')
+                        help='Index of the example to run (1 -- 6; 0 means run all).')
 
     args = parser.parse_args()
 
-    ### Array index corresponding to the example number
-    ex_ndx = args.example_num - 1
+    if args.example_num < 0 or args.example_num > 6:
+        raise ValueError("example_num must be in the range [0, 6]")
 
-    ### Label to attach to simulated image files and output plots
-    file_lab = '_paper1_ex{:d}'.format(args.example_num)
+    if args.example_num == 0:
+        example_nums = range(1, 3)
+    else:
+        example_nums = [args.example_num]
 
-    outdir = "../output/roasting/example{:d}".format(args.example_num)
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
+    for ex_num in example_nums:
+        logging.debug('\n-------------\nStarting run for JIF paper 1, example {:d}'.format(ex_num))
+        ### Array index corresponding to the example number
+        ex_ndx = ex_num - 1
 
-    logging.debug('*** Started run for JIF paper 1, example {:d}'.format(args.example_num))
+        ### Label to attach to simulated image files and output plots
+        file_lab = '_paper1_ex{:d}'.format(ex_num)
 
-    logging.debug('Generating simulated images')
-    galsim_galaxy.make_test_images(
-        filter_name_ground=k_filters_ground[ex_ndx],
-        filter_name_space=k_filters_space[ex_ndx],
-        file_lab=file_lab)
+        outdir = "../output/roasting/example{:d}".format(ex_num)
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
 
-    ### Run Roaster for epochs 0, 1 individually and then combined (epoch == None)
-    epochs = [0, 1, None]
-    for epoch in epochs:
-        logging.debug('Setting up Roaster')
-        ### Reset the module-level pixel data list in Roaster.
-        ### Otherwise, this list gets appended to under subsequent steps in the 'epoch' loop.
-        Roaster.pixel_data = [] 
-        roaster = Roaster.Roaster(data_format=k_data_formats[ex_ndx],
-            lnprior_omega=Roaster.DefaultPriorBulgeDisk(z_mean=k_redshifts[ex_ndx]),
-            galaxy_model_type="BulgeDisk",
-            epoch=epoch)
-        roaster.Load("../TestData/test_image_data" + file_lab + ".h5")
-        logging.debug('Running Roaster MCMC')
-        roaster_args = RoasterArgs(args.example_num, file_lab=file_lab, epoch=epoch)
-        Roaster.do_sampling(roaster_args, roaster)
+        
 
-    ### TODO: Add DM wrapper here
+        logging.debug('Generating simulated images')
+        galsim_galaxy.make_test_images(
+            filter_name_ground=examples[ex_num]['filter_ground'],
+            filter_name_space=examples[ex_num]['filter_space'],
+            file_lab=file_lab)
 
-    logging.debug('Making plots of posterior constraints for example {:d}'.format(args.example_num))
-    gpp_args = GPPArgs(args.example_num, file_lab=file_lab)
-    gpp = gpp_plot.GalaxyPosteriorPlot(gpp_args)
-    gpp.plot()
+        ### Run Roaster for epochs 0, 1 individually and then combined (epoch == None)
+        epochs = [0, 1, None]
+        for epoch in epochs:
+            logging.debug('===== Setting up Roaster')
+            ### Reset the module-level pixel data list in Roaster.
+            ### Otherwise, this list gets appended to under subsequent steps in the 'epoch' loop.
+            Roaster.pixel_data = [] 
+            roaster = Roaster.Roaster(data_format=examples[ex_num]['data_format'],
+                lnprior_omega=Roaster.DefaultPriorBulgeDisk(z_mean=examples[ex_num]['redshift']),
+                galaxy_model_type="BulgeDisk",
+                epoch=epoch,
+                param_subset=examples[ex_num]['param_indices'],
+                debug=False)
+            roaster.Load("../TestData/test_image_data" + file_lab + ".h5")
+            logging.debug('Running Roaster MCMC')
+            roaster_args = RoasterArgs(ex_num, file_lab=file_lab, epoch=epoch)
+            Roaster.do_sampling(roaster_args, roaster)
 
-    logging.debug('*** Finished run for JIF paper 1, example {:d}'.format(args.example_num))
+        ### TODO: Add DM wrapper here
+
+        logging.debug('Making plots of posterior constraints for example {:d}'.format(ex_num))
+        gpp_args = GPPArgs(ex_num, file_lab=file_lab)
+        gpp = gpp_plot.GalaxyPosteriorPlot(gpp_args)
+        gpp.plot()
+
+        logging.debug('*** Finished run for JIF paper 1, example {:d}'.format(ex_num))
     return 0
 
 
