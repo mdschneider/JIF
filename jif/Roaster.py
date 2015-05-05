@@ -115,14 +115,13 @@ class Roaster(object):
 
         logging.info("<Roaster> Loading image data")
         if self.data_format == "test_galsim_galaxy":
-            ### TODO: Get filter names from input file
-            self.filters = ['r', 'r']
-
             f = h5py.File(infile, 'r')
             if self.epoch is None:
                 self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
+                epochs = np.arange(self.num_epochs)
             else:
                 self.num_epochs = 1
+                epochs = [self.epoch]
             print "Num. epochs: {:d}".format(self.num_epochs)
             if segment == None:
                 segment = 0
@@ -133,7 +132,8 @@ class Roaster(object):
             wavelengths = []
             primary_diams = []
             atmospheres = []
-            for i in xrange(self.num_epochs):
+            self.filters = []
+            for i in epochs:
                 ### Make this option more generic
                 # setup df5 paths
                 # define the parent branch (i.e. telescope)
@@ -154,6 +154,7 @@ class Roaster(object):
                 wavelengths.append(obs.attrs['filter_central'])
                 primary_diams.append(telescope.attrs['primary_diam'])
                 atmospheres.append(telescope.attrs['atmosphere'])
+                self.filters.append(obs.attrs['filter_name'])
             print "Have data for instruments:", instruments
         else:
             if segment == None:
@@ -196,8 +197,10 @@ class Roaster(object):
         for i in xrange(self.num_epochs):
             ### Make this option more generic
             branch = self._get_branch_name(i)
+            print "branch:", branch
             dat = f[branch+'/observation/sextractor/segments/'+str(segment)+'/image']
             self.nx[i], self.ny[i] = dat.shape
+            print "nx, ny, i:", self.nx[i], self.ny[i], i
 
         src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model=self.galaxy_model_type,
                                 pixel_scale=pixel_scales[iepochs], 
