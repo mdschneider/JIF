@@ -342,6 +342,8 @@ def do_sampling(args, roaster):
     lnps = []
     logging.info("Sampling")
     for i in range(args.nsamples):
+        if np.mod(i+1, 20) == 0:
+            print "\tStep {:d} / {:d}".format(i+1, args.nsamples)
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         if not args.quiet:
             print i, np.mean(lnp)
@@ -365,7 +367,10 @@ def write_results(args, pps, lnps, param_subset=None):
     if "post" in f:
         del f["post"]
     post = f.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
-    post.attrs['paramnames'] = np.array(src_models[0][0].paramnames)[param_subset]
+    pnames = np.array(src_models[0][0].paramnames)
+    if param_subset is not None:
+        pnames = pnames[param_subset]
+    post.attrs['paramnames'] = pnames
     if "logprobs" in f:
         del f["logprobs"]
     logprobs = f.create_dataset("logprobs", data=np.vstack(lnps))

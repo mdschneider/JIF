@@ -26,6 +26,7 @@ import os.path
 
 import galsim_galaxy
 import Roaster
+import RoasterInspector
 import gpp_space_ground as gpp_plot
 
 import logging
@@ -91,11 +92,19 @@ class RoasterArgs(object):
         self.outfile = '../output/roasting/example{:d}/roaster_out{}'.format(example_num, file_lab)
         self.epoch = epoch
         self.seed = 6199256
-        self.nsamples = 100
+        self.nsamples = 1000
         self.nwalkers = 64
-        self.nburn = 10
+        self.nburn = 100
         self.nthreads = 1
-        self.quiet = False
+        self.quiet = True
+
+
+class RoasterInspectorArgs(object):
+    def __init__(self, infile, outprefix):
+        self.infile = infile
+        self.keeplast = 500
+        self.outprefix = outprefix
+        self.truths = None
         
 
 class GPPArgs(object):
@@ -111,7 +120,7 @@ class GPPArgs(object):
         ### True value of the parameter
         self.truth = 0.3
         ### Drop nburn samples from the start of each Roaster chain
-        self.nburn = 10
+        self.nburn = 1 #200
 
 
 def main():
@@ -127,7 +136,7 @@ def main():
         raise ValueError("example_num must be in the range [0, 6]")
 
     if args.example_num == 0:
-        example_nums = range(1, 3)
+        example_nums = range(1, 5)
     else:
         example_nums = [args.example_num]
 
@@ -168,6 +177,18 @@ def main():
             logging.debug('Running Roaster MCMC')
             roaster_args = RoasterArgs(ex_num, file_lab=file_lab, epoch=epoch)
             Roaster.do_sampling(roaster_args, roaster)
+
+            # if epoch is not None:
+            #     epoch_lab = '_epoch{:d}'.format(epoch)
+            #     epoch_subdir = 'epoch{:d}'.format(epoch)
+            # else:
+            #     epoch_lab = ''
+            #     epoch_subdir = ''
+            # args_inspector = RoasterInspectorArgs(
+            #     infile=os.path.join(outdir, 'roaster_out_paper1_ex{:d}{}.h5'.format(ex_num, epoch_lab)),
+            #     outprefix=os.path.join(outdir, epoch_subdir))
+            # inspector = RoasterInspector.RoasterInspector(args_inspector)
+            # inspector.plot()
 
         ### TODO: Add DM wrapper here
 

@@ -16,6 +16,8 @@ class RoasterInspector(object):
         self.args = args
         f = h5py.File(args.infile, 'r')
         self.paramnames = f['post'].attrs['paramnames']
+        if len(self.paramnames.shape) > 1:
+            self.paramnames = self.paramnames[0]
         self.data = f['post'][...]
         self.logprob = f['logprobs'][...]
         self.nburn = f.attrs['nburn']        
@@ -28,6 +30,7 @@ class RoasterInspector(object):
         print self.__str__()
         # print "Parameter names:", self.paramnames
         print "data: ", self.data.shape
+        print "paramnames:", self.paramnames.shape
         # print self.data
         # print self.logprob
         return None
