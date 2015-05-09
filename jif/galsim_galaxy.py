@@ -312,8 +312,8 @@ class GalSimGalaxyModel(object):
             image = None                    
         return image
 
-    def save_image(self, file_name, filter_name='r'):
-        image = self.get_image(filter_name=filter_name)
+    def save_image(self, file_name, out_image=None, filter_name='r'):
+        image = self.get_image(filter_name=filter_name, out_image=out_image)
         image.write(file_name)
         return None
 
@@ -357,14 +357,14 @@ def make_test_images():
     lsst = GalSimGalaxyModel(pixel_scale=0.2, noise=lsst_noise(82357),
         galaxy_model="BulgeDisk",
         wavelength=500.e-9, primary_diam_meters=8.4, atmosphere=True)
-    lsst.save_image("../TestData/test_lsst_image.fits", filter_name='r')
+    lsst.save_image("../TestData/test_lsst_image.fits", filter_name='r', out_image=galsim.Image(70, 70))
     lsst.plot_image("../TestData/test_lsst_image.png", ngrid=70, filter_name='r',
                     title="LSST")
 
     wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357),
         galaxy_model="BulgeDisk",
         wavelength=1.e-6, primary_diam_meters=2.4, atmosphere=False)
-    wfirst.save_image("../TestData/test_wfirst_image.fits", filter_name='r')
+    wfirst.save_image("../TestData/test_wfirst_image.fits", filter_name='r', out_image=galsim.Image(128, 128))
     wfirst.plot_image("../TestData/test_wfirst_image.png", ngrid=128, filter_name='r',
                       title="WFIRST")
 
