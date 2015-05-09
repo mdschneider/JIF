@@ -57,6 +57,9 @@ class GalaxyPosteriorPlot(object):
             data = f['post'][...]
             data = data[self.args.nburn:, :, :]
             f.close()
+
+            if len(paramnames.shape) > 1:
+                paramnames = paramnames[0]            
             return paramnames, data
         else:
             logging.debug("Cannot find {}".format(infile))

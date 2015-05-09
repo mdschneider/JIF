@@ -13,6 +13,7 @@ import galsim
 
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
 k_filter_names = 'ugrizy'
+k_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750., 'z':880., 'y':1000.}
 
 k_spergel_paramnames = ['nu', 'hlr', 'e', 'beta']
 
@@ -180,7 +181,8 @@ class GalSimGalaxyModel(object):
         """
         Return a list of model parameter values.
         """
-        p = self.params.view('<f8')
+        p = self.params.view('<f8').copy()
+        # print "galsim_galaxy get_params:", p
         ### Transform fluxes to ln(Flux) for MCMC sampling
         if self.galaxy_model in ["Spergel", "Sersic"]:
             p[5:(5+len(k_SED_names))] = np.log(p[5:(5+len(k_SED_names))])
@@ -346,34 +348,42 @@ class GalSimGalaxyModel(object):
                     results.observed_shape.e2, results.moments_sigma)
 
 
-def make_test_images():
+def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab=''):
     """
     Use the GalSimGalaxyModel class to make test images of a galaxy for LSST and WFIRST.
     """
     import os
     import h5py
 
+    ngrid_lsst = 70
+    ngrid_wfirst = 128
+
     print "Making test images for LSST and WFIRST"
     lsst = GalSimGalaxyModel(pixel_scale=0.2, noise=lsst_noise(82357),
         galaxy_model="BulgeDisk",
         wavelength=500.e-9, primary_diam_meters=8.4, atmosphere=True)
-    lsst.save_image("../TestData/test_lsst_image.fits", filter_name='r', out_image=galsim.Image(70, 70))
-    lsst.plot_image("../TestData/test_lsst_image.png", ngrid=70, filter_name='r',
-                    title="LSST")
+    lsst.save_image("../TestData/test_lsst_image" + file_lab + ".fits",
+        filter_name=filter_name_ground, out_image=galsim.Image(ngrid_lsst, ngrid_lsst))
+    lsst.plot_image("../TestData/test_lsst_image" + file_lab + ".png", ngrid=ngrid_lsst,
+        filter_name=filter_name_ground, title="LSST")
 
     wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357),
         galaxy_model="BulgeDisk",
         wavelength=1.e-6, primary_diam_meters=2.4, atmosphere=False)
-    wfirst.save_image("../TestData/test_wfirst_image.fits", filter_name='r', out_image=galsim.Image(128, 128))
-    wfirst.plot_image("../TestData/test_wfirst_image.png", ngrid=128, filter_name='r',
-                      title="WFIRST")
+    wfirst.save_image("../TestData/test_wfirst_image" + file_lab + ".fits", 
+        filter_name=filter_name_space, out_image=galsim.Image(ngrid_wfirst, ngrid_wfirst))
+    wfirst.plot_image("../TestData/test_wfirst_image" + file_lab + ".png", ngrid=ngrid_wfirst,
+        filter_name=filter_name_space, title="WFIRST")
 
-    lsst_data = lsst.get_image(galsim.Image(70, 70), add_noise=True, filter_name='r').array
-    wfirst_data = wfirst.get_image(galsim.Image(128, 128), add_noise=True, filter_name='r').array
+    lsst_data = lsst.get_image(galsim.Image(ngrid_lsst, ngrid_lsst), add_noise=True,
+        filter_name=filter_name_ground).array
+    wfirst_data = wfirst.get_image(galsim.Image(ngrid_wfirst, ngrid_wfirst), add_noise=True,
+        filter_name=filter_name_space).array
 
     # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster
-    f = h5py.File(os.path.join(os.path.dirname(__file__), '../TestData/test_image_data.h5'), 'w')
+    f = h5py.File(os.path.join(os.path.dirname(__file__), 
+        '../TestData/test_image_data' + file_lab + '.h5'), 'w')
     
     # Define the (sub)groups
     g = f.create_group('ground')
@@ -408,7 +418,8 @@ def make_test_images():
     ### TODO: add background model(s)
     g.attrs['telescope'] = 'LSST'
     g.attrs['pixel_scale'] = 0.2
-    g_obs.attrs['filter_central'] = 500.e-9
+    g_obs.attrs['filter_central'] = k_filter_central_wavelengths[filter_name_ground] * 1.e-9
+    g_obs.attrs['filter_name'] = filter_name_ground
     g.attrs['primary_diam'] = 8.4
     g.attrs['atmosphere'] = True
     
@@ -432,7 +443,8 @@ def make_test_images():
     ### TODO: add background model(s)
     s.attrs['telescope'] = 'WFIRST'
     s.attrs['pixel_scale'] = 0.11
-    s_obs.attrs['filter_central'] = 1.e-6
+    s_obs.attrs['filter_central'] = k_filter_central_wavelengths[filter_name_space] * 1.e-9
+    s_obs.attrs['filter_name'] = filter_name_space
     s.attrs['primary_diam'] = 2.4
     s.attrs['atmosphere'] = False
 

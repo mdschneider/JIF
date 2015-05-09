@@ -61,12 +61,15 @@ class Roaster(object):
     @param epoch              Select only this epoch number from the input, if provided.
                               If not provided, then get all epochs.
     @param debug              Save debugging outputs (including model images per step?)
+    @param param_subset       Indices of a subset of model parameters to use in MCMC sampling.
+                              Use all parameters if this argument is not supplied.
     """
     def __init__(self, lnprior_omega=None, 
                  data_format='test_galsim_galaxy',
                  galaxy_model_type='BulgeDisk',
                  epoch=None,
-                 debug=False):
+                 debug=False,
+                 param_subset=None):
         if lnprior_omega is None:
             self.lnprior_omega = EmptyPrior()
         else:
@@ -75,6 +78,7 @@ class Roaster(object):
         self.galaxy_model_type = galaxy_model_type
         self.epoch = epoch
         self.debug = debug
+        self.param_subset = param_subset
 
         ### Count the number of calls to self.lnlike
         self.istep = 0
@@ -115,15 +119,15 @@ class Roaster(object):
 
         logging.info("<Roaster> Loading image data")
         if self.data_format == "test_galsim_galaxy":
-            ### TODO: Get filter names from input file
-            self.filters = ['r', 'r']
-
             f = h5py.File(infile, 'r')
             if self.epoch is None:
                 self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
+                epochs = np.arange(self.num_epochs)
             else:
                 self.num_epochs = 1
-            print "Num. epochs: {:d}".format(self.num_epochs)
+                epochs = [self.epoch]
+            if self.debug:
+                print "Num. epochs: {:d}".format(self.num_epochs)
             if segment == None:
                 segment = 0
             self.num_sources = f['space/observation/sextractor/segments/'+str(segment)+'/stamp_objprops'].shape[0]
@@ -133,7 +137,8 @@ class Roaster(object):
             wavelengths = []
             primary_diams = []
             atmospheres = []
-            for i in xrange(self.num_epochs):
+            self.filters = []
+            for i in epochs:
                 ### Make this option more generic
                 # setup df5 paths
                 # define the parent branch (i.e. telescope)
@@ -143,8 +148,9 @@ class Roaster(object):
                 obs = f[branch+'/observation']
                 dat = seg['image']
                 noise = seg['noise']
-                print i, "dat shape:", dat.shape
-                print "\t", np.array(dat).shape ### not sure why this is here; duplicates previous line
+                if self.debug:
+                    print i, "dat shape:", dat.shape
+                    print "\t", np.array(dat).shape ### not sure why this is here; duplicates previous line
                 pixel_data.append(np.array(dat))
                 # pixel_data.append(np.core.records.array(np.array(dat), dtype=float, shape=dat.shape))
                 # pixel_data.append(np.array(cutout['pixel_data']))
@@ -154,6 +160,7 @@ class Roaster(object):
                 wavelengths.append(obs.attrs['filter_central'])
                 primary_diams.append(telescope.attrs['primary_diam'])
                 atmospheres.append(telescope.attrs['atmosphere'])
+                self.filters.append(obs.attrs['filter_name'])
             print "Have data for instruments:", instruments
         else:
             if segment == None:
@@ -198,6 +205,9 @@ class Roaster(object):
             branch = self._get_branch_name(i)
             dat = f[branch+'/observation/sextractor/segments/'+str(segment)+'/image']
             self.nx[i], self.ny[i] = dat.shape
+            if self.debug:
+                print "branch:", branch
+                print "nx, ny, i:", self.nx[i], self.ny[i], i
 
         src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model=self.galaxy_model_type,
                                 pixel_scale=pixel_scales[iepochs], 
@@ -207,15 +217,21 @@ class Roaster(object):
                             for iepochs in xrange(self.num_epochs)] 
                            for isrcs in xrange(self.num_sources)]
         self.n_params = src_models[0][0].n_params
+        if self.param_subset is not None:
+            self.n_params = len(self.param_subset)
         logging.debug("<Roaster> Finished loading data")
-        print "\npixel data shapes:", [dat.shape for dat in pixel_data]
+        if self.debug:
+            print "\npixel data shapes:", [dat.shape for dat in pixel_data]
         return None
 
     def get_params(self):
         """
         Make a flat array of model parameters for all sources
         """
-        return np.array([m[0].get_params() for m in src_models]).ravel()
+        ### In subsetting by self.param_subset below, we use the feature that 
+        ### for a numpy array x, x[None] == x
+        p = np.array([m[0].get_params()[self.param_subset] for m in src_models]).ravel()
+        return p
 
     def set_params(self, p):
         """
@@ -228,18 +244,31 @@ class Roaster(object):
         for isrcs in xrange(self.num_sources):
             imin = isrcs * self.n_params
             imax = (isrcs + 1) * self.n_params
+
+            if self.param_subset is None:
+                p_set = p[imin:imax]
+            else:
+                p_set = src_models[isrcs][0].get_params()
+                if self.debug:
+                    print "p_set before indexing:", p_set
+                p_set[self.param_subset] = p[imin:imax]
+                if self.debug:
+                    print "p_set after indexing:", p_set
+
             for iepochs in xrange(self.num_epochs):
-                src_models[isrcs][iepochs].set_params(p[imin:imax])
+                src_models[isrcs][iepochs].set_params(p_set)
                 valid_params *= src_models[isrcs][iepochs].validate_params()
         return valid_params
 
     def lnprior(self, omega):
         ### Iterate over distinct galaxy models in the segment and evaluate the prior for each one.
         lnp = 0.0
-        for isrcs in xrange(self.num_sources):
-            imin = isrcs * self.n_params
-            imax = (isrcs + 1) * self.n_params
-            lnp += self.lnprior_omega(omega[imin:imax])
+
+        if self.param_subset is None:
+            for isrcs in xrange(self.num_sources):
+                imin = isrcs * self.n_params
+                imax = (isrcs + 1) * self.n_params
+                lnp += self.lnprior_omega(omega[imin:imax])
         return lnp
 
     def lnlike(self, omega, *args, **kwargs):
@@ -295,6 +324,7 @@ def do_sampling(args, roaster):
     print "omega_interim:", omega_interim
 
     nvars = len(omega_interim)
+    print "Number of parameters:", nvars
     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
 
     logging.debug("Initializing parameters for MCMC to yield finite posterior values")
@@ -312,6 +342,8 @@ def do_sampling(args, roaster):
     lnps = []
     logging.info("Sampling")
     for i in range(args.nsamples):
+        if np.mod(i+1, 20) == 0:
+            print "\tStep {:d} / {:d}".format(i+1, args.nsamples)
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         if not args.quiet:
             print i, np.mean(lnp)
@@ -320,11 +352,11 @@ def do_sampling(args, roaster):
         pps.append(pp.copy())
         lnps.append(lnp.copy())
 
-    write_results(args, pps, lnps)
+    write_results(args, pps, lnps, roaster.param_subset)
     return None
 
 
-def write_results(args, pps, lnps):
+def write_results(args, pps, lnps, param_subset=None):
     if args.epoch is None:
         epoch_lab = ""
     else:
@@ -335,7 +367,10 @@ def write_results(args, pps, lnps):
     if "post" in f:
         del f["post"]
     post = f.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
-    post.attrs['paramnames'] = src_models[0][0].paramnames
+    pnames = np.array(src_models[0][0].paramnames)
+    if param_subset is not None:
+        pnames = pnames[param_subset]
+    post.attrs['paramnames'] = pnames
     if "logprobs" in f:
         del f["logprobs"]
     logprobs = f.create_dataset("logprobs", data=np.vstack(lnps))

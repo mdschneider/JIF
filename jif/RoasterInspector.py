@@ -16,6 +16,8 @@ class RoasterInspector(object):
         self.args = args
         f = h5py.File(args.infile, 'r')
         self.paramnames = f['post'].attrs['paramnames']
+        if len(self.paramnames.shape) > 1:
+            self.paramnames = self.paramnames[0]
         self.data = f['post'][...]
         self.logprob = f['logprobs'][...]
         self.nburn = f.attrs['nburn']        
@@ -28,6 +30,7 @@ class RoasterInspector(object):
         print self.__str__()
         # print "Parameter names:", self.paramnames
         print "data: ", self.data.shape
+        print "paramnames:", self.paramnames.shape
         # print self.data
         # print self.logprob
         return None
@@ -39,10 +42,13 @@ class RoasterInspector(object):
         print "\n"
 
     def plot(self):
+        if not os.path.exists(self.args.outprefix):
+            os.makedirs(self.args.outprefix)
+
         # Triangle plot
         fig = triangle.corner(np.vstack(self.data[-self.args.keeplast:,...]),
                               labels=self.paramnames, truths=self.args.truths)
-        outfile = ''.join([self.args.outprefix, "roaster_inspector_triangle.png"])
+        outfile = os.path.join(self.args.outprefix, "roaster_inspector_triangle.png")
         print "Saving {}".format(outfile)
         fig.savefig(outfile)
 
@@ -64,7 +70,7 @@ class RoasterInspector(object):
         ax.plot(self.logprob)
         ax.set_ylabel('ln(prob)')
         fig.tight_layout()
-        outfile = ''.join([self.args.outprefix, 'roaster_inspector_walkers.png'])
+        outfile = os.path.join(self.args.outprefix, 'roaster_inspector_walkers.png')
         print "Saving {}".format(outfile)
         fig.savefig(outfile)
 
