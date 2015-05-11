@@ -25,6 +25,7 @@ joint modeling becomes even more acute.
 
 - Our image models are built around the [GalSim](https://github.com/GalSim-developers/GalSim/wiki) image simulation framework.
 - For some of the comparitive analysis we require [LSST DM Stack](https://confluence.lsstcorp.org/display/LSWUG/LSST+Software+User+Guide). Note that it is possible to install GalSim as part of the LSST DM environment, see [Building GalSim with the LSST stack](https://github.com/GalSim-developers/GalSim/wiki/Building-GalSim-with-the-LSST-stack).
+  - Note that if using the LSST stack install of galsim this needs to be "setup", by runnning `source loadLSST.bash` then `setup galsim` in the LSST stack install location.  
 - For parameter inference, we use [emcee](http://dan.iel.fm/emcee/current/) (and probably other samplers TBD).
 - The sources (and source groups) we extract from raw imaging are stored in [HDF5](http://www.hdfgroup.org/HDF5/) file formats, with a custom grouping.
 - For part of the results visualization we use [triangle](https://github.com/dfm/triangle.py).
