@@ -318,6 +318,12 @@ class GalSimGalaxyModel(object):
         image = self.get_image(filter_name=filter_name)
         image.write(file_name)
         return None
+    
+    def save_psf(self, file_name):
+        psf = self.get_psf()
+        image_epsf = psf.drawImage(scale=self.pixel_scale)
+        image_epsf.write(file_name)
+        return None
 
     def plot_image(self, file_name, ngrid=None, filter_name='r', title=None):
         import matplotlib.pyplot as plt
@@ -340,6 +346,25 @@ class GalSimGalaxyModel(object):
         cbar.set_label(r"$10^3$ photons / pixel")
         fig.savefig(file_name)
         return None
+    
+    def plot_psf(self, file_name, title=None):
+        import matplotlib.pyplot as plt
+        psf = self.get_psf()
+        image_epsf = psf.drawImage(scale=self.pixel_scale)        
+        ###
+        fig = plt.figure(figsize=(8, 8), dpi=100)
+        ax = fig.add_subplot(1,1,1)
+        im = ax.imshow(image_epsf.array, 
+            cmap=plt.get_cmap('coolwarm'), origin='lower',
+            interpolation='none')
+        ax.set_xlabel(r"Detector $x$-axis (arcsec.)")
+        ax.set_ylabel(r"Detector $y$-axis (arcsec.)")
+        if title is not None:
+            ax.set_title(title)
+        cbar = fig.colorbar(im)
+        cbar.set_label(r"normalized photons / pixel")
+        fig.savefig(file_name)
+        return None    
 
     def get_moments(self, add_noise=True):
         results = self.get_image(add_noise=add_noise).FindAdaptiveMom()
@@ -356,21 +381,31 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='')
     import h5py
 
     print "Making test images for LSST and WFIRST"
+    # LSST
     lsst = GalSimGalaxyModel(pixel_scale=0.2, noise=lsst_noise(82357),
         galaxy_model="BulgeDisk",
         wavelength=500.e-9, primary_diam_meters=8.4, atmosphere=True)
+    # Save the image
     lsst.save_image("../TestData/test_lsst_image" + file_lab + ".fits",
         filter_name=filter_name_ground)
     lsst.plot_image("../TestData/test_lsst_image" + file_lab + ".png", ngrid=70,
         filter_name=filter_name_ground, title="LSST")
-
+    # Save the corresponding PSF
+    lsst.save_psf("../TestData/test_lsst_psf" + file_lab + ".fits")
+    lsst.plot_psf("../TestData/test_lsst_psf" + file_lab + ".png", title="LSST")
+    
+    # WFIRST
     wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357),
         galaxy_model="BulgeDisk",
         wavelength=1.e-6, primary_diam_meters=2.4, atmosphere=False)
+    # Save the image
     wfirst.save_image("../TestData/test_wfirst_image" + file_lab + ".fits", 
         filter_name=filter_name_space)
     wfirst.plot_image("../TestData/test_wfirst_image" + file_lab + ".png", ngrid=128,
         filter_name=filter_name_space, title="WFIRST")
+    # Save the corresponding PSF
+    wfirst.save_psf("../TestData/test_wfirst_psf" + file_lab + ".fits")
+    wfirst.plot_psf("../TestData/test_wfirst_psf" + file_lab + ".png", title="WFIRST")
 
     lsst_data = lsst.get_image(galsim.Image(70, 70), add_noise=True,
         filter_name=filter_name_ground).array
