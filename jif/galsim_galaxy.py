@@ -6,6 +6,7 @@ galsim_galaxy.py
 Wrapper for GalSim galaxy models to use in MCMC.
 """
 import os
+import math
 import numpy as np
 from operator import add
 import galsim
@@ -227,7 +228,7 @@ class GalSimGalaxyModel(object):
         lam_over_diam *= 206265. # arcsec
         optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1., gsparams=self.gsparams)
         if self.atmosphere:
-            atmos = galsim.Kolmogorov(lam_over_r0=9.e-8, gsparams=self.gsparams)
+            atmos = galsim.Kolmogorov(lam_over_r0=8.e-6, gsparams=self.gsparams)
             psf = galsim.Convolve([atmos, optics])
         else:
             psf = optics
@@ -249,7 +250,7 @@ class GalSimGalaxyModel(object):
                 for i, SED_name in enumerate(self.SEDs)]
         return reduce(add, SEDs)
 
-    def get_image(self, out_image=None, add_noise=False, filter_name='r', gain=1.):
+    def get_image(self, out_image=None, dx=0., dy=0, add_noise=False, filter_name='r', gain=1.):
         if self.galaxy_model == "Gaussian":
             # gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
             # gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
@@ -264,6 +265,7 @@ class GalSimGalaxyModel(object):
             gal = galsim.Chromatic(mono_gal, SED)
             gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
             gal = gal.shear(gal_shape)
+            gal = gal.shift(dx, dy)
 
         elif self.galaxy_model == "Sersic":
             mono_gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
@@ -486,7 +488,67 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='')
     f.close()
     # -------------------------------------------------------------------------    
 
+def make_blended_test_image(num_sources=3, random_seed=75256611):
+    lsst_pixel_scale_arcsec = 0.2
+
+    ellipticities = [0.05, 0.3, 0.16]
+    hlrs = [1.8, 1.0, 2.0]
+    orientations = np.array([0.1, 0.25, -0.3]) * np.pi
+
+    ### Setup the 'segment' image that will contain all the galaxies in the blend
+    npix_segment = 128
+    # segment_pos = galsim.CelectialCoord(ra=90.*galsim.degrees, dec=-10.*galsim.degrees)
+    segment_image = galsim.ImageF(npix_segment, npix_segment, scale=lsst_pixel_scale_arcsec)
+
+    ### Define the galaxy positions in the segment (relative to the center of the segment image)
+    ### (see galsim demo13.py)
+    pos_rng = galsim.UniformDeviate(random_seed)
+    x_gal = np.array([pos_rng() for i in xrange(num_sources)]) * npix_segment
+    y_gal = np.array([pos_rng() for i in xrange(num_sources)]) * npix_segment
+
+    npix_gal = 100
+
+    for isrcs in xrange(num_sources):
+        # ### Draw every source using the full output array
+        # b = galsim.BoundsI(1, nx, 1, ny)
+        # sub_image = segment_image[b]
+
+        sub_image = galsim.Image(npix_gal, npix_gal, scale=lsst_pixel_scale_arcsec)
+
+        src_model = GalSimGalaxyModel(pixel_scale=lsst_pixel_scale_arcsec, 
+            noise=lsst_noise(82357),
+            galaxy_model="Spergel",
+            wavelength=770.e-9, primary_diam_meters=8.4, atmosphere=True)
+        src_model.params[0]["e"] = ellipticities[isrcs]
+        src_model.params[0]["beta"] = orientations[isrcs]
+        src_model.params[0]["hlr"] = hlrs[isrcs]
+        # p = src_model.get_params()
+
+        # src_model.set_params(p)
+
+        gal_image = src_model.get_image(sub_image, filter_name='r')
+
+        ix = int(math.floor(x_gal[isrcs]+0.5))
+        iy = int(math.floor(y_gal[isrcs]+0.5))
+
+        # Create a nominal bound for the postage stamp given the integer part of the
+        # position.
+        sub_bounds = galsim.BoundsI(ix-0.5*npix_gal, ix+0.5*npix_gal-1, 
+                                    iy-0.5*npix_gal, iy+0.5*npix_gal-1)
+        print("sub_bounds:", sub_bounds)
+        sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin, sub_bounds.ymin))        
+
+        # Find the overlapping bounds between the large image and the individual postage
+        # stamp.
+        bounds = sub_image.bounds & segment_image.bounds
+        print("bounds:", bounds)
+
+        segment_image[bounds] += sub_image[bounds]
+
+    segment_image.write("../TestData/test_lsst_blended_image.fits")
+
 
 if __name__ == "__main__":
-    make_test_images()
+    # make_test_images()
+    make_blended_test_image()
 
