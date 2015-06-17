@@ -503,8 +503,8 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
     ### Define the galaxy positions in the segment (relative to the center of the segment image)
     ### (see galsim demo13.py)
     pos_rng = galsim.UniformDeviate(random_seed)
-    x_gal = np.array([pos_rng() for i in xrange(num_sources)]) * npix_segment
-    y_gal = np.array([pos_rng() for i in xrange(num_sources)]) * npix_segment
+    x_gal = (0.4 + 0.2 * np.array([pos_rng() for i in xrange(num_sources)])) * npix_segment
+    y_gal = (0.4 + 0.2 * np.array([pos_rng() for i in xrange(num_sources)])) * npix_segment
 
     npix_gal = 100
 
@@ -535,13 +535,11 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
         # position.
         sub_bounds = galsim.BoundsI(ix-0.5*npix_gal, ix+0.5*npix_gal-1, 
                                     iy-0.5*npix_gal, iy+0.5*npix_gal-1)
-        print("sub_bounds:", sub_bounds)
         sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin, sub_bounds.ymin))        
 
         # Find the overlapping bounds between the large image and the individual postage
         # stamp.
         bounds = sub_image.bounds & segment_image.bounds
-        print("bounds:", bounds)
 
         segment_image[bounds] += sub_image[bounds]
 
