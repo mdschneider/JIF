@@ -92,9 +92,9 @@ class RoasterArgs(object):
         self.outfile = '../output/roasting/example{:d}/roaster_out{}'.format(example_num, file_lab)
         self.epoch = epoch
         self.seed = 6199256
-        self.nsamples = 1000
-        self.nwalkers = 64
-        self.nburn = 100
+        self.nsamples = 100
+        self.nwalkers = 16
+        self.nburn = 10
         self.nthreads = 1
         self.quiet = True
 
@@ -116,7 +116,7 @@ class GPPArgs(object):
         ### Head of the output file(s) from Roaster
         self.outhead = '../output/roasting/example{:d}/roaster_out{}'.format(example_num, file_lab)
         ### Name of the parameter to plot
-        self.param_name = 'e_disk'
+        self.param_name = 'e'
         ### True value of the parameter
         self.truth = 0.3
         ### Drop nburn samples from the start of each Roaster chain
@@ -165,7 +165,7 @@ def main():
         ### Run Roaster for epochs 0, 1 individually and then combined (epoch == None)
         epochs = [0, 1, None]
         for epoch in epochs:
-            logging.debug('===== Setting up Roaster')
+            logging.debug('===== Setting up Roaster for epoch {}'.format(epoch))
             ### Reset the module-level pixel data list in Roaster.
             ### Otherwise, this list gets appended to under subsequent steps in the 'epoch' loop.
             Roaster.pixel_data = [] 
@@ -173,24 +173,27 @@ def main():
                 lnprior_omega=Roaster.DefaultPriorBulgeDisk(z_mean=examples[ex_num]['redshift']),
                 galaxy_model_type=args.galaxy_model_type,
                 epoch=epoch,
-                param_subset=[1, 2, 3, 4, 5], #examples[ex_num]['param_indices'],
+                param_subset=[3], #examples[ex_num]['param_indices'],
                 debug=False)
-            roaster.Load("../TestData/test_image_data" + file_lab + ".h5")
+            infile = "../TestData/test_image_data" + file_lab + ".h5"
+            logging.debug('Loading {}'.format(infile))
+            roaster.Load(infile)
             logging.debug('Running Roaster MCMC')
             roaster_args = RoasterArgs(ex_num, file_lab=file_lab, epoch=epoch)
             Roaster.do_sampling(roaster_args, roaster)
 
-            # if epoch is not None:
-            #     epoch_lab = '_epoch{:d}'.format(epoch)
-            #     epoch_subdir = 'epoch{:d}'.format(epoch)
-            # else:
-            #     epoch_lab = ''
-            #     epoch_subdir = ''
-            # args_inspector = RoasterInspectorArgs(
-            #     infile=os.path.join(outdir, 'roaster_out_paper1_ex{:d}{}.h5'.format(ex_num, epoch_lab)),
-            #     outprefix=os.path.join(outdir, epoch_subdir))
-            # inspector = RoasterInspector.RoasterInspector(args_inspector)
-            # inspector.plot()
+            if epoch is not None:
+                epoch_lab = '_epoch{:d}'.format(epoch)
+                epoch_subdir = 'epoch{:d}'.format(epoch)
+            else:
+                epoch_lab = ''
+                epoch_subdir = 'epoch_combined'
+            args_inspector = RoasterInspectorArgs(
+                infile=os.path.join(outdir, 'roaster_out_paper1_ex{:d}{}.h5'.format(ex_num, epoch_lab)),
+                outprefix=os.path.join(outdir, epoch_subdir))
+            inspector = RoasterInspector.RoasterInspector(args_inspector)
+            inspector.report()
+            inspector.plot()
 
         ### TODO: Add DM wrapper here
 

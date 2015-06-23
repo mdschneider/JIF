@@ -76,7 +76,7 @@ class GalSimGalaxyModel(object):
     """
     def __init__(self,
                  psf_sigma=0.5, ### Not used
-                 pixel_scale=0.2, 
+                 pixel_scale=0.11, 
                  noise=None,
                  galaxy_model="Spergel",
                  wavelength=1.e-6,
@@ -95,12 +95,12 @@ class GalSimGalaxyModel(object):
         ### Set GalSim galaxy model parameters
         # self.params = GalSimGalParams(galaxy_model=galaxy_model)
         if galaxy_model == "Sersic":
-            self.params = np.core.records.array([(1., 3.4, 1.8, 0.3, np.pi/4, 1.e5, 0., 0., 0.)],
+            self.params = np.core.records.array([(1., 3.4, 1.8, 0.3, np.pi/4, 1.e5, 1.e-8, 1.e-8, 1.e-8)],
                 dtype=k_galparams_type_sersic)
             self.paramtypes = k_galparams_type_sersic
             self.paramnames = [p[0] for p in k_galparams_type_sersic]
         elif galaxy_model == "Spergel":
-            self.params = np.core.records.array([(1., -0.3, 1.8, 0.3, np.pi/4, 1.e5, 0., 0., 0.)],
+            self.params = np.core.records.array([(1., -0.3, 1.8, 0.3, np.pi/4, 1.e5, 1.e-8, 1.e-8, 1.e-8)],
                 dtype=k_galparams_type_spergel)
             self.paramtypes = k_galparams_type_spergel
             self.paramnames = [p[0] for p in k_galparams_type_spergel]
@@ -123,11 +123,11 @@ class GalSimGalaxyModel(object):
         self._load_filter_files()
 
         self.gsparams = galsim.GSParams(
-            folding_threshold=1.e-2, # maximum fractional flux that may be folded around edge of FFT
+            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
             maxk_threshold=2.e-2,    # k-values less than this may be excluded off edge of FFT
-            xvalue_accuracy=1.e-2,   # approximations in real space aim to be this accurate
-            kvalue_accuracy=1.e-2,   # approximations in fourier space aim to be this accurate
-            shoot_accuracy=1.e-2,    # approximations in photon shooting aim to be this accurate
+            xvalue_accuracy=1.e-1,   # approximations in real space aim to be this accurate
+            kvalue_accuracy=1.e-1,   # approximations in fourier space aim to be this accurate
+            shoot_accuracy=1.e-1,    # approximations in photon shooting aim to be this accurate
             minimum_fft_size=16)     # minimum size of ffts
 
     def _load_sed_files(self):
@@ -165,6 +165,8 @@ class GalSimGalaxyModel(object):
 
         For use in emcee.
         """
+        # assert len(p) == len(p_names), "galsim_galaxy.set_params requires p and p_names arguments \
+        #                                 to have the same length"
         self.params = np.core.records.array(p, dtype=self.paramtypes)
         ### Transform flux variables with exp -- we sample in ln(Flux)
         for i in xrange(len(k_SED_names)):
@@ -326,7 +328,7 @@ class GalSimGalaxyModel(object):
     
     def save_psf(self, file_name):
         psf = self.get_psf()
-        image_epsf = psf.drawImage(scale=self.pixel_scale)
+        image_epsf = psf.drawImage(scale=self.pixel_scale, nx=16, ny=16)
         image_epsf.write(file_name)
         return None
 
@@ -355,7 +357,7 @@ class GalSimGalaxyModel(object):
     def plot_psf(self, file_name, title=None):
         import matplotlib.pyplot as plt
         psf = self.get_psf()
-        image_epsf = psf.drawImage(scale=self.pixel_scale)        
+        image_epsf = psf.drawImage(scale=self.pixel_scale, nx=16, ny=16)        
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
@@ -386,13 +388,17 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='',
     import h5py
 
     ngrid_lsst = 70
-    ngrid_wfirst = 128
 
-    print "Making test images for LSST and WFIRST"
+    print("Making test images for LSST and WFIRST")
+
     # LSST
-    lsst = GalSimGalaxyModel(pixel_scale=0.2, noise=lsst_noise(82357),
+    lsst = GalSimGalaxyModel(pixel_scale=0.2, 
+        noise=lsst_noise(82357),
         galaxy_model=galaxy_model,
-        wavelength=500.e-9, primary_diam_meters=8.4, atmosphere=True)
+        wavelength=k_filter_central_wavelengths[filter_name_ground] * 1.e-9, 
+        primary_diam_meters=8.4, 
+        atmosphere=True)
+
     # Save the image
     lsst.save_image("../TestData/test_lsst_image" + file_lab + ".fits",
         filter_name=filter_name_ground, out_image=galsim.Image(ngrid_lsst, ngrid_lsst))
@@ -403,9 +409,15 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='',
     lsst.plot_psf("../TestData/test_lsst_psf" + file_lab + ".png", title="LSST")
     
     # WFIRST
-    wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357),
+    wfirst = GalSimGalaxyModel(pixel_scale=0.11, 
+        noise=wfirst_noise(82357),
         galaxy_model=galaxy_model,
-        wavelength=1.e-6, primary_diam_meters=2.4, atmosphere=False)
+        wavelength=k_filter_central_wavelengths[filter_name_space] * 1.e-9, 
+        primary_diam_meters=2.4, 
+        atmosphere=False)
+
+    ngrid_wfirst = np.ceil(ngrid_lsst * lsst.pixel_scale / wfirst.pixel_scale) #128
+
     # Save the image
     wfirst.save_image("../TestData/test_wfirst_image" + file_lab + ".fits", 
         filter_name=filter_name_space, out_image=galsim.Image(ngrid_wfirst, ngrid_wfirst))
@@ -457,11 +469,11 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='',
     ### TODO: add WCS information
     ### TODO: add background model(s)
     g.attrs['telescope'] = 'LSST'
-    g.attrs['pixel_scale'] = 0.2
+    g.attrs['pixel_scale'] = lsst.pixel_scale
     g_obs.attrs['filter_central'] = k_filter_central_wavelengths[filter_name_ground] * 1.e-9
     g_obs.attrs['filter_name'] = filter_name_ground
-    g.attrs['primary_diam'] = 8.4
-    g.attrs['atmosphere'] = True
+    g.attrs['primary_diam'] = lsst.primary_diam_meters
+    g.attrs['atmosphere'] = lsst.atmosphere
     
 
     ### Instrument/epoch 2
@@ -482,11 +494,11 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='',
     ### TODO: add WCS information
     ### TODO: add background model(s)
     s.attrs['telescope'] = 'WFIRST'
-    s.attrs['pixel_scale'] = 0.11
+    s.attrs['pixel_scale'] = wfirst.pixel_scale
     s_obs.attrs['filter_central'] = k_filter_central_wavelengths[filter_name_space] * 1.e-9
     s_obs.attrs['filter_name'] = filter_name_space
-    s.attrs['primary_diam'] = 2.4
-    s.attrs['atmosphere'] = False
+    s.attrs['primary_diam'] = wfirst.primary_diam_meters
+    s.attrs['atmosphere'] = wfirst.atmosphere
 
     f.close()
     # -------------------------------------------------------------------------    
