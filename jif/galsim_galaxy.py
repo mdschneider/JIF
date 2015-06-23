@@ -316,6 +316,9 @@ class GalSimGalaxyModel(object):
             image = None                    
         return image
 
+    def get_segment(self):
+        pass
+
     def save_image(self, file_name, out_image=None, filter_name='r'):
         image = self.get_image(filter_name=filter_name, out_image=out_image)
         image.write(file_name)
@@ -375,7 +378,7 @@ class GalSimGalaxyModel(object):
                     results.observed_shape.e2, results.moments_sigma)
 
 
-def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab=''):
+def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='', galaxy_model="BulgeDisk"):
     """
     Use the GalSimGalaxyModel class to make test images of a galaxy for LSST and WFIRST.
     """
@@ -388,7 +391,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='')
     print "Making test images for LSST and WFIRST"
     # LSST
     lsst = GalSimGalaxyModel(pixel_scale=0.2, noise=lsst_noise(82357),
-        galaxy_model="BulgeDisk",
+        galaxy_model=galaxy_model,
         wavelength=500.e-9, primary_diam_meters=8.4, atmosphere=True)
     # Save the image
     lsst.save_image("../TestData/test_lsst_image" + file_lab + ".fits",
@@ -401,7 +404,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='')
     
     # WFIRST
     wfirst = GalSimGalaxyModel(pixel_scale=0.11, noise=wfirst_noise(82357),
-        galaxy_model="BulgeDisk",
+        galaxy_model=galaxy_model,
         wavelength=1.e-6, primary_diam_meters=2.4, atmosphere=False)
     # Save the image
     wfirst.save_image("../TestData/test_wfirst_image" + file_lab + ".fits", 

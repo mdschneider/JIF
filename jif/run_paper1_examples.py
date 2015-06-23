@@ -54,7 +54,7 @@ logging.basicConfig(level=logging.DEBUG,
 ### Indices of the galsim_galaxy Bulge+Disk model without SED parameter sampling.
 ### [(nu, hlr, e, beta)_bulge, (nu, hlr, e, beta)_disk, flux_bulge, flux_disk]
 k_param_indices_no_SED = [1, 2, 3, 4, 5, 6, 7, 8, 9, 14]
-
+k_spergel_subset = [1, 2, 3, 4, 5]
 
 ### Dictionary of settings for different examples
 examples = {
@@ -130,6 +130,9 @@ def main():
     parser.add_argument('--example_num', type=int, default=1,
                         help='Index of the example to run (1 -- 6; 0 means run all).')
 
+    parser.add_argument('--galaxy_model_type', type=str, default="Spergel",
+                        help='Type of galaxy model to simulation [Default: "Spergel"]')
+
     args = parser.parse_args()
 
     if args.example_num < 0 or args.example_num > 6:
@@ -152,13 +155,12 @@ def main():
         if not os.path.exists(outdir):
             os.makedirs(outdir)
 
-        
-
         logging.debug('Generating simulated images')
         galsim_galaxy.make_test_images(
             filter_name_ground=examples[ex_num]['filter_ground'],
             filter_name_space=examples[ex_num]['filter_space'],
-            file_lab=file_lab)
+            file_lab=file_lab,
+            galaxy_model=args.galaxy_model_type)
 
         ### Run Roaster for epochs 0, 1 individually and then combined (epoch == None)
         epochs = [0, 1, None]
@@ -169,9 +171,9 @@ def main():
             Roaster.pixel_data = [] 
             roaster = Roaster.Roaster(data_format=examples[ex_num]['data_format'],
                 lnprior_omega=Roaster.DefaultPriorBulgeDisk(z_mean=examples[ex_num]['redshift']),
-                galaxy_model_type="BulgeDisk",
+                galaxy_model_type=args.galaxy_model_type,
                 epoch=epoch,
-                param_subset=examples[ex_num]['param_indices'],
+                param_subset=[1, 2, 3, 4, 5], #examples[ex_num]['param_indices'],
                 debug=False)
             roaster.Load("../TestData/test_image_data" + file_lab + ".h5")
             logging.debug('Running Roaster MCMC')

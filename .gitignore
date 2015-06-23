@@ -62,3 +62,4 @@ gpps.pdf
 test_lsst_image.fits
 test_wfirst_image.fits
 spaceground.hdf5
+*.fits
