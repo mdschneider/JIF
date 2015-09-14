@@ -78,7 +78,7 @@ class Roaster(object):
         self.galaxy_model_type = galaxy_model_type
         self.epoch = epoch
         self.debug = debug
-        self.param_subset = param_subset
+        self.model_paramnames = model_paramnames
 
         ### Count the number of calls to self.lnlike
         self.istep = 0
@@ -218,8 +218,6 @@ class Roaster(object):
                             for iepochs in xrange(self.num_epochs)]
                            for isrcs in xrange(self.num_sources)]
         self.n_params = src_models[0][0].n_params
-        if self.param_subset is not None:
-            self.n_params = len(self.param_subset)
         logging.debug("<Roaster> Finished loading data")
         if self.debug:
             print "\npixel data shapes:", [dat.shape for dat in pixel_data]
@@ -229,9 +227,7 @@ class Roaster(object):
         """
         Make a flat array of model parameters for all sources
         """
-        ### In subsetting by self.param_subset below, we use the feature that
-        ### for a numpy array x, x[None] == x
-        p = np.array([m[0].get_params()[self.param_subset] for m in src_models]).ravel()
+        p = np.array([m[0].get_params() for m in src_models]).ravel()
         return p
 
     def set_params(self, p):
@@ -246,15 +242,12 @@ class Roaster(object):
             imin = isrcs * self.n_params
             imax = (isrcs + 1) * self.n_params
 
-            if self.param_subset is None:
-                p_set = p[imin:imax]
-            else:
-                p_set = src_models[isrcs][0].get_params()
-                if self.debug:
-                    print "p_set before indexing:", p_set
-                p_set[self.param_subset] = p[imin:imax]
-                if self.debug:
-                    print "p_set after indexing:", p_set
+            p_set = src_models[isrcs][0].get_params()
+            if self.debug:
+                print "p_set before indexing:", p_set
+            p_set = p[imin:imax]
+            if self.debug:
+                print "p_set after indexing:", p_set
 
             for iepochs in xrange(self.num_epochs):
                 src_models[isrcs][iepochs].set_params(p_set)
@@ -265,11 +258,10 @@ class Roaster(object):
         ### Iterate over distinct galaxy models in the segment and evaluate the prior for each one.
         lnp = 0.0
 
-        if self.param_subset is None:
-            for isrcs in xrange(self.num_sources):
-                imin = isrcs * self.n_params
-                imax = (isrcs + 1) * self.n_params
-                lnp += self.lnprior_omega(omega[imin:imax])
+        for isrcs in xrange(self.num_sources):
+            imin = isrcs * self.n_params
+            imax = (isrcs + 1) * self.n_params
+            lnp += self.lnprior_omega(omega[imin:imax])
         return lnp
 
     def lnlike(self, omega, *args, **kwargs):
@@ -457,6 +449,7 @@ def main():
     roaster = Roaster(debug=args.debug, data_format=args.data_format,
                       lnprior_omega=lnprior_omega,
                       galaxy_model_type=args.galaxy_model_type,
+                      model_paramnames=['hlr', 'e', 'beta', 'nu'],
                       epoch=args.epoch)
     roaster.Load(args.infiles[0])
 

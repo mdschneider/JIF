@@ -344,7 +344,7 @@ class GalSimGalaxyModel(object):
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
         im = ax.imshow(self.get_image(out_image, add_noise=True, filter_name=filter_name).array / 1.e3,
-            cmap=plt.get_cmap('BrBG'), origin='lower',
+            cmap=plt.get_cmap('pink'), origin='lower',
             interpolation='none',
             extent=[0, ngrid*self.pixel_scale, 0, ngrid*self.pixel_scale])
         ax.set_xlabel(r"Detector $x$-axis (arcsec.)")
@@ -368,7 +368,7 @@ class GalSimGalaxyModel(object):
         ax = fig.add_subplot(1,1,1)
         ngx, ngy = image_epsf.array.shape
         im = ax.imshow(image_epsf.array,
-            cmap=plt.get_cmap('BrBG'), origin='lower',
+            cmap=plt.get_cmap('pink'), origin='lower',
             interpolation='none',
             extent=[0, ngx*self.pixel_scale, 0, ngy*self.pixel_scale])
         ax.set_xlabel(r"Detector $x$-axis (arcsec.)")
