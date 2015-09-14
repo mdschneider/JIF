@@ -16,12 +16,15 @@ k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
 k_filter_names = 'ugrizy'
 k_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750., 'z':880., 'y':1000.}
 
-k_spergel_paramnames = ['nu', 'hlr', 'e', 'beta']
+### Minimum value a flux parameter can take, since these get log-transformed
+k_flux_param_minval = 1.e-12
 
+
+k_spergel_paramnames = ['nu', 'hlr', 'e', 'beta']
 
 ### Numpy composite object types for the model parameters for galaxy images under different
 ### modeling assumptions.
-k_galparams_type_sersic = [('redshift', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'), 
+k_galparams_type_sersic = [('redshift', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'),
                            ('beta', '<f8')]
 k_galparams_type_sersic += [('flux_sed{:d}'.format(i+1), '<f8') for i in xrange(len(k_SED_names))]
 
@@ -31,14 +34,31 @@ k_galparams_type_spergel += [('flux_sed{:d}'.format(i+1), '<f8') for i in xrange
 k_galparams_type_bulgedisk = [('redshift', '<f8')]
 k_galparams_type_bulgedisk += [('{}_bulge'.format(p), '<f8') for p in k_spergel_paramnames]
 k_galparams_type_bulgedisk += [('{}_disk'.format(p), '<f8') for p in k_spergel_paramnames]
-k_galparams_type_bulgedisk += [('flux_sed{:d}_bulge'.format(i+1), '<f8') 
+k_galparams_type_bulgedisk += [('flux_sed{:d}_bulge'.format(i+1), '<f8')
     for i in xrange(len(k_SED_names))]
-k_galparams_type_bulgedisk += [('flux_sed{:d}_disk'.format(i+1), '<f8') 
+k_galparams_type_bulgedisk += [('flux_sed{:d}_disk'.format(i+1), '<f8')
     for i in xrange(len(k_SED_names))]
 
 
-### Minimum value a flux parameter can take, since these get log-transformed
-k_flux_param_minval = 1.e-12
+k_galparams_types = {
+    "Sersic": k_galparams_type_sersic,
+    "Spergel": k_galparams_type_spergel,
+    "BulgeDisk": k_galparams_type_bulgedisk
+}
+
+
+### The galaxy models are initialized with these values:
+k_galparams_defaults = {
+    "Sersic": [(1., 3.4, 1.8, 0.3, np.pi/4, 1.e5, k_flux_param_minval,
+        k_flux_param_minval, k_flux_param_minval)],
+    "Spergel": [(1., -0.3, 1.8, 0.3, np.pi/4, 1.e5, k_flux_param_minval,
+        k_flux_param_minval, k_flux_param_minval)],
+    "BulgeDisk": [(1.,
+        0.5, 0.6, 0.05, 0.0,
+        -0.6, 1.8, 0.3, np.pi/4,
+        2.e4, k_flux_param_minval, k_flux_param_minval, k_flux_param_minval,
+        k_flux_param_minval, 1.e4, k_flux_param_minval, k_flux_param_minval)]
+}
 
 
 def lsst_noise(random_seed):
@@ -63,7 +83,7 @@ def wfirst_noise(random_seed):
     read_noise_e_rms = 5.
     sky_background = 3.60382E-01 # e-/pix/s
     gain = 2.1 # e- / ADU
-    return galsim.CCDNoise(rng, gain=2.1, 
+    return galsim.CCDNoise(rng, gain=2.1,
         read_noise=(read_noise_e_rms / gain) ** 2,
         sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
 
@@ -76,46 +96,32 @@ class GalSimGalaxyModel(object):
     """
     def __init__(self,
                  psf_sigma=0.5, ### Not used
-                 pixel_scale=0.11, 
+                 pixel_scale=0.11, ### arcseconds
                  noise=None,
                  galaxy_model="Spergel",
+                 active_parameters=['hlr', 'e', 'beta'],
                  wavelength=1.e-6,
                  primary_diam_meters=2.4,
-                 atmosphere=False): 
+                 atmosphere=False):
         self.psf_sigma = psf_sigma
         self.pixel_scale = pixel_scale
         # if noise is None:
         #     noise = galsim.GaussianNoise(sigma=30.)
         self.noise = noise
         self.galaxy_model = galaxy_model
+        self.active_parameters = active_parameters
         self.wavelength = wavelength
         self.primary_diam_meters = primary_diam_meters
         self.atmosphere = atmosphere
 
         ### Set GalSim galaxy model parameters
-        # self.params = GalSimGalParams(galaxy_model=galaxy_model)
-        if galaxy_model == "Sersic":
-            self.params = np.core.records.array([(1., 3.4, 1.8, 0.3, np.pi/4, 1.e5, 1.e-8, 1.e-8, 1.e-8)],
-                dtype=k_galparams_type_sersic)
-            self.paramtypes = k_galparams_type_sersic
-            self.paramnames = [p[0] for p in k_galparams_type_sersic]
-        elif galaxy_model == "Spergel":
-            self.params = np.core.records.array([(1., -0.3, 1.8, 0.3, np.pi/4, 1.e5, 1.e-8, 1.e-8, 1.e-8)],
-                dtype=k_galparams_type_spergel)
-            self.paramtypes = k_galparams_type_spergel
-            self.paramnames = [p[0] for p in k_galparams_type_spergel]
-        elif galaxy_model == "BulgeDisk":
-            self.params = np.core.records.array([(1., 
-                0.5, 0.6, 0.05, 0.0,
-                -0.6, 1.8, 0.3, np.pi/4,
-                2.e4, k_flux_param_minval, k_flux_param_minval, k_flux_param_minval,
-                k_flux_param_minval, 1.e4, k_flux_param_minval, k_flux_param_minval)],
-                dtype=k_galparams_type_bulgedisk)
-            self.paramtypes = k_galparams_type_bulgedisk
-            self.paramnames = [p[0] for p in k_galparams_type_bulgedisk]
-        else:
-            raise AttributeError("Unimplemented galaxy model")
-        self.n_params = len(self.paramnames)
+        self.params = np.core.records.array(k_galparams_defaults[galaxy_model],
+            dtype=k_galparams_types[galaxy_model])
+        self.paramtypes = k_galparams_types[galaxy_model]
+        # self.paramnames = [p[0] for p in k_galparams_types[galaxy_model]]
+        self.paramnames = self.active_parameters
+        # self.n_params = len(self.paramnames)
+        self.n_params = len(self.active_parameters)
 
         ### Set GalSim SED model parameters
         self._load_sed_files()
@@ -161,36 +167,27 @@ class GalSimGalaxyModel(object):
 
     def set_params(self, p):
         """
-        Take a list of parameters and set local variables.
+        Take a list of (active) parameters and set local variables.
 
         For use in emcee.
         """
-        # assert len(p) == len(p_names), "galsim_galaxy.set_params requires p and p_names arguments \
-        #                                 to have the same length"
-        self.params = np.core.records.array(p, dtype=self.paramtypes)
-        ### Transform flux variables with exp -- we sample in ln(Flux)
-        for i in xrange(len(k_SED_names)):
-            if self.galaxy_model in ["Spergel", "Sersic"]:
-                pname = 'flux_sed{:d}'.format(i+1)
-                self.params[0][pname] = np.exp(self.params[0][pname])
-            elif self.galaxy_model == "BulgeDisk":
-                pname = 'flux_sed{:d}_bulge'.format(i+1)
-                self.params[0][pname] = np.exp(self.params[0][pname])
-                pname = 'flux_sed{:d}_disk'.format(i+1)
-                self.params[0][pname] = np.exp(self.params[0][pname])
+        for ip, pname in enumerate(self.active_parameters):
+            if 'flux_sed' in pname:
+                ### Transform flux variables with exp -- we sample in ln(Flux)
+                self.params[0][pname] = np.exp(p[ip])
+            else:
+                self.params[0][pname] = p[ip]
         return None
 
     def get_params(self):
         """
-        Return a list of model parameter values.
+        Return a list of active model parameter values.
         """
-        p = self.params.view('<f8').copy()
-        # print "galsim_galaxy get_params:", p
+        p = self.params[self.active_parameters].view('<f8').copy()
         ### Transform fluxes to ln(Flux) for MCMC sampling
-        if self.galaxy_model in ["Spergel", "Sersic"]:
-            p[5:(5+len(k_SED_names))] = np.log(p[5:(5+len(k_SED_names))])
-        elif self.galaxy_model == "BulgeDisk":
-            p[9:(9+(2*len(k_SED_names)))] = np.log(p[9:(9+2*len(k_SED_names))])
+        for ip, pname in enumerate(self.active_parameters):
+            if 'flux_sed' in pname:
+                p[ip] = np.log(p[ip])
         return p
 
     def validate_params(self):
@@ -209,7 +206,7 @@ class GalSimGalaxyModel(object):
                 valid_params *= False
             for i in xrange(len(k_SED_names)):
                 if self.params[0]['flux_sed{:d}'.format(i+1)] <= 0.:
-                    valid_params *= False                
+                    valid_params *= False
         if self.galaxy_model == "BulgeDisk":
             if (self.params[0].e_bulge < 0. or self.params[0].e_bulge > 1. or
                 self.params[0].e_disk < 0. or self.params[0].e_disk > 1.):
@@ -222,15 +219,16 @@ class GalSimGalaxyModel(object):
                 if self.params[0]['flux_sed{:d}_bulge'.format(i+1)] <= 0.:
                     valid_params *= False
                 if self.params[0]['flux_sed{:d}_disk'.format(i+1)] <= 0.:
-                    valid_params *= False                    
+                    valid_params *= False
         return valid_params
 
     def get_psf(self):
         lam_over_diam = self.wavelength / self.primary_diam_meters
         lam_over_diam *= 206265. # arcsec
-        optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1., gsparams=self.gsparams)
+        optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1.,
+            gsparams=self.gsparams)
         if self.atmosphere:
-            atmos = galsim.Kolmogorov(lam_over_r0=8.e-6, gsparams=self.gsparams)
+            atmos = galsim.Kolmogorov(fwhm=0.6, gsparams=self.gsparams)
             psf = galsim.Convolve([atmos, optics])
         else:
             psf = optics
@@ -261,7 +259,7 @@ class GalSimGalaxyModel(object):
 
         elif self.galaxy_model == "Spergel":
             mono_gal = galsim.Spergel(nu=self.params[0].nu, half_light_radius=self.params[0].hlr,
-                # flux=self.params[0].gal_flux, 
+                # flux=self.params[0].gal_flux,
                 gsparams=self.gsparams)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
@@ -271,41 +269,43 @@ class GalSimGalaxyModel(object):
 
         elif self.galaxy_model == "Sersic":
             mono_gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
-                # flux=self.params[0].gal_flux, 
+                # flux=self.params[0].gal_flux,
                 gsparams=self.gsparams)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
             gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
-            gal = gal.shear(gal_shape)            
+            gal = gal.shear(gal_shape)
+            gal = gal.shift(dx, dy)
 
         elif self.galaxy_model == "BulgeDisk":
-            mono_bulge = galsim.Spergel(nu=self.params[0].nu_bulge, 
+            mono_bulge = galsim.Spergel(nu=self.params[0].nu_bulge,
                 half_light_radius=self.params[0].hlr_bulge,
                 gsparams=self.gsparams)
             SED_bulge = self.get_SED(gal_comp='bulge')
             bulge = galsim.Chromatic(mono_bulge, SED_bulge)
-            bulge_shape = galsim.Shear(g=self.params[0].e_bulge, 
+            bulge_shape = galsim.Shear(g=self.params[0].e_bulge,
                 beta=self.params[0].beta_bulge*galsim.radians)
             bulge = bulge.shear(bulge_shape)
 
-            mono_disk = galsim.Spergel(nu=self.params[0].nu_disk, 
+            mono_disk = galsim.Spergel(nu=self.params[0].nu_disk,
                 half_light_radius=self.params[0].hlr_disk,
                 gsparams=self.gsparams)
             SED_disk = self.get_SED(gal_comp='disk')
             disk = galsim.Chromatic(mono_disk, SED_disk)
-            disk_shape = galsim.Shear(g=self.params[0].e_disk, 
+            disk_shape = galsim.Shear(g=self.params[0].e_disk,
                 beta=self.params[0].beta_disk*galsim.radians)
-            disk = disk.shear(disk_shape)            
+            disk = disk.shear(disk_shape)
 
             # gal = self.params[0].bulge_frac * bulge + (1 - self.params[0].bulge_frac) * disk
             gal = bulge + disk
+            gal = gal.shift(dx, dy)
 
         else:
             raise AttributeError("Unimplemented galaxy model")
         final = galsim.Convolve([gal, self.get_psf()])
         # wcs = galsim.PixelScale(self.pixel_scale)'
         try:
-            image = final.drawImage(self.filters[filter_name], 
+            image = final.drawImage(self.filters[filter_name],
                 image=out_image, scale=self.pixel_scale, gain=gain)
             if add_noise:
                 if self.noise is not None:
@@ -315,7 +315,7 @@ class GalSimGalaxyModel(object):
                         image.")
         except RuntimeError:
             print "Trying to make an image that's too big."
-            image = None                    
+            image = None
         return image
 
     def get_segment(self):
@@ -325,10 +325,12 @@ class GalSimGalaxyModel(object):
         image = self.get_image(filter_name=filter_name, out_image=out_image)
         image.write(file_name)
         return None
-    
-    def save_psf(self, file_name):
+
+    def save_psf(self, file_name, ngrid=None):
         psf = self.get_psf()
-        image_epsf = psf.drawImage(scale=self.pixel_scale, nx=16, ny=16)
+        if ngrid is None:
+            ngrid = 16
+        image_epsf = psf.drawImage(scale=self.pixel_scale, nx=ngrid, ny=ngrid)
         image_epsf.write(file_name)
         return None
 
@@ -341,8 +343,8 @@ class GalSimGalaxyModel(object):
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
-        im = ax.imshow(self.get_image(out_image, add_noise=True, filter_name=filter_name).array / 1.e3, 
-            cmap=plt.get_cmap('coolwarm'), origin='lower',
+        im = ax.imshow(self.get_image(out_image, add_noise=True, filter_name=filter_name).array / 1.e3,
+            cmap=plt.get_cmap('BrBG'), origin='lower',
             interpolation='none',
             extent=[0, ngrid*self.pixel_scale, 0, ngrid*self.pixel_scale])
         ax.set_xlabel(r"Detector $x$-axis (arcsec.)")
@@ -353,17 +355,22 @@ class GalSimGalaxyModel(object):
         cbar.set_label(r"$10^3$ photons / pixel")
         fig.savefig(file_name)
         return None
-    
-    def plot_psf(self, file_name, title=None):
+
+    def plot_psf(self, file_name, ngrid=None, title=None, filter_name='r'):
         import matplotlib.pyplot as plt
         psf = self.get_psf()
-        image_epsf = psf.drawImage(scale=self.pixel_scale, nx=16, ny=16)        
+        if ngrid is None:
+            ngrid = 16
+        image_epsf = psf.drawImage(image=None,
+            scale=self.pixel_scale, nx=ngrid, ny=ngrid)
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
-        im = ax.imshow(image_epsf.array, 
-            cmap=plt.get_cmap('coolwarm'), origin='lower',
-            interpolation='none')
+        ngx, ngy = image_epsf.array.shape
+        im = ax.imshow(image_epsf.array,
+            cmap=plt.get_cmap('BrBG'), origin='lower',
+            interpolation='none',
+            extent=[0, ngx*self.pixel_scale, 0, ngy*self.pixel_scale])
         ax.set_xlabel(r"Detector $x$-axis (arcsec.)")
         ax.set_ylabel(r"Detector $y$-axis (arcsec.)")
         if title is not None:
@@ -371,7 +378,7 @@ class GalSimGalaxyModel(object):
         cbar = fig.colorbar(im)
         cbar.set_label(r"normalized photons / pixel")
         fig.savefig(file_name)
-        return None    
+        return None
 
     def get_moments(self, add_noise=True):
         results = self.get_image(add_noise=add_noise).FindAdaptiveMom()
@@ -380,7 +387,7 @@ class GalSimGalaxyModel(object):
                     results.observed_shape.e2, results.moments_sigma)
 
 
-def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='', galaxy_model="BulgeDisk"):
+def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='', galaxy_model="Spergel"):
     """
     Use the GalSimGalaxyModel class to make test images of a galaxy for LSST and WFIRST.
     """
@@ -392,40 +399,46 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='',
     print("Making test images for LSST and WFIRST")
 
     # LSST
-    lsst = GalSimGalaxyModel(pixel_scale=0.2, 
+    lsst = GalSimGalaxyModel(pixel_scale=0.2,
         noise=lsst_noise(82357),
         galaxy_model=galaxy_model,
-        wavelength=k_filter_central_wavelengths[filter_name_ground] * 1.e-9, 
-        primary_diam_meters=8.4, 
+        wavelength=k_filter_central_wavelengths[filter_name_ground] * 1.e-9,
+        primary_diam_meters=8.4,
         atmosphere=True)
 
     # Save the image
     lsst.save_image("../TestData/test_lsst_image" + file_lab + ".fits",
-        filter_name=filter_name_ground, out_image=galsim.Image(ngrid_lsst, ngrid_lsst))
-    lsst.plot_image("../TestData/test_lsst_image" + file_lab + ".png", ngrid=ngrid_lsst,
+        filter_name=filter_name_ground,
+        out_image=galsim.Image(ngrid_lsst, ngrid_lsst))
+    lsst.plot_image("../TestData/test_lsst_image" + file_lab + ".png",
+        ngrid=ngrid_lsst,
         filter_name=filter_name_ground, title="LSST")
     # Save the corresponding PSF
-    lsst.save_psf("../TestData/test_lsst_psf" + file_lab + ".fits")
-    lsst.plot_psf("../TestData/test_lsst_psf" + file_lab + ".png", title="LSST")
-    
+    lsst.save_psf("../TestData/test_lsst_psf" + file_lab + ".fits",
+        ngrid=ngrid_lsst/4)
+    lsst.plot_psf("../TestData/test_lsst_psf" + file_lab + ".png",
+        ngrid=ngrid_lsst/4, title="LSST")
+
     # WFIRST
-    wfirst = GalSimGalaxyModel(pixel_scale=0.11, 
-        noise=wfirst_noise(82357),
+    wfirst = GalSimGalaxyModel(pixel_scale=0.11,
+        noise=lsst_noise(82357), #wfirst_noise(82357),
         galaxy_model=galaxy_model,
-        wavelength=k_filter_central_wavelengths[filter_name_space] * 1.e-9, 
-        primary_diam_meters=2.4, 
+        wavelength=k_filter_central_wavelengths[filter_name_space] * 1.e-9,
+        primary_diam_meters=2.4,
         atmosphere=False)
 
     ngrid_wfirst = np.ceil(ngrid_lsst * lsst.pixel_scale / wfirst.pixel_scale) #128
 
     # Save the image
-    wfirst.save_image("../TestData/test_wfirst_image" + file_lab + ".fits", 
+    wfirst.save_image("../TestData/test_wfirst_image" + file_lab + ".fits",
         filter_name=filter_name_space, out_image=galsim.Image(ngrid_wfirst, ngrid_wfirst))
     wfirst.plot_image("../TestData/test_wfirst_image" + file_lab + ".png", ngrid=ngrid_wfirst,
         filter_name=filter_name_space, title="WFIRST")
     # Save the corresponding PSF
-    wfirst.save_psf("../TestData/test_wfirst_psf" + file_lab + ".fits")
-    wfirst.plot_psf("../TestData/test_wfirst_psf" + file_lab + ".png", title="WFIRST")
+    wfirst.save_psf("../TestData/test_wfirst_psf" + file_lab + ".fits",
+        ngrid=ngrid_wfirst/4)
+    wfirst.plot_psf("../TestData/test_wfirst_psf" + file_lab + ".png",
+        ngrid=ngrid_wfirst/4, title="WFIRST")
 
     lsst_data = lsst.get_image(galsim.Image(ngrid_lsst, ngrid_lsst), add_noise=True,
         filter_name=filter_name_ground).array
@@ -434,21 +447,21 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='',
 
     # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster
-    f = h5py.File(os.path.join(os.path.dirname(__file__), 
+    f = h5py.File(os.path.join(os.path.dirname(__file__),
         '../TestData/test_image_data' + file_lab + '.h5'), 'w')
-    
+
     # Define the (sub)groups
     g = f.create_group('ground')
     g_obs = f.create_group('ground/observation')
     g_obs_sex = f.create_group('ground/observation/sextractor')
     g_obs_sex_seg = f.create_group('ground/observation/sextractor/segments')
-    
+
     s = f.create_group('space')
     s_obs = f.create_group('space/observation')
     s_obs_sex = f.create_group('space/observation/sextractor')
     s_obs_sex_seg = f.create_group('space/observation/sextractor/segments')
-    
-    
+
+
     f.attrs['num_sources'] = 1 ### Assert a fixed number of sources for all epochs
 
     ### Instrument/epoch 1
@@ -457,10 +470,10 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='',
     ### TODO: Add object property data like that that might come out of DMstack or sextractor
     # currently a hack to allow roaster to determine number of objects the
     # same as is done for the data processed by sheller
-    g_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))    
+    g_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))
     ### TODO: Add segmentation mask
     # the real data will create a dataset that is an image of the noise
-    # for the galsim_galaxy only a single value characterizing the 
+    # for the galsim_galaxy only a single value characterizing the
     # variance is generated
     g_obs_sex_seg_i_noise = g_obs_sex_seg_i.create_dataset('noise', data=lsst.noise.getVariance())
     # for consistency with real data, also assign this to the noise dataset
@@ -474,7 +487,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='',
     g_obs.attrs['filter_name'] = filter_name_ground
     g.attrs['primary_diam'] = lsst.primary_diam_meters
     g.attrs['atmosphere'] = lsst.atmosphere
-    
+
 
     ### Instrument/epoch 2
     s_obs_sex_seg_i = f.create_group("space/observation/sextractor/segments/0")
@@ -485,7 +498,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='',
     s_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))
     ### TODO: Add segmentation mask
     # the real data will create a dataset that is an image of the noise
-    # for the galsim_galaxy only a single value characterizing the 
+    # for the galsim_galaxy only a single value characterizing the
     # variance is generated
     s_obs_sex_seg_i_noise = s_obs_sex_seg_i.create_dataset('noise', data=wfirst.noise.getVariance())
     # for consistency with real data, also assign this to the noise dataset
@@ -501,7 +514,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='r', file_lab='',
     s.attrs['atmosphere'] = wfirst.atmosphere
 
     f.close()
-    # -------------------------------------------------------------------------    
+    # -------------------------------------------------------------------------
 
 def make_blended_test_image(num_sources=3, random_seed=75256611):
     lsst_pixel_scale_arcsec = 0.2
@@ -530,7 +543,7 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
         sub_image = galsim.Image(npix_gal, npix_gal, scale=lsst_pixel_scale_arcsec)
 
-        src_model = GalSimGalaxyModel(pixel_scale=lsst_pixel_scale_arcsec, 
+        src_model = GalSimGalaxyModel(pixel_scale=lsst_pixel_scale_arcsec,
             noise=lsst_noise(82357),
             galaxy_model="Spergel",
             wavelength=770.e-9, primary_diam_meters=8.4, atmosphere=True)
@@ -548,9 +561,9 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
         # Create a nominal bound for the postage stamp given the integer part of the
         # position.
-        sub_bounds = galsim.BoundsI(ix-0.5*npix_gal, ix+0.5*npix_gal-1, 
+        sub_bounds = galsim.BoundsI(ix-0.5*npix_gal, ix+0.5*npix_gal-1,
                                     iy-0.5*npix_gal, iy+0.5*npix_gal-1)
-        sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin, sub_bounds.ymin))        
+        sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin, sub_bounds.ymin))
 
         # Find the overlapping bounds between the large image and the individual postage
         # stamp.
@@ -562,6 +575,5 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
 
 if __name__ == "__main__":
-    # make_test_images()
-    make_blended_test_image()
-
+    make_test_images()
+    # make_blended_test_image()

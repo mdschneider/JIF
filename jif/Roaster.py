@@ -51,7 +51,7 @@ class Roaster(object):
         (a) Multiple epochs or instruments observing the same source
         (b) Multiple sources in a single 'cutout' (e.g., for blended sources)
     For scenario (a), the likelihood is a product of the likelihoods for each epoch or instrument.
-    For scenario (b), we need a list of source models that generate a model image that is 
+    For scenario (b), we need a list of source models that generate a model image that is
     fed to the likelihood function for a single epoch or instrument.
 
     @param lnprior_omega      Prior class for the galaxy model parameters
@@ -61,15 +61,15 @@ class Roaster(object):
     @param epoch              Select only this epoch number from the input, if provided.
                               If not provided, then get all epochs.
     @param debug              Save debugging outputs (including model images per step?)
-    @param param_subset       Indices of a subset of model parameters to use in MCMC sampling.
-                              Use all parameters if this argument is not supplied.
+    @param model_paramnames   Names of the galaxy model parameters to sample in.
+                              These must match names in a galsim_galaxy model.
     """
-    def __init__(self, lnprior_omega=None, 
+    def __init__(self, lnprior_omega=None,
                  data_format='test_galsim_galaxy',
                  galaxy_model_type='BulgeDisk',
                  epoch=None,
                  debug=False,
-                 param_subset=None):
+                 model_paramnames=['hlr', 'e', 'beta']):
         if lnprior_omega is None:
             self.lnprior_omega = EmptyPrior()
         else:
@@ -89,15 +89,15 @@ class Roaster(object):
         if self.epoch is None:
             branch = branches[i]
         else:
-            branch = branches[self.epoch]        
+            branch = branches[self.epoch]
         return branch
-    
+
     def Load(self, infile, segment=None):
         """
         Load image cutouts from file for the given segment, where segment is
         an integer reference.
 
-        The input file should contain: 
+        The input file should contain:
             1. Pixel data for a cutout of N galaxies
             2. A segmentation mask for the cutout
             3. The pixel noise model (e.g., variance per pixel)
@@ -182,7 +182,7 @@ class Roaster(object):
                 telescope = f[branch]
                 seg = f[branch+'/observation/sextractor/segments/'+str(segment)]
                 obs = f[branch+'/observation']
-                
+
                 dat = seg['image']
                 print i, "dat shape:", dat.shape
                 print "\t", np.array(dat).shape ### not sure why this is here; duplicates previous line
@@ -210,11 +210,12 @@ class Roaster(object):
                 print "nx, ny, i:", self.nx[i], self.ny[i], i
 
         src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model=self.galaxy_model_type,
-                                pixel_scale=pixel_scales[iepochs], 
+                                active_parameters=self.model_paramnames,
+                                pixel_scale=pixel_scales[iepochs],
                                 wavelength=wavelengths[iepochs],
                                 primary_diam_meters=primary_diams[iepochs],
-                                atmosphere=atmospheres[iepochs]) 
-                            for iepochs in xrange(self.num_epochs)] 
+                                atmosphere=atmospheres[iepochs])
+                            for iepochs in xrange(self.num_epochs)]
                            for isrcs in xrange(self.num_sources)]
         self.n_params = src_models[0][0].n_params
         if self.param_subset is not None:
@@ -228,7 +229,7 @@ class Roaster(object):
         """
         Make a flat array of model parameters for all sources
         """
-        ### In subsetting by self.param_subset below, we use the feature that 
+        ### In subsetting by self.param_subset below, we use the feature that
         ### for a numpy array x, x[None] == x
         p = np.array([m[0].get_params()[self.param_subset] for m in src_models]).ravel()
         return p
@@ -273,7 +274,7 @@ class Roaster(object):
 
     def lnlike(self, omega, *args, **kwargs):
         """
-        Evaluate the log-likelihood function for joint pixel data for all 
+        Evaluate the log-likelihood function for joint pixel data for all
         galaxies in a blended group given all available imaging and epochs.
 
         See GalSim/examples/demo5.py for how to add multiple sources to a single image.
@@ -284,26 +285,26 @@ class Roaster(object):
         if valid_params:
             lnlike = 0.0
             for iepochs in xrange(self.num_epochs):
-                model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs], 
+                model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs],
                     scale=src_models[0][iepochs].pixel_scale)
 
                 for isrcs in xrange(self.num_sources):
                     ### Draw every source using the full output array
                     b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
                     sub_image = model_image[b]
-                    model = src_models[isrcs][iepochs].get_image(sub_image, 
+                    model = src_models[isrcs][iepochs].get_image(sub_image,
                         filter_name=self.filters[iepochs])
 
                 if model is None:
                     lnlike = -np.inf
                 else:
                     if self.debug:
-                        model_image_file_name = os.path.join('debug', 
+                        model_image_file_name = os.path.join('debug',
                             'model_image_iepoch%d_istep%d.fits' % (iepochs, self.istep))
                         model_image.write(model_image_file_name)
                         logging.debug('Wrote model image to %r', model_image_file_name)
 
-                    lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image.array) ** 2) / 
+                    lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image.array) ** 2) /
                         pix_noise_var[iepochs])
         else:
             lnlike = -np.inf
@@ -343,7 +344,7 @@ def do_sampling(args, roaster):
     logging.info("Sampling")
     for i in range(args.nsamples):
         if np.mod(i+1, 20) == 0:
-            print "\tStep {:d} / {:d}".format(i+1, args.nsamples)
+            print "\tStep {:d} / {:d}, lnp: {:5.4g}".format(i+1, args.nsamples, np.mean(pp))
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         if not args.quiet:
             print i, np.mean(lnp)
@@ -352,11 +353,11 @@ def do_sampling(args, roaster):
         pps.append(pp.copy())
         lnps.append(lnp.copy())
 
-    write_results(args, pps, lnps, roaster.param_subset)
+    write_results(args, pps, lnps)
     return None
 
 
-def write_results(args, pps, lnps, param_subset=None):
+def write_results(args, pps, lnps):
     if args.epoch is None:
         epoch_lab = ""
     else:
@@ -368,8 +369,6 @@ def write_results(args, pps, lnps, param_subset=None):
         del f["post"]
     post = f.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
     pnames = np.array(src_models[0][0].paramnames)
-    if param_subset is not None:
-        pnames = pnames[param_subset]
     post.attrs['paramnames'] = pnames
     if "logprobs" in f:
         del f["logprobs"]
@@ -407,16 +406,16 @@ class DefaultPriorBulgeDisk(object):
 def main():
     parser = argparse.ArgumentParser(
         description='Draw interim samples of source model parameters via MCMC.')
-    
+
     parser.add_argument("infiles",
                         help="input image files to roast", nargs='+')
-    
+
     parser.add_argument("-o", "--outfile", default="../output/roasting/roaster_out",
                         help="output HDF5 to record posterior samples and loglikes."
                              +"(Default: `roaster_out`)")
 
-    parser.add_argument("--galaxy_model_type", type=str, default="BulgeDisk",
-                        help="Type of parametric galaxy model (Default: 'BulgeDisk')")
+    parser.add_argument("--galaxy_model_type", type=str, default="Spergel",
+                        help="Type of parametric galaxy model (Default: 'Spergel')")
 
     parser.add_argument("--data_format", type=str, default="test_galsim_galaxy",
                         help="Format of the input image data file (Default: 'test_galsim_galaxy')")
@@ -424,24 +423,24 @@ def main():
     parser.add_argument("--epoch", type=int, default=None,
                         help="Select only a single epoch from the input data file \
                         (Default: None - get all epochs)")
-    
+
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
-    
+
     parser.add_argument("--nsamples", default=250, type=int,
                         help="Number of samples for each emcee walker (Default: 250)")
-    
+
     parser.add_argument("--nwalkers", default=64, type=int,
                         help="Number of emcee walkers (Default: 64)")
-    
+
     parser.add_argument("--nburn", default=50, type=int,
                         help="Number of burn-in steps (Default: 50)")
-    
+
     parser.add_argument("--nthreads", default=1, type=int,
                         help="Number of threads to use (Default: 8)")
-    
+
     parser.add_argument("--quiet", action="store_true")
-    
+
     parser.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
@@ -456,14 +455,20 @@ def main():
         lnprior_omega = EmptyPrior()
 
     roaster = Roaster(debug=args.debug, data_format=args.data_format,
-                      lnprior_omega=lnprior_omega, 
+                      lnprior_omega=lnprior_omega,
                       galaxy_model_type=args.galaxy_model_type,
                       epoch=args.epoch)
     roaster.Load(args.infiles[0])
 
-    print "\nRoaster:", roaster.__dict__, "\n"
+    import pprint
+    pp = pprint.PrettyPrinter(indent=4)
 
-    print "\nsource models:",src_models[0][0].__dict__, "\n"
+    print("\nRoaster:")
+    pp.pprint(roaster.__dict__)
+
+    if not args.quiet:
+        print("\nsource model 0:")
+        pp.pprint(src_models[0][0].__dict__)
 
     do_sampling(args, roaster)
 

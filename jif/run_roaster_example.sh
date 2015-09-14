@@ -11,9 +11,10 @@ if ($#argv != 1) then
     goto done
 endif
 
+### Assuming make_test_images() gets called here:
 python galsim_galaxy.py
-python Roaster.py test_image_data.h5 --nsamples $1 --nwalkers 16 --nburn 500 --nthreads 1
-python RoasterInspector.py ../output/roasting/roaster_out.h5 --truths 1e5 -0.3 1.8 0.3 0.7854
+python Roaster.py ../TestData/test_image_data.h5 --nsamples $1 --nwalkers 16 --nburn 100 --nthreads 1 --quiet
+python RoasterInspector.py ../output/roasting/roaster_out.h5 --truths 1.8 0.3 0.7854
 
 ## labels for proper exit or error
 done:

@@ -92,9 +92,9 @@ class RoasterArgs(object):
         self.outfile = '../output/roasting/example{:d}/roaster_out{}'.format(example_num, file_lab)
         self.epoch = epoch
         self.seed = 6199256
-        self.nsamples = 100
+        self.nsamples = 500
         self.nwalkers = 16
-        self.nburn = 10
+        self.nburn = 50
         self.nthreads = 1
         self.quiet = True
 

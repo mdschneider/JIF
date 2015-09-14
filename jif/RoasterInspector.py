@@ -20,17 +20,17 @@ class RoasterInspector(object):
             self.paramnames = self.paramnames[0]
         self.data = f['post'][...]
         self.logprob = f['logprobs'][...]
-        self.nburn = f.attrs['nburn']        
+        self.nburn = f.attrs['nburn']
         f.close()
 
     def __str__(self):
-        return ("<RoasterInspector>\n" + "Input file: %s" % self.args.infile)       
+        return ("<RoasterInspector>\n" + "Input file: %s" % self.args.infile)
 
     def summary(self):
         print self.__str__()
         # print "Parameter names:", self.paramnames
         print "data: ", self.data.shape
-        print "paramnames:", self.paramnames.shape
+        print "paramnames:", self.paramnames.shape, "\n", self.paramnames
         # print self.data
         # print self.logprob
         return None
