@@ -14,7 +14,8 @@ import galsim
 
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
 k_filter_names = 'ugrizy'
-k_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750., 'z':880., 'y':1000.}
+k_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,
+                                'z':880., 'y':1000.}
 
 ### Minimum value a flux parameter can take, since these get log-transformed
 k_flux_param_minval = 1.e-12
@@ -24,16 +25,21 @@ k_spergel_paramnames = ['nu', 'hlr', 'e', 'beta']
 
 ### Numpy composite object types for the model parameters for galaxy images under different
 ### modeling assumptions.
-k_galparams_type_sersic = [('redshift', '<f8'), ('n', '<f8'), ('hlr', '<f8'), ('e', '<f8'),
-                           ('beta', '<f8')]
-k_galparams_type_sersic += [('flux_sed{:d}'.format(i+1), '<f8') for i in xrange(len(k_SED_names))]
+k_galparams_type_sersic = [('redshift', '<f8'), ('n', '<f8'), ('hlr', '<f8'),
+                           ('e', '<f8'), ('beta', '<f8')]
+k_galparams_type_sersic += [('flux_sed{:d}'.format(i+1), '<f8')
+                            for i in xrange(len(k_SED_names))]
 
-k_galparams_type_spergel = [('redshift', '<f8')] + [(p, '<f8') for p in k_spergel_paramnames]
-k_galparams_type_spergel += [('flux_sed{:d}'.format(i+1), '<f8') for i in xrange(len(k_SED_names))]
+k_galparams_type_spergel = [('redshift', '<f8')] + [(p, '<f8')
+                            for p in k_spergel_paramnames]
+k_galparams_type_spergel += [('flux_sed{:d}'.format(i+1), '<f8')
+                             for i in xrange(len(k_SED_names))]
 
 k_galparams_type_bulgedisk = [('redshift', '<f8')]
-k_galparams_type_bulgedisk += [('{}_bulge'.format(p), '<f8') for p in k_spergel_paramnames]
-k_galparams_type_bulgedisk += [('{}_disk'.format(p), '<f8') for p in k_spergel_paramnames]
+k_galparams_type_bulgedisk += [('{}_bulge'.format(p), '<f8')
+                               for p in k_spergel_paramnames]
+k_galparams_type_bulgedisk += [('{}_disk'.format(p), '<f8')
+                               for p in k_spergel_paramnames]
 k_galparams_type_bulgedisk += [('flux_sed{:d}_bulge'.format(i+1), '<f8')
     for i in xrange(len(k_SED_names))]
 k_galparams_type_bulgedisk += [('flux_sed{:d}_disk'.format(i+1), '<f8')
@@ -80,8 +86,8 @@ def wfirst_noise(random_seed):
     rng = galsim.BaseDeviate(random_seed)
     exposure_time_s = 150.
     pixel_scale_arcsec = 0.11
-    read_noise_e_rms = 5.
-    sky_background = 3.60382E-01 # e-/pix/s
+    read_noise_e_rms = 0.5 #5.
+    sky_background = 3.6e-2 #3.60382E-01 # e-/pix/s
     gain = 2.1 # e- / ADU
     return galsim.CCDNoise(rng, gain=gain,
         read_noise=(read_noise_e_rms / gain) ** 2,
@@ -261,7 +267,7 @@ class GalSimGalaxyModel(object):
         elif self.galaxy_model == "Spergel":
             mono_gal = galsim.Spergel(nu=self.params[0].nu, half_light_radius=self.params[0].hlr,
                 # flux=self.params[0].gal_flux,
-                flux=1.0,
+                # flux=1.0,
                 gsparams=self.gsparams)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
