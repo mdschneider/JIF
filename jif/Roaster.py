@@ -112,6 +112,7 @@ class Roaster(object):
         These values will be used to initialize any model-fitting (e.g., MCMC) algorithm.
 
         @param infiles  List of input filenames to load.
+        @param segment  Index of the segment to load. Choose segment 0 if not supplied.
         """
         global pixel_data
         global pix_noise_var
@@ -318,7 +319,7 @@ def do_sampling(args, roaster):
 
     nvars = len(omega_interim)
     print "Number of parameters:", nvars
-    p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
+    p0 = walker_ball(omega_interim, 0.05, args.nwalkers)
 
     logging.debug("Initializing parameters for MCMC to yield finite posterior values")
     while not all([np.isfinite(roaster(p)) for p in p0]):

@@ -83,7 +83,7 @@ def wfirst_noise(random_seed):
     read_noise_e_rms = 5.
     sky_background = 3.60382E-01 # e-/pix/s
     gain = 2.1 # e- / ADU
-    return galsim.CCDNoise(rng, gain=2.1,
+    return galsim.CCDNoise(rng, gain=gain,
         read_noise=(read_noise_e_rms / gain) ** 2,
         sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
 
@@ -228,7 +228,7 @@ class GalSimGalaxyModel(object):
         optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1.,
             gsparams=self.gsparams)
         if self.atmosphere:
-            atmos = galsim.Kolmogorov(fwhm=0.6, gsparams=self.gsparams)
+            atmos = galsim.Kolmogorov(fwhm=0.8, gsparams=self.gsparams)
             psf = galsim.Convolve([atmos, optics])
         else:
             psf = optics
@@ -250,7 +250,8 @@ class GalSimGalaxyModel(object):
                 for i, SED_name in enumerate(self.SEDs)]
         return reduce(add, SEDs)
 
-    def get_image(self, out_image=None, dx=0., dy=0, add_noise=False, filter_name='r', gain=1.):
+    def get_image(self, out_image=None, dx=0., dy=0, add_noise=False,
+                  filter_name='r', gain=1., snr=None):
         if self.galaxy_model == "Gaussian":
             # gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
             # gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
@@ -260,6 +261,7 @@ class GalSimGalaxyModel(object):
         elif self.galaxy_model == "Spergel":
             mono_gal = galsim.Spergel(nu=self.params[0].nu, half_light_radius=self.params[0].hlr,
                 # flux=self.params[0].gal_flux,
+                flux=1.0,
                 gsparams=self.gsparams)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
@@ -309,7 +311,10 @@ class GalSimGalaxyModel(object):
                 image=out_image, scale=self.pixel_scale, gain=gain)
             if add_noise:
                 if self.noise is not None:
-                    image.addNoise(self.noise)
+                    if snr is None:
+                        image.addNoise(self.noise)
+                    else:
+                        image.addNoiseSNR(self.noise, snr=snr)
                 else:
                     raise AttributeError("A GalSim noise model must be specified to add noise to an\
                         image.")
@@ -421,7 +426,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
 
     # WFIRST
     wfirst = GalSimGalaxyModel(pixel_scale=0.11,
-        noise=lsst_noise(82357), #wfirst_noise(82357),
+        noise=wfirst_noise(82357),
         galaxy_model=galaxy_model,
         wavelength=k_filter_central_wavelengths[filter_name_space] * 1.e-9,
         primary_diam_meters=2.4,
@@ -575,5 +580,5 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
 
 if __name__ == "__main__":
-    make_test_images()
-    # make_blended_test_image()
+    # make_test_images()
+    make_blended_test_image()
