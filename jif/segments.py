@@ -61,9 +61,8 @@ class Segments(object):
         """
         Save images for the segments from a single telescope
         """
-        segment_name = '{}/observation/{}/segments'.format(group_name, source_extraction)
-        # g_obs_sex_seg = self.file.create_group(segment_name)
-
+        segment_name = '{}/observation/{}/segments'.format(group_name,
+            source_extraction)
         for iseg, im in enumerate(image_list):
             seg = create_group(self.file, segment_name + '/{:d}'.format(iseg))
             # image - background
@@ -83,6 +82,8 @@ class Segments(object):
         """
         Save an image of the estimated PSF for each segment
         """
+        segment_name = '{}/observation/{}/segments'.format(group_name,
+            source_extraction)
         for iseg, im in enumerate(image_list):
             seg = create_group(self.file, segment_name + '/{:d}'.format(iseg))
             seg.create_dataset('psf', data=im)

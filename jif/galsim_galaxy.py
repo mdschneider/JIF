@@ -334,6 +334,13 @@ class GalSimGalaxyModel(object):
             image = None
         return image
 
+    def get_psf_image(self, ngrid=None):
+        psf = self.get_psf()
+        if ngrid is None:
+            ngrid = 16
+        image_epsf = psf.drawImage(scale=self.pixel_scale, nx=ngrid, ny=ngrid)
+        return image_epsf
+
     def get_segment(self):
         pass
 
@@ -343,10 +350,7 @@ class GalSimGalaxyModel(object):
         return None
 
     def save_psf(self, file_name, ngrid=None):
-        psf = self.get_psf()
-        if ngrid is None:
-            ngrid = 16
-        image_epsf = psf.drawImage(scale=self.pixel_scale, nx=ngrid, ny=ngrid)
+        image_epsf = self.get_psf_image(ngrid)
         image_epsf.write(file_name)
         return None
 
@@ -465,6 +469,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
     ### Save a file with joint image data for input to the Roaster
     segfile = os.path.join(os.path.dirname(__file__),
         '../TestData/test_image_data' + file_lab + '.h5')
+    print("Writing {}".format(segfile))
     seg = segments.Segments(segfile)
 
     dummy_mask = 1.0
@@ -477,6 +482,9 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
         primary_diam=lsst.primary_diam_meters,
         pixel_scale_arcsec=lsst.pixel_scale,
         atmosphere=lsst.atmosphere)
+    seg.save_psf_images([lsst.get_psf_image().array],
+        group_name='ground', source_extraction='sextractor',
+        filter_name=filter_name_ground)
     ### TODO: Save bandpass lookup tables
 
     ### Space data
@@ -487,6 +495,9 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
         primary_diam=wfirst.primary_diam_meters,
         pixel_scale_arcsec=wfirst.pixel_scale,
         atmosphere=wfirst.atmosphere)
+    seg.save_psf_images([wfirst.get_psf_image().array],
+        group_name='space', source_extraction='sextractor',
+        filter_name=filter_name_space)
     ### TODO: Save bandpass lookup tables
 
 
