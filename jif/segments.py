@@ -14,6 +14,18 @@ import numpy as np
 import h5py
 
 
+def create_group(f, group_name):
+    """
+    Create an HDF5 group in f if it does not already exist,
+    otherwise just get a reference to it.
+    """
+    if group_name not in f:
+        g = f.create_group(group_name)
+    else:
+        g = f[group_name]
+    return g
+
+
 class Segments(object):
     """
     I/O for galaxy image segments
@@ -26,10 +38,7 @@ class Segments(object):
     def save_tel_metadata(self, group_name='ground', telescope='lsst',
                           primary_diam=8.4, pixel_scale_arcsec=0.2,
                           atmosphere=True):
-        if group_name not in self.file:
-            g = self.file.create_group(group_name)
-        else:
-            g = self.file[group_name]
+        g = create_group(self.file, group_name)
         g.attrs['telescope'] = telescope
         g.attrs['primary_diam'] = primary_diam
         g.attrs['pixel_scale_arcsec'] = pixel_scale_arcsec
@@ -50,7 +59,7 @@ class Segments(object):
         # g_obs_sex_seg = self.file.create_group(segment_name)
 
         for iseg, im in enumerate(image_list):
-            seg = self.file.create_group(segment_name + '/{:d}'.format(iseg))
+            seg = create_group(self.file, segment_name + '/{:d}'.format(iseg))
             # image - background
             seg.create_dataset('image', data=im)
             # rms noise
@@ -58,6 +67,19 @@ class Segments(object):
             # estimate the variance of this noise image and save as attribute
             seg.attrs['variance'] = np.var(noise)
             seg.create_dataset('segmask', data=mask_list[iseg])
+        return None
+
+    def save_psf_images(self,
+                        image_list,
+                        group_name='ground',
+                        source_extraction='sextractor',
+                        filter_name='r'):
+        """
+        Save an image of the estimated PSF for each segment
+        """
+        for iseg, im in enumerate(image_list):
+            seg = create_group(self.file, segment_name + '/{:d}'.format(iseg))
+            seg.create_dataset('psf', data=im)
         return None
 
     def save_bandpasses(self, filters_list, waves_nm_list, throughputs_list,

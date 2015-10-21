@@ -10,6 +10,7 @@ import math
 import numpy as np
 from operator import add
 import galsim
+import segments
 
 
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
