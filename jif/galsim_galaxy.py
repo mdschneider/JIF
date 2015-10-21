@@ -463,73 +463,100 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
 
     # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster
-    f = h5py.File(os.path.join(os.path.dirname(__file__),
-        '../TestData/test_image_data' + file_lab + '.h5'), 'w')
+    segfile = os.path.join(os.path.dirname(__file__),
+        '../TestData/test_image_data' + file_lab + '.h5')
+    seg = segments.Segments(segfile)
 
-    # Define the (sub)groups
-    g = f.create_group('ground')
-    g_obs = f.create_group('ground/observation')
-    g_obs_sex = f.create_group('ground/observation/sextractor')
-    g_obs_sex_seg = f.create_group('ground/observation/sextractor/segments')
+    dummy_mask = 1.0
 
-    s = f.create_group('space')
-    s_obs = f.create_group('space/observation')
-    s_obs_sex = f.create_group('space/observation/sextractor')
-    s_obs_sex_seg = f.create_group('space/observation/sextractor/segments')
+    ### Ground data
+    seg.save_images([lsst_data], [lsst.noise.getVariance()], [dummy_mask],
+        group_name='ground', source_extraction='sextractor',
+        filter_name=filter_name_ground)
+    seg.save_tel_metadata(group_name='ground', telescope='LSST',
+        primary_diam=lsst.primary_diam_meters,
+        pixel_scale_arcsec=lsst.pixel_scale,
+        atmosphere=lsst.atmosphere)
+    ### TODO: Save bandpass lookup tables
+
+    ### Space data
+    seg.save_images([wfirst_data], [wfirst.noise.getVariance()], [dummy_mask],
+        group_name='space', source_extraction='sextractor',
+        filter_name=filter_name_space)
+    seg.save_tel_metadata(group_name='space', telescope='WFIRST',
+        primary_diam=wfirst.primary_diam_meters,
+        pixel_scale_arcsec=wfirst.pixel_scale,
+        atmosphere=wfirst.atmosphere)
+    ### TODO: Save bandpass lookup tables
 
 
-    f.attrs['num_sources'] = 1 ### Assert a fixed number of sources for all epochs
+    # f = h5py.File(os.path.join(os.path.dirname(__file__),
+    #     '../TestData/test_image_data' + file_lab + '.h5'), 'w')
 
-    ### Instrument/epoch 1
-    g_obs_sex_seg_i = f.create_group("ground/observation/sextractor/segments/0")
-    g_obs_sex_seg_i.create_dataset('image', data=lsst_data)
-    ### TODO: Add object property data like that that might come out of DMstack or sextractor
-    # currently a hack to allow roaster to determine number of objects the
-    # same as is done for the data processed by sheller
-    g_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))
-    ### TODO: Add segmentation mask
-    # the real data will create a dataset that is an image of the noise
-    # for the galsim_galaxy only a single value characterizing the
-    # variance is generated
-    g_obs_sex_seg_i_noise = g_obs_sex_seg_i.create_dataset('noise', data=lsst.noise.getVariance())
-    # for consistency with real data, also assign this to the noise dataset
-    # attribute
-    g_obs_sex_seg_i_noise.attrs['variance'] = lsst.noise.getVariance()
+    # # Define the (sub)groups
+    # g = f.create_group('ground')
+    # g_obs = f.create_group('ground/observation')
+    # g_obs_sex = f.create_group('ground/observation/sextractor')
+    # g_obs_sex_seg = f.create_group('ground/observation/sextractor/segments')
+    #
+    # s = f.create_group('space')
+    # s_obs = f.create_group('space/observation')
+    # s_obs_sex = f.create_group('space/observation/sextractor')
+    # s_obs_sex_seg = f.create_group('space/observation/sextractor/segments')
+
+
+    # f.attrs['num_sources'] = 1 ### Assert a fixed number of sources for all epochs
+
+    # ### Instrument/epoch 1
+    # g_obs_sex_seg_i = f.create_group("ground/observation/sextractor/segments/0")
+    # g_obs_sex_seg_i.create_dataset('image', data=lsst_data)
+    # ### TODO: Add object property data like that that might come out of DMstack or sextractor
+    # # currently a hack to allow roaster to determine number of objects the
+    # # same as is done for the data processed by sheller
+    # g_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))
+    # ### TODO: Add segmentation mask
+    # # the real data will create a dataset that is an image of the noise
+    # # for the galsim_galaxy only a single value characterizing the
+    # # variance is generated
+    # g_obs_sex_seg_i_noise = g_obs_sex_seg_i.create_dataset('noise', data=lsst.noise.getVariance())
+    # # for consistency with real data, also assign this to the noise dataset
+    # # attribute
+    # g_obs_sex_seg_i_noise.attrs['variance'] = lsst.noise.getVariance()
     ### TODO: add WCS information
     ### TODO: add background model(s)
-    g.attrs['telescope'] = 'LSST'
-    g.attrs['pixel_scale'] = lsst.pixel_scale
-    g_obs.attrs['filter_central'] = k_filter_central_wavelengths[filter_name_ground] * 1.e-9
-    g_obs.attrs['filter_name'] = filter_name_ground
-    g.attrs['primary_diam'] = lsst.primary_diam_meters
-    g.attrs['atmosphere'] = lsst.atmosphere
+    # g.attrs['telescope'] = 'LSST'
+    # g.attrs['pixel_scale'] = lsst.pixel_scale
+    # g_obs.attrs['filter_central'] = k_filter_central_wavelengths[filter_name_ground] * 1.e-9
+    # g_obs.attrs['filter_name'] = filter_name_ground
+    # g.attrs['primary_diam'] = lsst.primary_diam_meters
+    # g.attrs['atmosphere'] = lsst.atmosphere
+    #
 
-
-    ### Instrument/epoch 2
-    s_obs_sex_seg_i = f.create_group("space/observation/sextractor/segments/0")
-    s_obs_sex_seg_i.create_dataset('image', data=wfirst_data)
-    ### TODO: Add object property data like that that might come out of DMstack or sextractor
-    # currently a hack to allow roaster to determine number of objects the
-    # same as is done for the data processed by sheller
-    s_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))
-    ### TODO: Add segmentation mask
-    # the real data will create a dataset that is an image of the noise
-    # for the galsim_galaxy only a single value characterizing the
-    # variance is generated
-    s_obs_sex_seg_i_noise = s_obs_sex_seg_i.create_dataset('noise', data=wfirst.noise.getVariance())
-    # for consistency with real data, also assign this to the noise dataset
-    # attribute
-    s_obs_sex_seg_i_noise.attrs['variance'] = lsst.noise.getVariance()
+    # ### Instrument/epoch 2
+    # s_obs_sex_seg_i = f.create_group("space/observation/sextractor/segments/0")
+    # s_obs_sex_seg_i.create_dataset('image', data=wfirst_data)
+    # ### TODO: Add object property data like that that might come out of DMstack or sextractor
+    # # currently a hack to allow roaster to determine number of objects the
+    # # same as is done for the data processed by sheller
+    # s_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))
+    # ### TODO: Add segmentation mask
+    # # the real data will create a dataset that is an image of the noise
+    # # for the galsim_galaxy only a single value characterizing the
+    # # variance is generated
+    # s_obs_sex_seg_i_noise = s_obs_sex_seg_i.create_dataset('noise', data=wfirst.noise.getVariance())
+    # # for consistency with real data, also assign this to the noise dataset
+    # # attribute
+    # s_obs_sex_seg_i_noise.attrs['variance'] = lsst.noise.getVariance()
     ### TODO: add WCS information
     ### TODO: add background model(s)
-    s.attrs['telescope'] = 'WFIRST'
-    s.attrs['pixel_scale'] = wfirst.pixel_scale
-    s_obs.attrs['filter_central'] = k_filter_central_wavelengths[filter_name_space] * 1.e-9
-    s_obs.attrs['filter_name'] = filter_name_space
-    s.attrs['primary_diam'] = wfirst.primary_diam_meters
-    s.attrs['atmosphere'] = wfirst.atmosphere
-
-    f.close()
+    # s.attrs['telescope'] = 'WFIRST'
+    # s.attrs['pixel_scale'] = wfirst.pixel_scale
+    # s_obs.attrs['filter_central'] = k_filter_central_wavelengths[filter_name_space] * 1.e-9
+    # s_obs.attrs['filter_name'] = filter_name_space
+    # s.attrs['primary_diam'] = wfirst.primary_diam_meters
+    # s.attrs['atmosphere'] = wfirst.atmosphere
+    #
+    # f.close()
     # -------------------------------------------------------------------------
 
 def make_blended_test_image(num_sources=3, random_seed=75256611):
@@ -595,9 +622,9 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
     outfile = "../TestData/test_lsst_blended_image.fits"
     print("Saving to {}".format(outfile))
-	segment_image.write(outfile)
+    segment_image.write(outfile)
 
 
 if __name__ == "__main__":
-    # make_test_images()
-    make_blended_test_image()
+    make_test_images()
+    # make_blended_test_image()

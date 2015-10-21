@@ -45,6 +45,12 @@ class Segments(object):
         g.attrs['atmosphere'] = atmosphere
         return None
 
+    def save_wcs(self):
+        raise NotImplementedError()
+
+    def save_backgrounds(self):
+        raise NotImplementedError()
+
     def save_images(self,
                     image_list,
                     noise_list,
@@ -65,7 +71,7 @@ class Segments(object):
             # rms noise
             seg.create_dataset('noise', data=noise_list[iseg])
             # estimate the variance of this noise image and save as attribute
-            seg.attrs['variance'] = np.var(noise)
+            seg.attrs['variance'] = np.var(noise_list[iseg])
             seg.create_dataset('segmask', data=mask_list[iseg])
         return None
 
