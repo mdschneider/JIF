@@ -41,7 +41,7 @@ img1_rms_name = 'HST_background_rms.fits'
 img1_segmentation_name = 'HST_segmentation.fits'
 cat1_name = 'HST_catalog.fits'
 
-# Threshild factor, multiplacitive factor above rms that a pixel must be to 
+# Threshild factor, multiplacitive factor above rms that a pixel must be to
 # be considered during the percolation analysis.
 f_thresh = 3
 
@@ -141,19 +141,19 @@ s_obs.attrs['INSTRUME'] = 'ACS' # instrument name
 s_obs.attrs['DETECTOR'] = 'WFC' # detector name
 s_obs.attrs['FILTER1'] = 'CLEAR1L' # a clear filter
 s_obs.attrs['FILTER2'] = 'F814W' # non-clear filter
-s_obs.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel                
-s_obs.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel                
-s_obs.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel            
-s_obs.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel           
-s_obs.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis         
-s_obs.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis        
-s_obs.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x     
-s_obs.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y      
-s_obs.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x     
-s_obs.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y   
-s_obs.attrs['LTV1']  = 0.0 # offset in X to subsection start                
-s_obs.attrs['LTV2']  = 0.0 # offset in Y to subsection start                
-s_obs.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X               
+s_obs.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel
+s_obs.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel
+s_obs.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel
+s_obs.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel
+s_obs.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis
+s_obs.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis
+s_obs.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x
+s_obs.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y
+s_obs.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x
+s_obs.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y
+s_obs.attrs['LTV1']  = 0.0 # offset in X to subsection start
+s_obs.attrs['LTV2']  = 0.0 # offset in Y to subsection start
+s_obs.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X
 s_obs.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
 
 # ground based attributes
@@ -182,19 +182,19 @@ g_obs.attrs['INSTRUME'] = 'ACS' # instrument name
 g_obs.attrs['DETECTOR'] = 'WFC' # detector name
 g_obs.attrs['FILTER1'] = 'CLEAR1L' # a clear filter
 g_obs.attrs['FILTER2'] = 'F814W' # non-clear filter
-g_obs.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel                
-g_obs.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel                
-g_obs.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel            
-g_obs.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel           
-g_obs.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis         
-g_obs.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis        
-g_obs.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x     
-g_obs.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y      
-g_obs.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x     
-g_obs.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y   
-g_obs.attrs['LTV1']  = 0.0 # offset in X to subsection start                
-g_obs.attrs['LTV2']  = 0.0 # offset in Y to subsection start                
-g_obs.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X               
+g_obs.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel
+g_obs.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel
+g_obs.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel
+g_obs.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel
+g_obs.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis
+g_obs.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis
+g_obs.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x
+g_obs.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y
+g_obs.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x
+g_obs.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y
+g_obs.attrs['LTV1']  = 0.0 # offset in X to subsection start
+g_obs.attrs['LTV2']  = 0.0 # offset in Y to subsection start
+g_obs.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X
 g_obs.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
 
 
@@ -227,7 +227,7 @@ fits_img0_segmentation[0].data = img0_seg
 fits_img0_segmentation.writeto('HST_conv_seg.fits',clobber=True)
 
 
-# 
+#
 
 ## Create datasets
 #dset = f.create_dataset('space/observation/sex/', data=arr)
@@ -279,24 +279,24 @@ for i in range(N_img0_seg):
     print '{0} of {1}'.format(i+1,N_img0_seg)
     # get the pixel coordinates bounding the local group
     stamp_i = stamps[i]
-    
+
     # Create groups for this segment
     group_name_s = 'space/observation/sextractor/segments/'+str(i)
     group_name_g = 'ground/observation/sextractor/segments/'+str(i)
-    
-    s_obs_sex_grp_i = f.create_group(group_name_s)    
+
+    s_obs_sex_grp_i = f.create_group(group_name_s)
     g_obs_sex_grp_i = f.create_group(group_name_g)
-    
+
     # Ground Datasets
     # Create the image-background dataset
     g_obs_sex_grp_i.create_dataset('image', data=data_img0_minback[stamp_i])
     # Create the rms noise dataset
     g_obs_sex_grp_i_noise = g_obs_sex_grp_i.create_dataset('noise', data=data_img0_rms[stamp_i])
     # estimate the varinace of this noise image and save as attribute
-    g_obs_sex_grp_i_noise.attrs['variance'] = numpy.median(g_obs_sex_grp_i_noise)**2
+    g_obs_sex_grp_i_noise.attrs['variance'] = np.var(g_obs_sex_grp_i_noise) #numpy.median(g_obs_sex_grp_i_noise)**2
     # Create the local group segment mask dataset
     g_obs_sex_grp_i.create_dataset('segmask', data=mask_img0[stamp_i])
-    
+
     # Space Datasets
     # Create the image-background dataset
     s_obs_sex_grp_i.create_dataset('image', data=data_img1_minback[stamp_i])
@@ -304,11 +304,11 @@ for i in range(N_img0_seg):
     s_obs_sex_grp_i_noise = s_obs_sex_grp_i.create_dataset('noise', data=data_img1_rms[stamp_i])
     # estimate the varinace of this noise image and save as attribute
     s_obs_sex_grp_i_noise.attrs['variance'] = numpy.median(s_obs_sex_grp_i_noise)**2
-    # Create the local group segment mask dataset, 
-    # for now just the same as the ground 
+    # Create the local group segment mask dataset,
+    # for now just the same as the ground
     s_obs_sex_grp_i.create_dataset('segmask', data=mask_img0[stamp_i])
-    
-    # Determine which objects from the sextractor analysis are within the 
+
+    # Determine which objects from the sextractor analysis are within the
     # postage stamp
     # first slice is x-coord, and 0th slice is y-coord
     stamp_i_xbounds = stamp_i[1]
@@ -332,8 +332,8 @@ for i in range(N_img0_seg):
     data_stamp1 = data_cat1[mask_stamp_1]
     g_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_stamp0)
     s_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_stamp1)
-    
-    # Determine which objects from the sextractor analysis are within the 
+
+    # Determine which objects from the sextractor analysis are within the
     # segmentation region
     mask_pixels_seg = img0_seg == i+1 # identify pixels belonging to i^th seg
     mask_seg_0 = numpy.logical_and(numpy.in1d(x_round_0[mask_stamp_0],
@@ -341,7 +341,7 @@ for i in range(N_img0_seg):
                                    numpy.in1d(y_round_0[mask_stamp_0],
                                               Y[mask_pixels_seg]))
     N_seg_0 = numpy.sum(mask_seg_0)
-    
+
     mask_seg_1 = numpy.logical_and(numpy.in1d(x_round_1[mask_stamp_1],
                                               X[mask_pixels_seg]),
                                    numpy.in1d(y_round_1[mask_stamp_1],
