@@ -534,6 +534,10 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
     hlrs = [1.8, 1.0, 2.0]
     orientations = np.array([0.1, 0.25, -0.3]) * np.pi
 
+    noise_model = lsst_noise(82357)
+
+    filter_name = 'y'
+
     ### Setup the 'segment' image that will contain all the galaxies in the blend
     npix_segment = 128
     # segment_pos = galsim.CelectialCoord(ra=90.*galsim.degrees, dec=-10.*galsim.degrees)
@@ -542,8 +546,8 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
     ### Define the galaxy positions in the segment (relative to the center of the segment image)
     ### (see galsim demo13.py)
     pos_rng = galsim.UniformDeviate(random_seed)
-    x_gal = (0.4 + 0.2 * np.array([pos_rng() for i in xrange(num_sources)])) * npix_segment
-    y_gal = (0.4 + 0.2 * np.array([pos_rng() for i in xrange(num_sources)])) * npix_segment
+    x_gal = (0.4 + 0.1 * np.array([pos_rng() for i in xrange(num_sources)])) * npix_segment
+    y_gal = (0.4 + 0.1 * np.array([pos_rng() for i in xrange(num_sources)])) * npix_segment
 
     npix_gal = 100
 
@@ -565,7 +569,7 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
         # src_model.set_params(p)
 
-        gal_image = src_model.get_image(sub_image, filter_name='r')
+        gal_image = src_model.get_image(sub_image, filter_name=filter_name)
 
         ix = int(math.floor(x_gal[isrcs]+0.5))
         iy = int(math.floor(y_gal[isrcs]+0.5))
@@ -581,6 +585,8 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
         bounds = sub_image.bounds & segment_image.bounds
 
         segment_image[bounds] += sub_image[bounds]
+
+    segment_image.addNoise(noise_model)
 
     segment_image.write("../TestData/test_lsst_blended_image.fits")
 
