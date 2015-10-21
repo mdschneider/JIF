@@ -172,6 +172,10 @@ class GalSimGalaxyModel(object):
             self.filters[filter_name] = self.filters[filter_name].thin(rel_err=1e-4)
         return None
 
+    def set_wavelength(self, wavelength):
+        self.wavelength = wavelength
+        return None
+
     def set_params(self, p):
         """
         Take a list of (active) parameters and set local variables.
@@ -589,7 +593,9 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
     segment_image.addNoise(noise_model)
 
-    segment_image.write("../TestData/test_lsst_blended_image.fits")
+    outfile = "../TestData/test_lsst_blended_image.fits"
+    print("Saving to {}".format(outfile))
+	segment_image.write(outfile)
 
 
 if __name__ == "__main__":
