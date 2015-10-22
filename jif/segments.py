@@ -35,6 +35,10 @@ class Segments(object):
 
         self.file = h5py.File(segment_file, 'w')
 
+    def _segment_group_name(self, segment_index, telescope, filter_name):
+        return 'seg{:d}/{}/band_{}'.format(segment_index, telescope,
+            filter_name)
+
     def save_tel_metadata(self, telescope='lsst',
                           primary_diam=8.4, pixel_scale_arcsec=0.2,
                           atmosphere=True):
@@ -45,10 +49,16 @@ class Segments(object):
         g.attrs['atmosphere'] = atmosphere
         return None
 
-    def save_wcs(self):
-        raise NotImplementedError()
+    def save_source_catalog(self, seg_srcs, segment_index=0):
+        """
+        List the identified sources and associated properties for each segment.
+        """
+        seg = create_group(self.file, 'seg{:d}'.format(segment_index))
+        seg.create_dataset('catalog', data=seg_srcs)
+        seg.attrs['num_sources'] = seg_srcs.shape[0]
+        return None
 
-    def save_backgrounds(self):
+    def save_wcs(self):
         raise NotImplementedError()
 
     def save_images(self,
@@ -56,26 +66,33 @@ class Segments(object):
                     noise_list,
                     mask_list,
                     background_list,
-                    telescope = 'lsst',
-                    filter_name = 'r'):
+                    segment_index=0,
+                    telescope='lsst',
+                    filter_name='r'):
         """
         Save images for the segments from a single telescope
+
+        The input lists should contain multiple epochs for a common segment,
+        telescope, and bandpass.
         """
-        segment_name = 'segment/{}/band_{}'.format(telescope, filter_name)
-        for iseg, im in enumerate(image_list):
-            seg = create_group(self.file, segment_name + '/epoch_{:d}'.format(iseg))
+        segment_name = self._segment_group_name(segment_index, telescope,
+            filter_name)
+        for iepoch, im in enumerate(image_list):
+            seg = create_group(self.file,
+                segment_name + '/epoch_{:d}'.format(iepoch))
             # image - background
             seg.create_dataset('image', data=im)
             # rms noise
-            seg.create_dataset('noise', data=noise_list[iseg])
+            seg.create_dataset('noise', data=noise_list[iepoch])
             # estimate the variance of this noise image and save as attribute
-            seg.attrs['variance'] = np.var(noise_list[iseg])
-            seg.create_dataset('segmask', data=mask_list[iseg])
-            seg.create_dataset('background', data=background_list[iseg])
+            seg.attrs['variance'] = np.var(noise_list[iepoch])
+            seg.create_dataset('segmask', data=mask_list[iepoch])
+            seg.create_dataset('background', data=background_list[iepoch])
         return None
 
     def save_psf_images(self,
                         image_list,
+                        segment_index=0,
                         telescope='lsst',
                         filter_name='r',
                         model_names=None):
@@ -86,14 +103,16 @@ class Segments(object):
         specify how to parse the 'image' replacements with a list of descriptive
         strings in 'model_names'.
         """
-        segment_name = 'segment/{}/band_{}'.format(telescope, filter_name)
-        for iseg, im in enumerate(image_list):
-            seg = create_group(self.file, segment_name + '/epoch_{:d}'.format(iseg))
+        segment_name = self._segment_group_name(segment_index, telescope,
+            filter_name)
+        for iepoch, im in enumerate(image_list):
+            seg = create_group(self.file,
+                segment_name + '/epoch_{:d}'.format(iepoch))
             seg.create_dataset('psf', data=im)
             if model_names is None:
                 seg.attrs['psf_type'] = 'image'
             else: ### Assume a list of names of PSF model types
-                seg.attrs['psf_type'] = model_names[iseg]
+                seg.attrs['psf_type'] = model_names[iepoch]
         return None
 
     def save_bandpasses(self, filters_list, waves_nm_list, throughputs_list,

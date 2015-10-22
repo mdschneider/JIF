@@ -472,33 +472,37 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
     print("Writing {}".format(segfile))
     seg = segments.Segments(segfile)
 
+    seg_ndx = 0
+    src_catalog = lsst.params
+    seg.save_source_catalog(src_catalog, segment_index=seg_ndx)
+
     dummy_mask = 1.0
     dummy_background = 0.0
 
     ### Ground data
     seg.save_images([lsst_data], [lsst.noise.getVariance()], [dummy_mask],
-        [dummy_background],
+        [dummy_background], segment_index=seg_ndx,
         telescope='lsst',
         filter_name=filter_name_ground)
     seg.save_tel_metadata(telescope='lsst',
         primary_diam=lsst.primary_diam_meters,
         pixel_scale_arcsec=lsst.pixel_scale,
         atmosphere=lsst.atmosphere)
-    seg.save_psf_images([lsst.get_psf_image().array],
+    seg.save_psf_images([lsst.get_psf_image().array], segment_index=seg_ndx,
         telescope='lsst',
         filter_name=filter_name_ground)
     ### TODO: Save bandpass lookup tables
 
     ### Space data
     seg.save_images([wfirst_data], [wfirst.noise.getVariance()], [dummy_mask],
-        [dummy_background],
+        [dummy_background], segment_index=seg_ndx,
         telescope='wfirst',
         filter_name=filter_name_space)
     seg.save_tel_metadata(telescope='wfirst',
         primary_diam=wfirst.primary_diam_meters,
         pixel_scale_arcsec=wfirst.pixel_scale,
         atmosphere=wfirst.atmosphere)
-    seg.save_psf_images([wfirst.get_psf_image().array],
+    seg.save_psf_images([wfirst.get_psf_image().array], segment_index=seg_ndx,
         telescope='wfirst',
         filter_name=filter_name_space)
     ### TODO: Save bandpass lookup tables
