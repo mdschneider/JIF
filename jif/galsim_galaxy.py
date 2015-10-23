@@ -14,9 +14,16 @@ import segments
 
 
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
-k_filter_names = 'ugrizy'
-k_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,
+k_lsst_filter_names = 'ugrizy'
+k_lsst_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,
                                 'z':880., 'y':1000.}
+
+k_wfirst_filter_names = ['Z087', 'Y106', 'J129', 'H158', 'F184', 'W149']
+k_wfirst_filter_central_wavelengths = {'Z087':867., 'Y106':1100., 'J129':1300.,
+    'H158':994., 'F184':1880., 'W149':1410.}
+### TESTING
+# k_wfirst_filter_names = k_lsst_filter_names
+# k_wfirst_filter_central_wavelengths = k_lsst_filter_central_wavelengths
 
 ### Minimum value a flux parameter can take, since these get log-transformed
 k_flux_param_minval = 1.e-12
@@ -102,15 +109,18 @@ class GalSimGalaxyModel(object):
     Mimics GalSim examples/demo1.py
     """
     def __init__(self,
-                 psf_sigma=0.5, ### Not used
+                 telescope_name="LSST",
                  pixel_scale=0.11, ### arcseconds
                  noise=None,
                  galaxy_model="Spergel",
                  active_parameters=['hlr', 'e', 'beta'],
                  wavelength=1.e-6,
                  primary_diam_meters=2.4,
+                 filters=None,
+                 filter_names=None,
+                 filter_wavelength_scale=1.0,
                  atmosphere=False):
-        self.psf_sigma = psf_sigma
+        self.telescope_name = telescope_name
         self.pixel_scale = pixel_scale
         # if noise is None:
         #     noise = galsim.GaussianNoise(sigma=30.)
@@ -119,6 +129,8 @@ class GalSimGalaxyModel(object):
         self.active_parameters = active_parameters
         self.wavelength = wavelength
         self.primary_diam_meters = primary_diam_meters
+        self.filters = filters
+        self.filter_names = filter_names
         self.atmosphere = atmosphere
 
         ### Set GalSim galaxy model parameters
@@ -133,11 +145,12 @@ class GalSimGalaxyModel(object):
         ### Set GalSim SED model parameters
         self._load_sed_files()
         ### Load the filters that can be used to draw galaxy images
-        self._load_filter_files()
+        if self.filters is None and self.filter_names is not None:
+            self._load_filter_files(filter_wavelength_scale)
 
         self.gsparams = galsim.GSParams(
             folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
-            maxk_threshold=2.e-2,    # k-values less than this may be excluded off edge of FFT
+            maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
             xvalue_accuracy=1.e-1,   # approximations in real space aim to be this accurate
             kvalue_accuracy=1.e-1,   # approximations in fourier space aim to be this accurate
             shoot_accuracy=1.e-1,    # approximations in photon shooting aim to be this accurate
@@ -157,18 +170,22 @@ class GalSimGalaxyModel(object):
             self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang')
         return None
 
-    def _load_filter_files(self):
+    def _load_filter_files(self, wavelength_scale=1.0):
         """
         Load filters for drawing chromatic objects.
 
         Copied from GalSim demo12.py
         """
+        print(self.filter_names)
         path, filename = os.path.split(__file__)
         datapath = os.path.abspath(os.path.join(path, "../input/"))
         self.filters = {}
-        for filter_name in k_filter_names:
-            filter_filename = os.path.join(datapath, 'LSST_{0}.dat'.format(filter_name))
-            self.filters[filter_name] = galsim.Bandpass(filter_filename)
+        for filter_name in self.filter_names:
+            filter_filename = os.path.join(datapath, '{}_{}.dat'.format(
+                self.telescope_name, filter_name))
+            dat = np.loadtxt(filter_filename)
+            table = galsim.LookupTable(x=dat[:,0]*wavelength_scale, f=dat[:,1])
+            self.filters[filter_name] = galsim.Bandpass(table)
             self.filters[filter_name] = self.filters[filter_name].thin(rel_err=1e-4)
         return None
 
@@ -407,7 +424,30 @@ class GalSimGalaxyModel(object):
                     results.observed_shape.e2, results.moments_sigma)
 
 
-def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='', galaxy_model="Spergel"):
+def save_bandpasses_to_segment(seg, gg, filter_names, telescope_name="LSST", scale=1):
+    """
+    Read filter files and copy to a 'segment' HDF5 file
+    """
+    path, filename = os.path.split(__file__)
+    filter_names = list(filter_names)
+    waves_nm_list = []
+    throughputs_list = []
+    effective_wavelengths = []
+    for i, f in enumerate(filter_names):
+        bp = np.loadtxt(os.path.join(path, "../input/{}_{}.dat".format(
+            telescope_name, f)))
+        waves_nm_list.append(bp[:,0]*scale)
+        throughputs_list.append(bp[:,1])
+        effective_wavelengths.append(gg.filters[f].effective_wavelength)
+    seg.save_bandpasses(filter_names,
+        waves_nm_list, throughputs_list,
+        effective_wavelengths=effective_wavelengths,
+        telescope=telescope_name.lower())
+    return None
+
+
+def make_test_images(filter_name_ground='r', filter_name_space='Z087',
+                     file_lab='', galaxy_model="Spergel"):
     """
     Use the GalSimGalaxyModel class to make test images of a galaxy for LSST and WFIRST.
     """
@@ -419,11 +459,16 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
     print("Making test images for LSST and WFIRST")
 
     # LSST
-    lsst = GalSimGalaxyModel(pixel_scale=0.2,
+    print("\n----- LSST -----")
+    lsst = GalSimGalaxyModel(
+        telescope_name="LSST",
+        pixel_scale=0.2,
         noise=lsst_noise(82357),
         galaxy_model=galaxy_model,
-        wavelength=k_filter_central_wavelengths[filter_name_ground] * 1.e-9,
+        wavelength=k_lsst_filter_central_wavelengths[filter_name_ground] * 1.e-9,
         primary_diam_meters=8.4,
+        filter_names=k_lsst_filter_names,
+        filter_wavelength_scale=1.0,
         atmosphere=True)
 
     # Save the image
@@ -432,19 +477,24 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
         out_image=galsim.Image(ngrid_lsst, ngrid_lsst))
     lsst.plot_image("../TestData/test_lsst_image" + file_lab + ".png",
         ngrid=ngrid_lsst,
-        filter_name=filter_name_ground, title="LSST")
+        filter_name=filter_name_ground, title="LSST " + filter_name_ground)
     # Save the corresponding PSF
     lsst.save_psf("../TestData/test_lsst_psf" + file_lab + ".fits",
         ngrid=ngrid_lsst/4)
     lsst.plot_psf("../TestData/test_lsst_psf" + file_lab + ".png",
-        ngrid=ngrid_lsst/4, title="LSST")
+        ngrid=ngrid_lsst/4, title="LSST " + filter_name_ground)
 
     # WFIRST
-    wfirst = GalSimGalaxyModel(pixel_scale=0.11,
+    print("\n----- WFIRST -----")
+    wfirst = GalSimGalaxyModel(
+        telescope_name="WFIRST",
+        pixel_scale=0.11,
         noise=wfirst_noise(82357),
         galaxy_model=galaxy_model,
-        wavelength=k_filter_central_wavelengths[filter_name_space] * 1.e-9,
+        wavelength=k_wfirst_filter_central_wavelengths[filter_name_space] * 1.e-9,
         primary_diam_meters=2.4,
+        filter_names=k_wfirst_filter_names,
+        filter_wavelength_scale=1.0e3, # convert from micrometers to nanometers
         atmosphere=False)
 
     ngrid_wfirst = np.ceil(ngrid_lsst * lsst.pixel_scale / wfirst.pixel_scale) #128
@@ -453,12 +503,12 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
     wfirst.save_image("../TestData/test_wfirst_image" + file_lab + ".fits",
         filter_name=filter_name_space, out_image=galsim.Image(ngrid_wfirst, ngrid_wfirst))
     wfirst.plot_image("../TestData/test_wfirst_image" + file_lab + ".png", ngrid=ngrid_wfirst,
-        filter_name=filter_name_space, title="WFIRST")
+        filter_name=filter_name_space, title="WFIRST " + filter_name_space)
     # Save the corresponding PSF
     wfirst.save_psf("../TestData/test_wfirst_psf" + file_lab + ".fits",
         ngrid=ngrid_wfirst/4)
     wfirst.plot_psf("../TestData/test_wfirst_psf" + file_lab + ".png",
-        ngrid=ngrid_wfirst/4, title="WFIRST")
+        ngrid=ngrid_wfirst/4, title="WFIRST " + filter_name_space)
 
     lsst_data = lsst.get_image(galsim.Image(ngrid_lsst, ngrid_lsst), add_noise=True,
         filter_name=filter_name_ground).array
@@ -491,7 +541,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
     seg.save_psf_images([lsst.get_psf_image().array], segment_index=seg_ndx,
         telescope='lsst',
         filter_name=filter_name_ground)
-    ### TODO: Save bandpass lookup tables
+    save_bandpasses_to_segment(seg, lsst, k_lsst_filter_names, "LSST")
 
     ### Space data
     seg.save_images([wfirst_data], [wfirst.noise.getVariance()], [dummy_mask],
@@ -505,76 +555,8 @@ def make_test_images(filter_name_ground='r', filter_name_space='y', file_lab='',
     seg.save_psf_images([wfirst.get_psf_image().array], segment_index=seg_ndx,
         telescope='wfirst',
         filter_name=filter_name_space)
-    ### TODO: Save bandpass lookup tables
+    save_bandpasses_to_segment(seg, wfirst, k_wfirst_filter_names, "WFIRST", scale=1e3)
 
-
-    # f = h5py.File(os.path.join(os.path.dirname(__file__),
-    #     '../TestData/test_image_data' + file_lab + '.h5'), 'w')
-
-    # # Define the (sub)groups
-    # g = f.create_group('ground')
-    # g_obs = f.create_group('ground/observation')
-    # g_obs_sex = f.create_group('ground/observation/sextractor')
-    # g_obs_sex_seg = f.create_group('ground/observation/sextractor/segments')
-    #
-    # s = f.create_group('space')
-    # s_obs = f.create_group('space/observation')
-    # s_obs_sex = f.create_group('space/observation/sextractor')
-    # s_obs_sex_seg = f.create_group('space/observation/sextractor/segments')
-
-
-    # f.attrs['num_sources'] = 1 ### Assert a fixed number of sources for all epochs
-
-    # ### Instrument/epoch 1
-    # g_obs_sex_seg_i = f.create_group("ground/observation/sextractor/segments/0")
-    # g_obs_sex_seg_i.create_dataset('image', data=lsst_data)
-    # ### TODO: Add object property data like that that might come out of DMstack or sextractor
-    # # currently a hack to allow roaster to determine number of objects the
-    # # same as is done for the data processed by sheller
-    # g_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))
-    # ### TODO: Add segmentation mask
-    # # the real data will create a dataset that is an image of the noise
-    # # for the galsim_galaxy only a single value characterizing the
-    # # variance is generated
-    # g_obs_sex_seg_i_noise = g_obs_sex_seg_i.create_dataset('noise', data=lsst.noise.getVariance())
-    # # for consistency with real data, also assign this to the noise dataset
-    # # attribute
-    # g_obs_sex_seg_i_noise.attrs['variance'] = lsst.noise.getVariance()
-    ### TODO: add WCS information
-    ### TODO: add background model(s)
-    # g.attrs['telescope'] = 'LSST'
-    # g.attrs['pixel_scale'] = lsst.pixel_scale
-    # g_obs.attrs['filter_central'] = k_filter_central_wavelengths[filter_name_ground] * 1.e-9
-    # g_obs.attrs['filter_name'] = filter_name_ground
-    # g.attrs['primary_diam'] = lsst.primary_diam_meters
-    # g.attrs['atmosphere'] = lsst.atmosphere
-    #
-
-    # ### Instrument/epoch 2
-    # s_obs_sex_seg_i = f.create_group("space/observation/sextractor/segments/0")
-    # s_obs_sex_seg_i.create_dataset('image', data=wfirst_data)
-    # ### TODO: Add object property data like that that might come out of DMstack or sextractor
-    # # currently a hack to allow roaster to determine number of objects the
-    # # same as is done for the data processed by sheller
-    # s_obs_sex_seg_i.create_dataset('stamp_objprops', data=np.arange(1))
-    # ### TODO: Add segmentation mask
-    # # the real data will create a dataset that is an image of the noise
-    # # for the galsim_galaxy only a single value characterizing the
-    # # variance is generated
-    # s_obs_sex_seg_i_noise = s_obs_sex_seg_i.create_dataset('noise', data=wfirst.noise.getVariance())
-    # # for consistency with real data, also assign this to the noise dataset
-    # # attribute
-    # s_obs_sex_seg_i_noise.attrs['variance'] = lsst.noise.getVariance()
-    ### TODO: add WCS information
-    ### TODO: add background model(s)
-    # s.attrs['telescope'] = 'WFIRST'
-    # s.attrs['pixel_scale'] = wfirst.pixel_scale
-    # s_obs.attrs['filter_central'] = k_filter_central_wavelengths[filter_name_space] * 1.e-9
-    # s_obs.attrs['filter_name'] = filter_name_space
-    # s.attrs['primary_diam'] = wfirst.primary_diam_meters
-    # s.attrs['atmosphere'] = wfirst.atmosphere
-    #
-    # f.close()
     # -------------------------------------------------------------------------
 
 def make_blended_test_image(num_sources=3, random_seed=75256611):

@@ -36,13 +36,13 @@ class Segments(object):
         self.file = h5py.File(segment_file, 'w')
 
     def _segment_group_name(self, segment_index, telescope, filter_name):
-        return 'seg{:d}/{}/band_{}'.format(segment_index, telescope,
+        return 'segments/seg{:d}/{}/{}'.format(segment_index, telescope,
             filter_name)
 
     def save_tel_metadata(self, telescope='lsst',
                           primary_diam=8.4, pixel_scale_arcsec=0.2,
                           atmosphere=True):
-        g = create_group(self.file, telescope)
+        g = create_group(self.file, 'telescopes/{}'.format(telescope))
         g.attrs['telescope'] = telescope
         g.attrs['primary_diam'] = primary_diam
         g.attrs['pixel_scale_arcsec'] = pixel_scale_arcsec
@@ -53,7 +53,7 @@ class Segments(object):
         """
         List the identified sources and associated properties for each segment.
         """
-        seg = create_group(self.file, 'seg{:d}'.format(segment_index))
+        seg = create_group(self.file, 'segments/seg{:d}'.format(segment_index))
         seg.create_dataset('catalog', data=seg_srcs)
         seg.attrs['num_sources'] = seg_srcs.shape[0]
         return None
@@ -116,13 +116,18 @@ class Segments(object):
         return None
 
     def save_bandpasses(self, filters_list, waves_nm_list, throughputs_list,
+                        effective_wavelengths=None,
                         telescope='lsst'):
         """
         Save bandpasses for a single telescope as lookup tables.
         """
         for i, filter_name in enumerate(filters_list):
-            bp = self.file.create_group('{}/filters/{}'.format(telescope,
-                filter_name))
-            bp.create_dataset('waves_nm', data=waves_nm_list[i])
-            bp.create_dataset('throughput', data=throughputs_list[i])
+            group_name = 'telescopes/{}/filters/{}'.format(
+                telescope, filter_name)
+            if group_name not in self.file:
+                bp = create_group(self.file, group_name)
+                bp.create_dataset('waves_nm', data=waves_nm_list[i])
+                bp.create_dataset('throughput', data=throughputs_list[i])
+                if effective_wavelengths is not None:
+                    bp.attrs['effective_wavelength'] = effective_wavelengths[i]
         return None

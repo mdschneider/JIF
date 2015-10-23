@@ -3,8 +3,10 @@
 """
 Roaster.py
 
-Draw samples of source model parameters given the pixel data for image cutouts.
-April 1, 2015
+Draw samples of source model parameters given the pixel data for image segments.
+
+This script is intended to run on one segment at a time (i.e., call multiple
+instances of the script to process multiple segments).
 """
 
 import argparse
@@ -47,19 +49,22 @@ class Roaster(object):
     """
     Draw samples of source model parameters via MCMC.
 
-    We allow for 2 types of multiplicity in the data:
-        (a) Multiple epochs or instruments observing the same source
-        (b) Multiple sources in a single 'cutout' (e.g., for blended sources)
-    For scenario (a), the likelihood is a product of the likelihoods for each epoch or instrument.
-    For scenario (b), we need a list of source models that generate a model image that is
-    fed to the likelihood function for a single epoch or instrument.
+    We allow for 3 types of multiplicity in the data:
+        (a) Multiple instruments observing the same source,
+        (b) Multiple epochs of the same sources for a given instrument,
+        (c) Multiple sources in a single 'cutout' (e.g., for blended sources)
+    For scenarios (a) and (b), the likelihood is a product of the likelihoods
+    for each epoch or instrument.
+    For scenario (c), we need a list of source models that generate a model
+    image that is fed to the likelihood function for a single epoch or
+    instrument.
 
     @param lnprior_omega      Prior class for the galaxy model parameters
     @param data_format        Format for the input data file.
     @param galaxy_model_type  Type of parametric galaxy model - see galsim_galaxy types.
                               ['Sersic', 'Spergel', 'BulgeDisk' (default)]
-    @param epoch              Select only this epoch number from the input, if provided.
-                              If not provided, then get all epochs.
+    @param telescope          Select only this telescope observations from the input, if provided.
+                              If not provided, then get all telescopes.
     @param debug              Save debugging outputs (including model images per step?)
     @param model_paramnames   Names of the galaxy model parameters to sample in.
                               These must match names in a galsim_galaxy model.
@@ -67,7 +72,7 @@ class Roaster(object):
     def __init__(self, lnprior_omega=None,
                  data_format='test_galsim_galaxy',
                  galaxy_model_type='BulgeDisk',
-                 epoch=None,
+                 telescope=None,
                  debug=False,
                  model_paramnames=['hlr', 'e', 'beta']):
         if lnprior_omega is None:
@@ -76,7 +81,7 @@ class Roaster(object):
             self.lnprior_omega = lnprior_omega
         self.data_format = data_format
         self.galaxy_model_type = galaxy_model_type
-        self.epoch = epoch
+        self.telescope = telescope
         self.debug = debug
         self.model_paramnames = model_paramnames
 
@@ -121,47 +126,60 @@ class Roaster(object):
         logging.info("<Roaster> Loading image data")
         if self.data_format == "test_galsim_galaxy":
             f = h5py.File(infile, 'r')
-            if self.epoch is None:
-                self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
-                epochs = np.arange(self.num_epochs)
+            if self.telescope is None:
+                self.num_telescopes = len(f['telescopes'])
+                telescopes = f['telescopes'].keys()
             else:
-                self.num_epochs = 1
-                epochs = [self.epoch]
+                self.num_telescopes = 1
+                telescopes = [self.telescope]
             if self.debug:
-                print "Num. epochs: {:d}".format(self.num_epochs)
+                print("Num. telescopes: {:d}".format(self.num_telescopes))
+                print("Telescope names: {}".format(telescopes))
             if segment == None:
                 segment = 0
-            self.num_sources = f['space/observation/sextractor/segments/'+str(segment)+'/stamp_objprops'].shape[0]
+            self.num_sources = f['segments/seg{:d}'.format(segment)].attrs['num_sources']
 
-            instruments = []
+            instruments = telescopes
+
             pixel_scales = []
             wavelengths = []
             primary_diams = []
             atmospheres = []
-            self.filters = []
-            for i in epochs:
-                ### Make this option more generic
-                # setup df5 paths
-                # define the parent branch (i.e. telescope)
-                branch = self._get_branch_name(i)
-                telescope = f[branch]
-                seg = f[branch+'/observation/sextractor/segments/'+str(segment)]
-                obs = f[branch+'/observation']
-                dat = seg['image']
-                noise = seg['noise']
-                if self.debug:
-                    print i, "dat shape:", dat.shape
-                    print "\t", np.array(dat).shape ### not sure why this is here; duplicates previous line
-                pixel_data.append(np.array(dat))
-                # pixel_data.append(np.core.records.array(np.array(dat), dtype=float, shape=dat.shape))
-                # pixel_data.append(np.array(cutout['pixel_data']))
-                pix_noise_var.append(noise.attrs['variance'])
-                instruments.append(telescope.attrs['telescope'])
-                pixel_scales.append(telescope.attrs['pixel_scale'])
-                wavelengths.append(obs.attrs['filter_central'])
-                primary_diams.append(telescope.attrs['primary_diam'])
-                atmospheres.append(telescope.attrs['atmosphere'])
-                self.filters.append(obs.attrs['filter_name'])
+            self.filters = {}
+            self.filter_names = []
+            for itel, tel in enumerate(telescopes):
+                g = 'segments/seg{:d}/{}'.format(segment, tel)
+                filter_names = f[g].keys()
+                for ifilt, filter_name in enumerate(filter_names):
+                    fg = 'telescopes/{}/filters/{}'.format(tel, filter_name)
+                    waves_nm = f[fg + '/waves_nm']
+                    throughput = f[fg + '/throughput']
+                    wavelength = f[fg].attrs['effective_wavelength']
+                    bp = galsim.Bandpass(galsim.LookupTable(x=waves_nm, f=throughput))
+                    self.filters[filter_name] = bp
+
+                    h = 'segments/seg{:d}/{}/{}'.format(segment, tel, filter_name)
+                    nepochs = len(f[h])
+                    if self.debug:
+                        print("Number of epochs for {}: {:d}".format(tel, nepochs))
+                    for iepoch in xrange(nepochs):
+                        seg = f[h + '/epoch_{:d}'.format(iepoch)]
+                        # obs = f[branch+'/observation']
+                        dat = seg['image']
+                        noise = seg['noise']
+                        if self.debug:
+                            print itel, ifilt, iepoch, "dat shape:", dat.shape
+                            print "\t", np.array(dat).shape ### not sure why this is here; duplicates previous line
+                        pixel_data.append(np.array(dat))
+                        pix_noise_var.append(seg.attrs['variance'])
+                        ###
+                        wavelengths.append(wavelength)
+                        ###
+                        tel_group = f['telescopes/{}'.format(tel)]
+                        pixel_scales.append(tel_group.attrs['pixel_scale_arcsec'])
+                        primary_diams.append(tel_group.attrs['primary_diam'])
+                        atmospheres.append(tel_group.attrs['atmosphere'])
+                        self.filter_names.append(filter_name)
             print "Have data for instruments:", instruments
         else:
             if segment == None:
@@ -196,27 +214,28 @@ class Roaster(object):
                 wavelengths.append(obs.attrs['filter_central'])
                 primary_diams.append(telescope.attrs['primary_diam'])
                 atmospheres.append(telescope.attrs['atmosphere'])
+                ## TODO: Load and utilize PSF information
             print "Have data for instruments:", instruments
 
 
-        self.nx = np.zeros(self.num_epochs, dtype=int)
-        self.ny = np.zeros(self.num_epochs, dtype=int)
-        for i in xrange(self.num_epochs):
-            ### Make this option more generic
-            branch = self._get_branch_name(i)
-            dat = f[branch+'/observation/sextractor/segments/'+str(segment)+'/image']
-            self.nx[i], self.ny[i] = dat.shape
+        nimages = len(pixel_data)
+        self.num_epochs = nimages
+        self.nx = np.zeros(nimages, dtype=int)
+        self.ny = np.zeros(nimages, dtype=int)
+        for i in xrange(nimages):
+            self.nx[i], self.ny[i] = pixel_data[i].shape
             if self.debug:
-                print "branch:", branch
                 print "nx, ny, i:", self.nx[i], self.ny[i], i
 
-        src_models = [[galsim_galaxy.GalSimGalaxyModel(galaxy_model=self.galaxy_model_type,
+        src_models = [[galsim_galaxy.GalSimGalaxyModel(
+                                galaxy_model=self.galaxy_model_type,
                                 active_parameters=self.model_paramnames,
-                                pixel_scale=pixel_scales[iepochs],
-                                wavelength=wavelengths[iepochs],
-                                primary_diam_meters=primary_diams[iepochs],
-                                atmosphere=atmospheres[iepochs])
-                            for iepochs in xrange(self.num_epochs)]
+                                pixel_scale=pixel_scales[idat],
+                                wavelength=wavelengths[idat],
+                                primary_diam_meters=primary_diams[idat],
+                                filters=self.filters,
+                                atmosphere=atmospheres[idat])
+                            for idat in xrange(nimages)]
                            for isrcs in xrange(self.num_sources)]
         self.n_params = src_models[0][0].n_params
         logging.debug("<Roaster> Finished loading data")
@@ -286,7 +305,7 @@ class Roaster(object):
                     b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
                     sub_image = model_image[b]
                     model = src_models[isrcs][iepochs].get_image(sub_image,
-                        filter_name=self.filters[iepochs])
+                        filter_name=self.filter_names[iepochs])
 
                 if model is None:
                     lnlike = -np.inf
@@ -413,9 +432,9 @@ def main():
     parser.add_argument("--data_format", type=str, default="test_galsim_galaxy",
                         help="Format of the input image data file (Default: 'test_galsim_galaxy')")
 
-    parser.add_argument("--epoch", type=int, default=None,
-                        help="Select only a single epoch from the input data file \
-                        (Default: None - get all epochs)")
+    parser.add_argument("--telescope", type=str, default=None,
+                        help="Select only a single telescope from the input data file \
+                        (Default: None - get all telescopes data)")
 
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
@@ -451,7 +470,7 @@ def main():
                       lnprior_omega=lnprior_omega,
                       galaxy_model_type=args.galaxy_model_type,
                       model_paramnames=['hlr', 'e', 'beta', 'nu'],
-                      epoch=args.epoch)
+                      telescope=args.telescope)
     roaster.Load(args.infiles[0])
 
     import pprint
