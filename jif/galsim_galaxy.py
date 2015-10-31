@@ -18,7 +18,7 @@ k_lsst_filter_names = 'ugrizy'
 k_lsst_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,
                                 'z':880., 'y':1000.}
 
-k_wfirst_filter_names = ['Z087', 'Y106', 'J129', 'H158', 'F184', 'W149']
+k_wfirst_filter_names = ['r', 'Z087', 'Y106', 'J129', 'H158', 'F184', 'W149']
 k_wfirst_filter_central_wavelengths = {'Z087':867., 'Y106':1100., 'J129':1300.,
     'H158':994., 'F184':1880., 'W149':1410.}
 ### TESTING
@@ -149,7 +149,7 @@ class GalSimGalaxyModel(object):
             self._load_filter_files(filter_wavelength_scale)
 
         self.gsparams = galsim.GSParams(
-            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
+            folding_threshold=1.e0, # maximum fractional flux that may be folded around edge of FFT
             maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
             xvalue_accuracy=1.e-1,   # approximations in real space aim to be this accurate
             kvalue_accuracy=1.e-1,   # approximations in fourier space aim to be this accurate

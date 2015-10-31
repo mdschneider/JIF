@@ -31,8 +31,8 @@ logging.basicConfig(level=logging.DEBUG,
 #                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-# Store the pixel data as global (module scope) variables so emcee mutlithreading doesn't need to
-# repeatedly pickle these all the time.
+# Store the pixel data as global (module scope) variables so emcee
+# mutlithreading doesn't need to repeatedly pickle these all the time.
 pixel_data = []
 pix_noise_var = []
 src_models = []
@@ -61,11 +61,14 @@ class Roaster(object):
 
     @param lnprior_omega      Prior class for the galaxy model parameters
     @param data_format        Format for the input data file.
-    @param galaxy_model_type  Type of parametric galaxy model - see galsim_galaxy types.
+    @param galaxy_model_type  Type of parametric galaxy model - see
+                              galsim_galaxy types.
                               ['Sersic', 'Spergel', 'BulgeDisk' (default)]
-    @param telescope          Select only this telescope observations from the input, if provided.
+    @param telescope          Select only this telescope observations from the
+                              input, if provided.
                               If not provided, then get all telescopes.
-    @param debug              Save debugging outputs (including model images per step?)
+    @param debug              Save debugging outputs (including model images
+                              per step?)
     @param model_paramnames   Names of the galaxy model parameters to sample in.
                               These must match names in a galsim_galaxy model.
     """
@@ -111,13 +114,16 @@ class Roaster(object):
         This information should be replicated for each epoch and/or instrument.
 
         Each source in a blend group should contain information on:
-            1. a, b, theta (ellipticity semi-major and semi-minor axes, orientation angle)
+            1. a, b, theta (ellipticity semi-major and semi-minor axes,
+            orientation angle)
             2. centroid position (x,y)
             3. flux
-        These values will be used to initialize any model-fitting (e.g., MCMC) algorithm.
+        These values will be used to initialize any model-fitting (e.g., MCMC)
+        algorithm.
 
         @param infiles  List of input filenames to load.
-        @param segment  Index of the segment to load. Choose segment 0 if not supplied.
+        @param segment  Index of the segment to load. Choose segment 0 if not
+        supplied.
         """
         global pixel_data
         global pix_noise_var
@@ -145,6 +151,7 @@ class Roaster(object):
             wavelengths = []
             primary_diams = []
             atmospheres = []
+            tel_names = []
             self.filters = {}
             self.filter_names = []
             for itel, tel in enumerate(telescopes):
@@ -169,7 +176,6 @@ class Roaster(object):
                         noise = seg['noise']
                         if self.debug:
                             print itel, ifilt, iepoch, "dat shape:", dat.shape
-                            print "\t", np.array(dat).shape ### not sure why this is here; duplicates previous line
                         pixel_data.append(np.array(dat))
                         pix_noise_var.append(seg.attrs['variance'])
                         ###
@@ -179,14 +185,16 @@ class Roaster(object):
                         pixel_scales.append(tel_group.attrs['pixel_scale_arcsec'])
                         primary_diams.append(tel_group.attrs['primary_diam'])
                         atmospheres.append(tel_group.attrs['atmosphere'])
+                        tel_names.append(tel)
                         self.filter_names.append(filter_name)
             print "Have data for instruments:", instruments
         else:
             if segment == None:
                 logging.info("<Roaster> Must specify a segment number as an integer")
             f = h5py.File(infile, 'r')
-            self.num_epochs = len(f) ### FIXME: What's the right HDF5 method to get num groups?
-            self.num_sources = f['space/observation/sextractor/segments/'+str(segment)+'/stamp_objprops'].shape[0]
+            self.num_epochs = len(f)
+            self.num_sources = f['space/observation/sextractor/segments/'+
+                str(segment)+'/stamp_objprops'].shape[0]
 
             instruments = []
             pixel_scales = []
@@ -204,10 +212,7 @@ class Roaster(object):
 
                 dat = seg['image']
                 print i, "dat shape:", dat.shape
-                print "\t", np.array(dat).shape ### not sure why this is here; duplicates previous line
                 pixel_data.append(np.array(dat))
-                # pixel_data.append(np.core.records.array(np.array(dat), dtype=float, shape=dat.shape))
-                # pixel_data.append(np.array(cutout['pixel_data']))
                 pix_noise_var.append(seg['noise'])
                 instruments.append(telescope.attrs['instrument'])
                 pixel_scales.append(telescope.attrs['pixel_scale'])
@@ -228,6 +233,7 @@ class Roaster(object):
                 print "nx, ny, i:", self.nx[i], self.ny[i], i
 
         src_models = [[galsim_galaxy.GalSimGalaxyModel(
+                                telescope_name=tel_names[idat],
                                 galaxy_model=self.galaxy_model_type,
                                 active_parameters=self.model_paramnames,
                                 pixel_scale=pixel_scales[idat],
@@ -252,9 +258,11 @@ class Roaster(object):
 
     def set_params(self, p):
         """
-        Set the galaxy model parameters for all galaxies in a segment from a flattened array `p`.
+        Set the galaxy model parameters for all galaxies in a segment from a
+        flattened array `p`.
 
-        `p` is assumed to be packed as [(p1_gal1, ..., pn_gal1), ..., (p1_gal_m, ..., pn_gal_m)]
+        `p` is assumed to be packed as [(p1_gal1, ..., pn_gal1), ...,
+        (p1_gal_m, ..., pn_gal_m)]
         for n parameters per galaxy and m galaxies in the segment.
         """
         valid_params = True
@@ -275,7 +283,8 @@ class Roaster(object):
         return valid_params
 
     def lnprior(self, omega):
-        ### Iterate over distinct galaxy models in the segment and evaluate the prior for each one.
+        ### Iterate over distinct galaxy models in the segment and evaluate the
+        ### prior for each one.
         lnp = 0.0
 
         for isrcs in xrange(self.num_sources):
@@ -284,12 +293,28 @@ class Roaster(object):
             lnp += self.lnprior_omega(omega[imin:imax])
         return lnp
 
+    def _get_model_image(self, iepochs):
+        """
+        Create a galsim.Image from the source model(s)
+        """
+        model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs],
+            scale=src_models[0][iepochs].pixel_scale)
+
+        for isrcs in xrange(self.num_sources):
+            ### Draw every source using the full output array
+            b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
+            sub_image = model_image[b]
+            model = src_models[isrcs][iepochs].get_image(sub_image,
+                filter_name=self.filter_names[iepochs])
+        return model_image
+
     def lnlike(self, omega, *args, **kwargs):
         """
         Evaluate the log-likelihood function for joint pixel data for all
         galaxies in a blended group given all available imaging and epochs.
 
-        See GalSim/examples/demo5.py for how to add multiple sources to a single image.
+        See GalSim/examples/demo5.py for how to add multiple sources to a single
+        image.
         """
         self.istep += 1
         valid_params = self.set_params(omega)
@@ -297,26 +322,20 @@ class Roaster(object):
         if valid_params:
             lnlike = 0.0
             for iepochs in xrange(self.num_epochs):
-                model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs],
-                    scale=src_models[0][iepochs].pixel_scale)
-
-                for isrcs in xrange(self.num_sources):
-                    ### Draw every source using the full output array
-                    b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
-                    sub_image = model_image[b]
-                    model = src_models[isrcs][iepochs].get_image(sub_image,
-                        filter_name=self.filter_names[iepochs])
-
-                if model is None:
+                model_image = self._get_model_image(iepochs)
+                if model_image is None:
                     lnlike = -np.inf
                 else:
                     if self.debug:
                         model_image_file_name = os.path.join('debug',
-                            'model_image_iepoch%d_istep%d.fits' % (iepochs, self.istep))
+                            'model_image_iepoch%d_istep%d.fits' % (iepochs,
+                                self.istep))
                         model_image.write(model_image_file_name)
-                        logging.debug('Wrote model image to %r', model_image_file_name)
+                        logging.debug('Wrote model image to %r',
+                            model_image_file_name)
 
-                    lnlike += (-0.5 * np.sum((pixel_data[iepochs] - model_image.array) ** 2) /
+                    lnlike += (-0.5 * np.sum((pixel_data[iepochs] -
+                        model_image.array) ** 2) /
                         pix_noise_var[iepochs])
         else:
             lnlike = -np.inf
@@ -329,7 +348,8 @@ class Roaster(object):
 # MCMC routines
 # ---------------------------------------------------------------------------------------
 def walker_ball(omega, spread, nwalkers):
-    return [omega+(np.random.rand(len(omega))*spread-0.5*spread) for i in xrange(nwalkers)]
+    return [omega+(np.random.rand(len(omega))*spread-0.5*spread)
+            for i in xrange(nwalkers)]
 
 
 def do_sampling(args, roaster):
@@ -340,7 +360,8 @@ def do_sampling(args, roaster):
     print "Number of parameters:", nvars
     p0 = walker_ball(omega_interim, 0.05, args.nwalkers)
 
-    logging.debug("Initializing parameters for MCMC to yield finite posterior values")
+    logging.debug("Initializing parameters for MCMC to yield finite posterior \
+        values")
     while not all([np.isfinite(roaster(p)) for p in p0]):
         p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
     sampler = emcee.EnsembleSampler(args.nwalkers,
@@ -356,7 +377,8 @@ def do_sampling(args, roaster):
     logging.info("Sampling")
     for i in range(args.nsamples):
         if np.mod(i+1, 20) == 0:
-            print "\tStep {:d} / {:d}, lnp: {:5.4g}".format(i+1, args.nsamples, np.mean(pp))
+            print "\tStep {:d} / {:d}, lnp: {:5.4g}".format(i+1, args.nsamples,
+                np.mean(pp))
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         if not args.quiet:
             print i, np.mean(lnp)
@@ -365,11 +387,11 @@ def do_sampling(args, roaster):
         pps.append(pp.copy())
         lnps.append(lnp.copy())
 
-    write_results(args, pps, lnps)
+    write_results(args, pps, lnps, roaster)
     return None
 
 
-def write_results(args, pps, lnps):
+def write_results(args, pps, lnps, roaster):
     if args.epoch is None:
         epoch_lab = ""
     else:
@@ -377,6 +399,11 @@ def write_results(args, pps, lnps):
     outfile = args.outfile + epoch_lab + ".h5"
     logging.info("Writing MCMC results to %s" % outfile)
     f = h5py.File(outfile, 'w')
+    f.attrs['infile'] = args.infiles[0]
+    f.attrs['segment_number'] = args.segment_numbers[0]
+    f.attrs['galaxy_model_type'] = roaster.galaxy_model_type
+    f.attrs['telescope'] = roaster.telescope
+    f.attrs['model_paramnames'] = roaster.model_paramnames
     if "post" in f:
         del f["post"]
     post = f.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
@@ -405,7 +432,8 @@ class DefaultPriorBulgeDisk(object):
 
     def __call__(self, omega):
         """
-        Evaluate the prior on Bulge + Disk galaxy model parameters for a single galaxy
+        Evaluate the prior on Bulge + Disk galaxy model parameters for a single
+        galaxy.
         """
         ### Redshift
         lnp = -0.5 * (omega[0] - self.z_mean) ** 2 / self.z_var
@@ -422,6 +450,9 @@ def main():
     parser.add_argument("infiles",
                         help="input image files to roast", nargs='+')
 
+    parser.add_argument("--segment_numbers", type=int, nargs='+',
+                        help="Index of the segments to load from each infile")
+
     parser.add_argument("-o", "--outfile", default="../output/roasting/roaster_out",
                         help="output HDF5 to record posterior samples and loglikes."
                              +"(Default: `roaster_out`)")
@@ -430,7 +461,8 @@ def main():
                         help="Type of parametric galaxy model (Default: 'Spergel')")
 
     parser.add_argument("--data_format", type=str, default="test_galsim_galaxy",
-                        help="Format of the input image data file (Default: 'test_galsim_galaxy')")
+                        help="Format of the input image data file (Default: \
+                             'test_galsim_galaxy')")
 
     parser.add_argument("--telescope", type=str, default=None,
                         help="Select only a single telescope from the input data file \
@@ -439,17 +471,18 @@ def main():
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
 
-    parser.add_argument("--nsamples", default=250, type=int,
-                        help="Number of samples for each emcee walker (Default: 250)")
+    parser.add_argument("--nsamples", default=100, type=int,
+                        help="Number of samples for each emcee walker \
+                              (Default: 100)")
 
-    parser.add_argument("--nwalkers", default=64, type=int,
-                        help="Number of emcee walkers (Default: 64)")
+    parser.add_argument("--nwalkers", default=16, type=int,
+                        help="Number of emcee walkers (Default: 16)")
 
     parser.add_argument("--nburn", default=50, type=int,
                         help="Number of burn-in steps (Default: 50)")
 
     parser.add_argument("--nthreads", default=1, type=int,
-                        help="Number of threads to use (Default: 8)")
+                        help="Number of threads to use (Default: 1)")
 
     parser.add_argument("--quiet", action="store_true")
 
@@ -460,6 +493,9 @@ def main():
 
     logging.debug('--- Roaster started')
 
+    if args.segment_numbers is None:
+        args.segment_numbers = [0 for f in args.infiles]
+
     ### Set priors
     if args.galaxy_model_type == "BulgeDisk":
         lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
@@ -469,9 +505,9 @@ def main():
     roaster = Roaster(debug=args.debug, data_format=args.data_format,
                       lnprior_omega=lnprior_omega,
                       galaxy_model_type=args.galaxy_model_type,
-                      model_paramnames=['hlr', 'e', 'beta', 'nu'],
+                      model_paramnames=['hlr', 'e', 'beta'],
                       telescope=args.telescope)
-    roaster.Load(args.infiles[0])
+    roaster.Load(args.infiles[0], segment=args.segment_numbers[0])
 
     import pprint
     pp = pprint.PrettyPrinter(indent=4)
