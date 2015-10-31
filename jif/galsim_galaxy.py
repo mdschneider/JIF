@@ -113,7 +113,7 @@ class GalSimGalaxyModel(object):
                  pixel_scale=0.11, ### arcseconds
                  noise=None,
                  galaxy_model="Spergel",
-                 active_parameters=['hlr', 'e', 'beta'],
+                 active_parameters=['hlr'], #, 'e', 'beta'],
                  wavelength=1.e-6,
                  primary_diam_meters=2.4,
                  filters=None,
@@ -132,6 +132,8 @@ class GalSimGalaxyModel(object):
         self.filters = filters
         self.filter_names = filter_names
         self.atmosphere = atmosphere
+
+        print "GG active parameters:", self.active_parameters
 
         ### Set GalSim galaxy model parameters
         self.params = np.core.records.array(k_galparams_defaults[galaxy_model],

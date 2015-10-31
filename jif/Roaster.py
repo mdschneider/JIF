@@ -272,8 +272,10 @@ class Roaster(object):
 
             p_set = src_models[isrcs][0].get_params()
             if self.debug:
+                print "input p:", p
                 print "p_set before indexing:", p_set
             p_set = p[imin:imax]
+            # p_set = p[isrcs]
             if self.debug:
                 print "p_set after indexing:", p_set
 
@@ -362,8 +364,8 @@ def do_sampling(args, roaster):
 
     logging.debug("Initializing parameters for MCMC to yield finite posterior \
         values")
-    while not all([np.isfinite(roaster(p)) for p in p0]):
-        p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
+    # while not all([np.isfinite(roaster(p)) for p in p0]):
+    #     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
     sampler = emcee.EnsembleSampler(args.nwalkers,
                                     nvars,
                                     roaster,
@@ -392,11 +394,11 @@ def do_sampling(args, roaster):
 
 
 def write_results(args, pps, lnps, roaster):
-    if args.epoch is None:
-        epoch_lab = ""
+    if args.telescope is None:
+        tel_lab = ""
     else:
-        epoch_lab = "_epoch{:d}".format(args.epoch)
-    outfile = args.outfile + epoch_lab + ".h5"
+        tel_lab = "_{}".format(args.telescope)
+    outfile = args.outfile + tel_lab + ".h5"
     logging.info("Writing MCMC results to %s" % outfile)
     f = h5py.File(outfile, 'w')
     f.attrs['infile'] = args.infiles[0]

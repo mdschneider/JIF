@@ -1,4 +1,4 @@
-from __future__ import print_function
+# from __future__ import print_function
 import argparse
 import os
 import sys
@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import triangle
 
+import galsim
 import Roaster
 
 
@@ -53,12 +54,12 @@ class RoasterInspector(object):
     def _get_opt_params(self):
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
         opt_params = self.data[-self.args.keeplast:,...][ndx]
-        return opt_params
+        return opt_params[0]
 
     def _load_roaster_input_data(self):
         self.roaster = Roaster.Roaster(galaxy_model_type=self.galaxy_model_type,
             telescope=self.telescope,
-            model_paramname=self.model_paramname)
+            model_paramnames=self.model_paramnames, debug=True)
         self.roaster.Load(self.roaster_infile) ### puts data in Roaster.pixel_data
         return None
 
@@ -108,39 +109,39 @@ class RoasterInspector(object):
 
             ### pixel data
             ax = fig.add_subplot(2, 2, 1)
-            ax.title("Image")
-            ax.imshow(dat, interpolation='none', origin='lower',
+            ax.set_title("Image")
+            ax.imshow(dat, interpolation='none',
                 cmap=plt.cm.gray)
-            x.add_colorbar()
+            # plt.colorbar()
 
             ### model
             ax = fig.add_subplot(2, 2, 2)
-            ax.title("Opt Model")
+            ax.set_title("Opt Model")
             opt_params = self._get_opt_params()
             valid_params = self.roaster.set_params(opt_params)
             model_image = self.roaster._get_model_image(idat)
-            ax.imshow(model_image.array, interpolation='none', origin='lower',
+            ax.imshow(model_image.array, interpolation='none',
                       cmap=plt.cm.gray)
-            x.add_colorbar()
+            # plt.colorbar()
 
             resid = dat - model_image.array
 
             ### model + noise
             ax = fig.add_subplot(2, 2, 3)
-            ax.title("Model + Noise")
+            ax.set_title("Model + Noise")
             noise = galsim.GaussianNoise(
                 sigma=np.sqrt(Roaster.pix_noise_var[idat]))
             model_image.addNoise(noise)
-            ax.imshow(model_image.array, interpolation='none', orign='lower',
+            ax.imshow(model_image.array, interpolation='none',
                       cmap=plt.cm.gray)
-            x.add_colorbar()
+            # plt.colorbar()
 
             ### residual (chi)
             ax = fig.add_subplot(2, 2, 4)
-            ax.title("Residual")
-            ax.imshow(resid, interpolation='none', origin='lower',
+            ax.set_title("Residual")
+            ax.imshow(resid, interpolation='none',
                       cmap=plt.cm.BrBG)
-            ax.add_colorbar()
+            # plt.colorbar()
 
             plt.tight_layout()
             outfile = os.path.join(self.args.outprefix,
@@ -172,4 +173,6 @@ if __name__ == '__main__':
     inspector = RoasterInspector(args)
     inspector.summary()
     inspector.report()
-    inspector.plot()
+    # inspector.plot()
+
+    inspector.plot_data_and_model()
