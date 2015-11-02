@@ -84,8 +84,15 @@ class Segments(object):
             seg.create_dataset('image', data=im)
             # rms noise
             seg.create_dataset('noise', data=noise_list[iepoch])
-            # estimate the variance of this noise image and save as attribute
-            seg.attrs['variance'] = np.var(noise_list[iepoch])
+            # Save the noise variance for a i.i.d. Gaussian noise model
+            # approximation.
+            # If the input noise list contains scalar values, assume these are
+            # the noise variances for each epoch.
+            # Otherwise, estimate the variance of the supplied noise image.
+            if isinstance(noise_list[iepoch], float):
+                seg.attrs['variance'] = noise_list[iepoch]
+            else:
+                seg.attrs['variance'] = np.var(noise_list[iepoch])
             seg.create_dataset('segmask', data=mask_list[iepoch])
             seg.create_dataset('background', data=background_list[iepoch])
         return None
@@ -130,4 +137,5 @@ class Segments(object):
                 bp.create_dataset('throughput', data=throughputs_list[i])
                 if effective_wavelengths is not None:
                     bp.attrs['effective_wavelength'] = effective_wavelengths[i]
+                    bp.attrs['effective_wavelength_units'] = 'nanometers'
         return None

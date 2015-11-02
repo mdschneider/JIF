@@ -15,10 +15,12 @@ import segments
 
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
 k_lsst_filter_names = 'ugrizy'
+### 'Central' passband wavelengths in nanometers
 k_lsst_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,
                                 'z':880., 'y':1000.}
 
 k_wfirst_filter_names = ['r', 'Z087', 'Y106', 'J129', 'H158', 'F184', 'W149']
+### 'Central' passband wavelengths in nanometers
 k_wfirst_filter_central_wavelengths = {'Z087':867., 'Y106':1100., 'J129':1300.,
     'H158':994., 'F184':1880., 'W149':1410.}
 ### TESTING
@@ -65,7 +67,7 @@ k_galparams_types = {
 k_galparams_defaults = {
     "Sersic": [(1., 3.4, 1.8, 0.3, np.pi/4, 1.e5, k_flux_param_minval,
         k_flux_param_minval, k_flux_param_minval)],
-    "Spergel": [(1., -0.3, 1.8, 0.3, np.pi/4, 1.e5, k_flux_param_minval,
+    "Spergel": [(1., -0.3, 1.8, 0.3, np.pi/4, 1.e4, k_flux_param_minval,
         k_flux_param_minval, k_flux_param_minval)],
     "BulgeDisk": [(1.,
         0.5, 0.6, 0.05, 0.0,
@@ -110,30 +112,28 @@ class GalSimGalaxyModel(object):
     """
     def __init__(self,
                  telescope_name="LSST",
-                 pixel_scale=0.11, ### arcseconds
+                 pixel_scale_arcsec=0.11, ### arcseconds
                  noise=None,
                  galaxy_model="Spergel",
                  active_parameters=['hlr'], #, 'e', 'beta'],
-                 wavelength=1.e-6,
+                 wavelength_meters=1.e-6,
                  primary_diam_meters=2.4,
                  filters=None,
                  filter_names=None,
                  filter_wavelength_scale=1.0,
                  atmosphere=False):
         self.telescope_name = telescope_name
-        self.pixel_scale = pixel_scale
+        self.pixel_scale = pixel_scale_arcsec
         # if noise is None:
         #     noise = galsim.GaussianNoise(sigma=30.)
         self.noise = noise
         self.galaxy_model = galaxy_model
         self.active_parameters = active_parameters
-        self.wavelength = wavelength
+        self.wavelength = wavelength_meters
         self.primary_diam_meters = primary_diam_meters
         self.filters = filters
         self.filter_names = filter_names
         self.atmosphere = atmosphere
-
-        print "GG active parameters:", self.active_parameters
 
         ### Set GalSim galaxy model parameters
         self.params = np.core.records.array(k_galparams_defaults[galaxy_model],
@@ -151,7 +151,7 @@ class GalSimGalaxyModel(object):
             self._load_filter_files(filter_wavelength_scale)
 
         self.gsparams = galsim.GSParams(
-            folding_threshold=1.e0, # maximum fractional flux that may be folded around edge of FFT
+            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
             maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
             xvalue_accuracy=1.e-1,   # approximations in real space aim to be this accurate
             kvalue_accuracy=1.e-1,   # approximations in fourier space aim to be this accurate
@@ -178,7 +178,7 @@ class GalSimGalaxyModel(object):
 
         Copied from GalSim demo12.py
         """
-        print(self.filter_names)
+        # print(self.filter_names)
         path, filename = os.path.split(__file__)
         datapath = os.path.abspath(os.path.join(path, "../input/"))
         self.filters = {}
@@ -244,7 +244,6 @@ class GalSimGalaxyModel(object):
             if (self.params[0].nu_bulge < -0.85 or self.params[0].nu_bulge > 0.8 or
                 self.params[0].nu_disk < -0.85 or self.params[0].nu_disk > 0.8):
                 valid_params *= False
-                print self.params[0]
             for i in xrange(len(k_SED_names)):
                 if self.params[0]['flux_sed{:d}_bulge'.format(i+1)] <= 0.:
                     valid_params *= False
@@ -291,7 +290,7 @@ class GalSimGalaxyModel(object):
         elif self.galaxy_model == "Spergel":
             mono_gal = galsim.Spergel(nu=self.params[0].nu, half_light_radius=self.params[0].hlr,
                 # flux=self.params[0].gal_flux,
-                # flux=1.0,
+                flux=1.0,
                 gsparams=self.gsparams)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
@@ -336,9 +335,12 @@ class GalSimGalaxyModel(object):
             raise AttributeError("Unimplemented galaxy model")
         final = galsim.Convolve([gal, self.get_psf()])
         # wcs = galsim.PixelScale(self.pixel_scale)'
+
         try:
-            image = final.drawImage(self.filters[filter_name],
-                image=out_image, scale=self.pixel_scale, gain=gain)
+            image = final.drawImage(bandpass=self.filters[filter_name],
+                image=out_image, scale=self.pixel_scale, gain=gain,
+                add_to_image=False,
+                method='fft')
             if add_noise:
                 if self.noise is not None:
                     if snr is None:
@@ -346,8 +348,8 @@ class GalSimGalaxyModel(object):
                     else:
                         image.addNoiseSNR(self.noise, snr=snr)
                 else:
-                    raise AttributeError("A GalSim noise model must be specified to add noise to an\
-                        image.")
+                    raise AttributeError("A GalSim noise model must be \
+                                          specified to add noise to an image.")
         except RuntimeError:
             print "Trying to make an image that's too big."
             image = None
@@ -464,10 +466,10 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
     print("\n----- LSST -----")
     lsst = GalSimGalaxyModel(
         telescope_name="LSST",
-        pixel_scale=0.2,
+        pixel_scale_arcsec=0.2,
         noise=lsst_noise(82357),
         galaxy_model=galaxy_model,
-        wavelength=k_lsst_filter_central_wavelengths[filter_name_ground] * 1.e-9,
+        wavelength_meters=k_lsst_filter_central_wavelengths[filter_name_ground] * 1.e-9,
         primary_diam_meters=8.4,
         filter_names=k_lsst_filter_names,
         filter_wavelength_scale=1.0,
@@ -490,10 +492,10 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
     print("\n----- WFIRST -----")
     wfirst = GalSimGalaxyModel(
         telescope_name="WFIRST",
-        pixel_scale=0.11,
+        pixel_scale_arcsec=0.11,
         noise=wfirst_noise(82357),
         galaxy_model=galaxy_model,
-        wavelength=k_wfirst_filter_central_wavelengths[filter_name_space] * 1.e-9,
+        wavelength_meters=k_wfirst_filter_central_wavelengths[filter_name_space] * 1.e-9,
         primary_diam_meters=2.4,
         filter_names=k_wfirst_filter_names,
         filter_wavelength_scale=1.0e3, # convert from micrometers to nanometers

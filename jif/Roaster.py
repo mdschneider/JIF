@@ -231,13 +231,18 @@ class Roaster(object):
             self.nx[i], self.ny[i] = pixel_data[i].shape
             if self.debug:
                 print "nx, ny, i:", self.nx[i], self.ny[i], i
+                print "tel_name:", tel_names[i]
+                print "pixel_scale:", pixel_scales[i]
+                print "wavelength:", wavelengths[i]
+                print "primary_diam:", primary_diams[i]
+                print "atmosphere:", atmospheres[i]
 
         src_models = [[galsim_galaxy.GalSimGalaxyModel(
                                 telescope_name=tel_names[idat],
                                 galaxy_model=self.galaxy_model_type,
                                 active_parameters=self.model_paramnames,
-                                pixel_scale=pixel_scales[idat],
-                                wavelength=wavelengths[idat],
+                                pixel_scale_arcsec=pixel_scales[idat],
+                                wavelength_meters=wavelengths[idat]*1e-9,
                                 primary_diam_meters=primary_diams[idat],
                                 filters=self.filters,
                                 atmosphere=atmospheres[idat])
@@ -248,6 +253,12 @@ class Roaster(object):
         if self.debug:
             print "\npixel data shapes:", [dat.shape for dat in pixel_data]
         return None
+
+    def _get_noise_var(self, i=0):
+        return pix_noise_var[i]
+
+    def _get_raw_params(self):
+        return src_models[0][0].params
 
     def get_params(self):
         """
@@ -295,7 +306,7 @@ class Roaster(object):
             lnp += self.lnprior_omega(omega[imin:imax])
         return lnp
 
-    def _get_model_image(self, iepochs):
+    def _get_model_image(self, iepochs, add_noise=False):
         """
         Create a galsim.Image from the source model(s)
         """
@@ -307,7 +318,7 @@ class Roaster(object):
             b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
             sub_image = model_image[b]
             model = src_models[isrcs][iepochs].get_image(sub_image,
-                filter_name=self.filter_names[iepochs])
+                filter_name=self.filter_names[iepochs], add_noise=add_noise)
         return model_image
 
     def lnlike(self, omega, *args, **kwargs):
@@ -318,6 +329,7 @@ class Roaster(object):
         See GalSim/examples/demo5.py for how to add multiple sources to a single
         image.
         """
+
         self.istep += 1
         valid_params = self.set_params(omega)
 
@@ -356,10 +368,8 @@ def walker_ball(omega, spread, nwalkers):
 
 def do_sampling(args, roaster):
     omega_interim = roaster.get_params()
-    print "omega_interim:", omega_interim
 
     nvars = len(omega_interim)
-    print "Number of parameters:", nvars
     p0 = walker_ball(omega_interim, 0.05, args.nwalkers)
 
     logging.debug("Initializing parameters for MCMC to yield finite posterior \
@@ -401,11 +411,19 @@ def write_results(args, pps, lnps, roaster):
     outfile = args.outfile + tel_lab + ".h5"
     logging.info("Writing MCMC results to %s" % outfile)
     f = h5py.File(outfile, 'w')
+
+    ### Save attributes so we can later instantiate Roaster with the same
+    ### settings.
     f.attrs['infile'] = args.infiles[0]
     f.attrs['segment_number'] = args.segment_numbers[0]
     f.attrs['galaxy_model_type'] = roaster.galaxy_model_type
-    f.attrs['telescope'] = roaster.telescope
+    if roaster.telescope is not None:
+        f.attrs['telescope'] = roaster.telescope
+    else:
+        f.attrs['telescope'] = 'None'
     f.attrs['model_paramnames'] = roaster.model_paramnames
+
+    ### Write the MCMC samples and log probabilities
     if "post" in f:
         del f["post"]
     post = f.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
@@ -513,9 +531,6 @@ def main():
 
     import pprint
     pp = pprint.PrettyPrinter(indent=4)
-
-    print("\nRoaster:")
-    pp.pprint(roaster.__dict__)
 
     if not args.quiet:
         print("\nsource model 0:")

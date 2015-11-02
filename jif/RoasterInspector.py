@@ -2,6 +2,7 @@
 import argparse
 import os
 import sys
+import copy
 
 import h5py
 import numpy as np
@@ -23,6 +24,8 @@ class RoasterInspector(object):
         self.segment_number = f.attrs['segment_number']
         self.galaxy_model_type = f.attrs['galaxy_model_type']
         self.telescope = f.attrs['telescope']
+        if self.telescope == 'None':
+            self.telescope = None
         self.model_paramnames = f.attrs['model_paramnames']
         self.paramnames = f['post'].attrs['paramnames']
         if len(self.paramnames.shape) > 1:
@@ -52,6 +55,7 @@ class RoasterInspector(object):
         print "\n"
 
     def _get_opt_params(self):
+        ### FIXME: optimize over all walkers
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
         opt_params = self.data[-self.args.keeplast:,...][ndx]
         return opt_params[0]
@@ -59,7 +63,7 @@ class RoasterInspector(object):
     def _load_roaster_input_data(self):
         self.roaster = Roaster.Roaster(galaxy_model_type=self.galaxy_model_type,
             telescope=self.telescope,
-            model_paramnames=self.model_paramnames, debug=True)
+            model_paramnames=self.model_paramnames, debug=False)
         self.roaster.Load(self.roaster_infile) ### puts data in Roaster.pixel_data
         return None
 
@@ -107,12 +111,15 @@ class RoasterInspector(object):
         for idat, dat in enumerate(Roaster.pixel_data):
             fig = plt.figure(figsize=(10, 10/1.618))
 
+            vmin = dat.min()
+            vmax = dat.max()
+
             ### pixel data
             ax = fig.add_subplot(2, 2, 1)
             ax.set_title("Image")
-            ax.imshow(dat, interpolation='none',
-                cmap=plt.cm.gray)
-            # plt.colorbar()
+            cax = ax.imshow(dat, interpolation='none',
+                            cmap=plt.cm.gray, vmin=vmin, vmax=vmax)
+            cbar = fig.colorbar(cax)
 
             ### model
             ax = fig.add_subplot(2, 2, 2)
@@ -120,28 +127,30 @@ class RoasterInspector(object):
             opt_params = self._get_opt_params()
             valid_params = self.roaster.set_params(opt_params)
             model_image = self.roaster._get_model_image(idat)
-            ax.imshow(model_image.array, interpolation='none',
-                      cmap=plt.cm.gray)
-            # plt.colorbar()
+            cax = ax.imshow(model_image.array, interpolation='none',
+                            cmap=plt.cm.gray, vmin=vmin, vmax=vmax)
+            cbar = fig.colorbar(cax)
 
             resid = dat - model_image.array
+            noisy_image = copy.deepcopy(model_image)
 
             ### model + noise
+            noise_var = self.roaster._get_noise_var(idat)
+            print "noise variance: ", noise_var
             ax = fig.add_subplot(2, 2, 3)
             ax.set_title("Model + Noise")
-            noise = galsim.GaussianNoise(
-                sigma=np.sqrt(Roaster.pix_noise_var[idat]))
-            model_image.addNoise(noise)
-            ax.imshow(model_image.array, interpolation='none',
-                      cmap=plt.cm.gray)
-            # plt.colorbar()
+            noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
+            noisy_image.addNoise(noise)
+            cax = ax.imshow(noisy_image.array, interpolation='none',
+                            cmap=plt.cm.gray, vmin=vmin, vmax=vmax)
+            cbar = fig.colorbar(cax)
 
             ### residual (chi)
             ax = fig.add_subplot(2, 2, 4)
             ax.set_title("Residual")
-            ax.imshow(resid, interpolation='none',
-                      cmap=plt.cm.BrBG)
-            # plt.colorbar()
+            cax = ax.imshow(resid, interpolation='none',
+                            cmap=plt.cm.BrBG)
+            cbar = fig.colorbar(cax)
 
             plt.tight_layout()
             outfile = os.path.join(self.args.outprefix,
