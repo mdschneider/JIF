@@ -57,8 +57,13 @@ class RoasterInspector(object):
     def _get_opt_params(self):
         ### FIXME: optimize over all walkers
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
-        opt_params = self.data[-self.args.keeplast:,...][ndx]
-        return opt_params[0]
+
+        # m = self.args.keeplast * self.data.shape[1]
+        # n = self.data.shape[2]
+        # opt_params = self.data[-self.args.keeplast:,...].reshape(
+            # (m, n), order='F')[ndx, :]
+        opt_params = np.vstack(self.data[-self.args.keeplast:,...])[ndx,...]
+        return opt_params
 
     def _load_roaster_input_data(self):
         self.roaster = Roaster.Roaster(galaxy_model_type=self.galaxy_model_type,
@@ -182,6 +187,5 @@ if __name__ == '__main__':
     inspector = RoasterInspector(args)
     inspector.summary()
     inspector.report()
-    # inspector.plot()
-
+    inspector.plot()
     inspector.plot_data_and_model()
