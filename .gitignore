@@ -65,3 +65,6 @@ spaceground.hdf5
 *.fits
 great3
 jif/.ipynb_checkpoints
+git_tag.tex
+*.fls
+roaster_example.pdf

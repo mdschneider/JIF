@@ -204,9 +204,9 @@ class GalSimGalaxyModel(object):
         for ip, pname in enumerate(self.active_parameters):
             if 'flux_sed' in pname:
                 ### Transform flux variables with exp -- we sample in ln(Flux)
-                self.params[0][pname] = np.exp(p[ip])
+                self.params[pname][0] = np.exp(p[ip])
             else:
-                self.params[0][pname] = p[ip]
+                self.params[pname][0] = p[ip]
         return None
 
     def get_params(self):

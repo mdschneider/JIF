@@ -35,6 +35,10 @@ class RoasterInspector(object):
         self.nburn = f.attrs['nburn']
         f.close()
 
+        ### The lists input from HDF5 can lose the commas between entries.
+        ### This seems to fix it:
+        self.model_paramnames = [m for m in self.model_paramnames]
+
     def __str__(self):
         return ("<RoasterInspector>\n" + "Input file: %s" % self.args.infile)
 
@@ -55,7 +59,6 @@ class RoasterInspector(object):
         print "\n"
 
     def _get_opt_params(self):
-        ### FIXME: optimize over all walkers
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
 
         # m = self.args.keeplast * self.data.shape[1]
@@ -123,7 +126,7 @@ class RoasterInspector(object):
             ax = fig.add_subplot(2, 2, 1)
             ax.set_title("Image")
             cax = ax.imshow(dat, interpolation='none',
-                            cmap=plt.cm.gray, vmin=vmin, vmax=vmax)
+                            cmap=plt.cm.pink, vmin=vmin, vmax=vmax)
             cbar = fig.colorbar(cax)
 
             ### model
@@ -133,7 +136,7 @@ class RoasterInspector(object):
             valid_params = self.roaster.set_params(opt_params)
             model_image = self.roaster._get_model_image(idat)
             cax = ax.imshow(model_image.array, interpolation='none',
-                            cmap=plt.cm.gray, vmin=vmin, vmax=vmax)
+                            cmap=plt.cm.pink, vmin=vmin, vmax=vmax)
             cbar = fig.colorbar(cax)
 
             resid = dat - model_image.array
@@ -147,7 +150,7 @@ class RoasterInspector(object):
             noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
             noisy_image.addNoise(noise)
             cax = ax.imshow(noisy_image.array, interpolation='none',
-                            cmap=plt.cm.gray, vmin=vmin, vmax=vmax)
+                            cmap=plt.cm.pink, vmin=vmin, vmax=vmax)
             cbar = fig.colorbar(cax)
 
             ### residual (chi)
