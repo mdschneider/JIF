@@ -41,7 +41,8 @@ k_filter_central_wavelengths = {'r':620.}
 
 
 def create_segments(subfield_index=0, experiment="control",
-    observation_type="ground", shear_type="constant", verbose=False):
+    observation_type="ground", shear_type="constant",
+    n_gals=10000, verbose=False):
     """
     Load pixel data and PSFs for all epochs for a given galaxy
     """
@@ -87,6 +88,8 @@ def create_segments(subfield_index=0, experiment="control",
     ### Set some common metadata required by the Segment file structure
     # telescope_name = "GREAT3_{}".format(observation_type)
     telescope_name = {"ground": "LSST", "space": "WFIRST"}[observation_type]
+    if verbose:
+        print "telescope_name:", telescope_name
     filter_name = k_filter_name
     dummy_mask = 1.0
     dummy_background = 0.0
@@ -99,9 +102,11 @@ def create_segments(subfield_index=0, experiment="control",
     ### There are 1e4 galaxies in one GREAT3 image file.
     ### Save all images to the segment file, but with distinct 'segment_index'
     ### values.
-    n_gals_image_file = 4 #10000
+    n_gals_image_file = n_gals
     ngals_per_dim = 100 ### The image is a 100 x 100 grid of galaxies
     for igal in xrange(n_gals_image_file):
+        if verbose and np.mod(igal, 100) == 0:
+            print "Galaxy {:d} / {:d}".format(igal+1, n_gals_image_file)
         ### Specify input image grid ranges for this segment
         ng = k_g3_ngrid[observation_type]
         i, j = np.unravel_index(igal, (ngals_per_dim, ngals_per_dim))
@@ -119,7 +124,8 @@ def create_segments(subfield_index=0, experiment="control",
             f = fits.open(infile)
             images.append(np.asarray(f[0].data[ymin:ymax, xmin:xmax],
                 dtype=np.float64))
-            noise_vars.append(np.var(f[0].data)) # FIXME: Make a better noise estimator
+            noise_vars.append(float(np.var(f[0].data))) # FIXME: Make a better noise estimator
+            # print "empirical nosie variance: {:5.4g}".format(np.var(f[0].data))
             f.close()
 
             s = fits.open(starfiles[ifile])
@@ -131,6 +137,7 @@ def create_segments(subfield_index=0, experiment="control",
             psfs.append(np.asarray(s[0].data[0:ng, 0:ng], dtype=np.float64))
             s.close()
 
+        print "noise_vars:", noise_vars
         seg.save_images(images, noise_vars, [dummy_mask], [dummy_background],
             segment_index=igal, telescope=telescope_name)
         seg.save_psf_images(psfs, segment_index=igal, telescope=telescope_name,
@@ -169,6 +176,9 @@ def main():
     parser.add_argument('--shear_type', type=str, default="constant",
                         help="GREAT shear type [Default: constant]")
 
+    parser.add_argument('--n_gals', type=int, default=10,
+                        help="How many galaxies to process from a sub-field? [Default: 10]")
+
     parser.add_argument('--verbose', action='store_true',
                         help="Enable verbose messaging")
 
@@ -181,6 +191,7 @@ def main():
                     experiment=args.experiment,
                     observation_type=args.observation_type,
                     shear_type=args.shear_type,
+                    n_gals=args.n_gals,
                     verbose=args.verbose)
 
     logging.debug('Finished creating segment for subfield {:d}'.format(
