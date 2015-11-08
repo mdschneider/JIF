@@ -9,33 +9,182 @@ Created by Michael Schneider on 2015-10-16
 import argparse
 import sys
 import os.path
-#import numpy as np
+import numpy as np
 #import pandas as pd
 #import matplotlib.pyplot as plt
 
-import logging
+from astropy.io import fits
+import segments
+import galsim_galaxy as gg
 
+import logging
 
 # Print log messages to screen:
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 # Print log messages to file:
-#logging.basicConfig(filename='logs/sheller_great3.py.log',
+#logging.basicConfig(filename='logs/sheller_great3.log',
 #                     level=logging.DEBUG,
 #                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 
+### Number of pixels per galaxy postage stamp, per dimension
+k_g3_ngrid = {"ground": 48, "space": 96}
+### Pixel scales in arcseconds
+k_g3_pixel_scales = {"ground": 0.2, "space_single_epoch": 0.05,
+                     "space_multi_epoch": 0.1}
+### Guess what values were used to simulate optics PSFs
+k_g3_primary_diameters = {"ground": 8.2, "space": 2.4}
+### Guess that GREAT3 used LSST 'r' band to render images
+k_filter_name = 'r'
+k_filter_central_wavelengths = {'r':620.}
+
+
+def create_segments(subfield_index=0, experiment="control",
+    observation_type="ground", shear_type="constant", verbose=False):
+    """
+    Load pixel data and PSFs for all epochs for a given galaxy
+    """
+    if subfield_index < 0 or subfield_index > 199:
+        raise ValueError("subfield_index must be in range [0, 199]")
+
+    ### Reconstruct the GREAT3 image input file path and name
+    indir = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+        "../../great3", experiment, observation_type, shear_type)
+
+    ### Collect input image filenames for all epochs.
+    ### FIXME: Get correct 'experiment' names here
+    if experiment in ["control", "real_galaxy", "variable_PSF"]:
+        nepochs = 1
+    else:
+        nepochs = 6
+    infiles = []
+    starfiles = []
+    for epoch_index in xrange(nepochs):
+        infiles.append(os.path.join(indir,
+            "image-{:03d}-{:d}.fits".format(subfield_index, epoch_index)))
+        starfiles.append(os.path.join(indir,
+            "starfield_image-{:03d}-{:d}.fits".format(subfield_index, epoch_index)))
+    if verbose:
+        print "input files:", infiles
+
+
+    ### Load the galaxy catalog for this subfield
+    f = fits.open(os.path.join(indir,
+        "galaxy_catalog-{:03d}.fits".format(subfield_index)))
+    gal_cat = np.core.records.array(np.asarray(f[1].data),
+        dtype=[('x', '>i8'), ('y', '>i8'), ('ID', '>i8')])
+    f.close()
+
+    ### Specify the output filename for the Segments
+    segdir = os.path.join(indir, "segments")
+    if not os.path.exists(segdir):
+        os.makedirs(segdir)
+    seg_filename = os.path.join(segdir, "seg_{:03d}.h5".format(subfield_index))
+    if verbose:
+        print "seg_filename:", seg_filename
+
+    ### Set some common metadata required by the Segment file structure
+    # telescope_name = "GREAT3_{}".format(observation_type)
+    telescope_name = {"ground": "LSST", "space": "WFIRST"}[observation_type]
+    filter_name = k_filter_name
+    dummy_mask = 1.0
+    dummy_background = 0.0
+
+    ### Create and fill the elements of the segment file for all galaxies
+    ### in the current sub-field. Different sub-fields go in different segment
+    ### files (no particular reason for this - just seems convenient).
+    seg = segments.Segments(seg_filename)
+
+    ### There are 1e4 galaxies in one GREAT3 image file.
+    ### Save all images to the segment file, but with distinct 'segment_index'
+    ### values.
+    n_gals_image_file = 4 #10000
+    ngals_per_dim = 100 ### The image is a 100 x 100 grid of galaxies
+    for igal in xrange(n_gals_image_file):
+        ### Specify input image grid ranges for this segment
+        ng = k_g3_ngrid[observation_type]
+        i, j = np.unravel_index(igal, (ngals_per_dim, ngals_per_dim))
+        ### These lines define the order in which we sort the postage stamps
+        ### into segment indices:
+        xmin = j * ng
+        xmax = (j+1) * ng
+        ymin = i * ng
+        ymax = (i+1) * ng
+
+        images = []
+        psfs = []
+        noise_vars = []
+        for ifile, infile in enumerate(infiles): # Iterate over epochs, select same galaxy
+            f = fits.open(infile)
+            images.append(np.asarray(f[0].data[ymin:ymax, xmin:xmax],
+                dtype=np.float64))
+            noise_vars.append(np.var(f[0].data)) # FIXME: Make a better noise estimator
+            f.close()
+
+            s = fits.open(starfiles[ifile])
+            ### Select just the perfectly centered star image for the PSF model.
+            ### There are 8 other postage stamps (for constant PSF branches)
+            ### that have offset star locations with respect to the pixel grid.
+            ### It's not clear we need these for JIF modeling until we're
+            ### marginalizing the PSF model.
+            psfs.append(np.asarray(s[0].data[0:ng, 0:ng], dtype=np.float64))
+            s.close()
+
+        seg.save_images(images, noise_vars, [dummy_mask], [dummy_background],
+            segment_index=igal, telescope=telescope_name)
+        seg.save_psf_images(psfs, segment_index=igal, telescope=telescope_name,
+            filter_name=filter_name, model_names=None)
+        seg.save_source_catalog(np.reshape(gal_cat[igal], (1,)),
+            segment_index=igal)
+
+    ### It's not strictly necessary to instantiate a GalSimGalaxyModel object
+    ### here, but it's useful to do the parsing of existing bandpass files to
+    ### copy filter curves into the segment file.
+    gg_obj = gg.GalSimGalaxyModel(telescope_name=telescope_name,
+        filter_names=list(filter_name), filter_wavelength_scale=1.0)
+    gg.save_bandpasses_to_segment(seg, gg_obj, k_filter_name, telescope_name,
+        scale={"LSST": 1.0, "WFIRST": 1.e3}[telescope_name])
+
+    seg.save_tel_metadata(telescope=telescope_name,
+                          primary_diam=k_g3_primary_diameters[observation_type],
+                          pixel_scale_arcsec=k_g3_pixel_scales[observation_type],
+                          atmosphere=(observation_type == "ground"))
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description='My program description.')
-    parser.add_argument('outdir', help='Output directory')
+        description='Parse GREAT3 data file and save as galaxy segment files.')
+
+    parser.add_argument('--subfield_index', type=int, default=0,
+                        help="GREAT3 data set subfield index (0-199) [Default: 0]")
+
+    parser.add_argument('--experiment', type=str, default="control",
+                        help="GREAT3 'experiment' name. [Default: control]")
+
+    parser.add_argument('--observation_type', type=str, default="ground",
+                        help="GREAT3 'observation' type (ground/space) [Default: ground]")
+
+    parser.add_argument('--shear_type', type=str, default="constant",
+                        help="GREAT shear type [Default: constant]")
+
+    parser.add_argument('--verbose', action='store_true',
+                        help="Enable verbose messaging")
 
     args = parser.parse_args()
-    logging.debug('Program started')
+    logging.debug('Creating segment file for subfield {:d}'.format(
+        args.subfield_index))
 
-    outdir = os.path.abspath(args.outdir)
 
-    logging.debug('Program finished')
+    create_segments(subfield_index=args.subfield_index,
+                    experiment=args.experiment,
+                    observation_type=args.observation_type,
+                    shear_type=args.shear_type,
+                    verbose=args.verbose)
+
+    logging.debug('Finished creating segment for subfield {:d}'.format(
+        args.subfield_index))
     return 0
 
 
