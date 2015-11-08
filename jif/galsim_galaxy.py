@@ -65,9 +65,9 @@ k_galparams_types = {
 
 ### The galaxy models are initialized with these values:
 k_galparams_defaults = {
-    "Sersic": [(1., 3.4, 1.8, 0.3, np.pi/4, 1.e5, k_flux_param_minval,
+    "Sersic": [(1., 3.4, 1.0, 0.0, np.pi/4, 3.e1, k_flux_param_minval,
         k_flux_param_minval, k_flux_param_minval)],
-    "Spergel": [(1., -0.3, 1.8, 0.3, np.pi/4, 1.e4, k_flux_param_minval,
+    "Spergel": [(1., -0.3, 1.0, 0.0, np.pi/4, 3.e1, k_flux_param_minval,
         k_flux_param_minval, k_flux_param_minval)],
     "BulgeDisk": [(1.,
         0.5, 0.6, 0.05, 0.0,
@@ -121,7 +121,8 @@ class GalSimGalaxyModel(object):
                  filters=None,
                  filter_names=None,
                  filter_wavelength_scale=1.0,
-                 atmosphere=False):
+                 atmosphere=False,
+                 psf_image=None):
         self.telescope_name = telescope_name
         self.pixel_scale = pixel_scale_arcsec
         # if noise is None:
@@ -134,6 +135,7 @@ class GalSimGalaxyModel(object):
         self.filters = filters
         self.filter_names = filter_names
         self.atmosphere = atmosphere
+        self.psf_image = psf_image
 
         ### Set GalSim galaxy model parameters
         self.params = np.core.records.array(k_galparams_defaults[galaxy_model],
@@ -143,6 +145,13 @@ class GalSimGalaxyModel(object):
         self.paramnames = self.active_parameters
         # self.n_params = len(self.paramnames)
         self.n_params = len(self.active_parameters)
+
+        ### Setup the PSF model
+        if isinstance(self.psf_image, np.ndarray):
+            self.psf_model = 'InterpolatedImage'
+            self.psf_image = galsim.InterpolatedImage(self.psf_image)
+        else:
+            self.psf_model = 'Parametric'
 
         ### Set GalSim SED model parameters
         self._load_sed_files()
@@ -226,13 +235,23 @@ class GalSimGalaxyModel(object):
         """
         valid_params = True
         if self.galaxy_model == "Sersic" or self.galaxy_model == "Spergel":
+            if self.params[0].redshift < 0.0:
+                valid_params *= False
             if self.params[0].e < 0. or self.params[0].e > 1.:
+                valid_params *= False
+            if self.params[0].hlr < 0.0:
                 valid_params *= False
             for i in xrange(len(k_SED_names)):
                 if self.params[0]['flux_sed{:d}'.format(i+1)] <= 0.:
                     valid_params *= False
         if self.galaxy_model == "Spergel":
+            if self.params[0].redshift < 0.0:
+                valid_params *= False
+            if self.params[0].e < 0. or self.params[0].e > 1.:
+                valid_params *= False
             if self.params[0].nu < -0.85 or self.params[0].nu > 0.5:
+                valid_params *= False
+            if self.params[0].hlr < 0.0:
                 valid_params *= False
             for i in xrange(len(k_SED_names)):
                 if self.params[0]['flux_sed{:d}'.format(i+1)] <= 0.:
@@ -252,15 +271,18 @@ class GalSimGalaxyModel(object):
         return valid_params
 
     def get_psf(self):
-        lam_over_diam = self.wavelength / self.primary_diam_meters
-        lam_over_diam *= 206265. # arcsec
-        optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1.,
-            gsparams=self.gsparams)
-        if self.atmosphere:
-            atmos = galsim.Kolmogorov(fwhm=0.8, gsparams=self.gsparams)
-            psf = galsim.Convolve([atmos, optics])
+        if self.psf_model == 'InterpolatedImage':
+            psf = self.psf_image
         else:
-            psf = optics
+            lam_over_diam = self.wavelength / self.primary_diam_meters
+            lam_over_diam *= 206265. # arcsec
+            optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1.,
+                gsparams=self.gsparams)
+            if self.atmosphere:
+                atmos = galsim.Kolmogorov(fwhm=0.8, gsparams=self.gsparams)
+                psf = galsim.Convolve([atmos, optics])
+            else:
+                psf = optics
         return psf
 
     def get_SED(self, gal_comp='', flux_ref_wavelength=500):
