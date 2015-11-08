@@ -445,6 +445,18 @@ def write_results(args, pps, lnps, roaster):
 # ---------------------------------------------------------------------------------------
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------
+class DefaultPriorSpergel(object):
+    """
+    A default prior for a single-component Spergel galaxy
+    """
+    def __init__(self):
+        self.hlr_shape = 2.
+        self.hlr_scale = 0.25
+
+    def __call__(self, omega):
+        return 0.0
+
+
 class DefaultPriorBulgeDisk(object):
     """
     A default prior for the parameters of a bulge+disk galaxy model
@@ -531,7 +543,7 @@ def main():
     roaster = Roaster(debug=args.debug, data_format=args.data_format,
                       lnprior_omega=lnprior_omega,
                       galaxy_model_type=args.galaxy_model_type,
-                      model_paramnames=['hlr', 'e', 'beta', 'flux_sed1'],
+                      model_paramnames=['nu', 'hlr', 'e', 'beta', 'flux_sed1', 'dx', 'dy'],
                       telescope=args.telescope)
     roaster.Load(args.infiles[0], segment=args.segment_numbers[0])
 
