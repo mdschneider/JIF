@@ -310,7 +310,9 @@ class Roaster(object):
         for isrcs in xrange(self.num_sources):
             imin = isrcs * self.n_params
             imax = (isrcs + 1) * self.n_params
-            lnp += self.lnprior_omega(omega[imin:imax])
+            ### Pass active + inactive parameters, with names included
+            p = src_models[isrcs][0].params
+            lnp += self.lnprior_omega(p)
         return lnp
 
     def _get_model_image(self, iepochs, add_noise=False):
@@ -450,11 +452,17 @@ class DefaultPriorSpergel(object):
     A default prior for a single-component Spergel galaxy
     """
     def __init__(self):
+        ### Gamma distribution keeping half-light radius from becoming
+        ### much larger than 1 arcsecond or too close to zero.
         self.hlr_shape = 2.
         self.hlr_scale = 0.25
 
     def __call__(self, omega):
-        return 0.0
+        lnp = 0.0
+        ###
+        hlr = omega[0].hlr
+        lnp += (self.hlr_shape-1.)*np.log(hlr) - (hlr / self.hlr_scale)
+        return lnp
 
 
 class DefaultPriorBulgeDisk(object):
@@ -535,7 +543,9 @@ def main():
         args.segment_numbers = [0 for f in args.infiles]
 
     ### Set priors
-    if args.galaxy_model_type == "BulgeDisk":
+    if args.galaxy_model_type == "Spergel":
+        lnprior_omega = DefaultPriorSpergel()
+    elif args.galaxy_model_type == "BulgeDisk":
         lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
     else:
         lnprior_omega = EmptyPrior()

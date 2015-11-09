@@ -262,7 +262,7 @@ class GalSimGalaxyModel(object):
                 valid_params *= False
             if self.params[0].e < 0. or self.params[0].e > 1.:
                 valid_params *= False
-            if self.params[0].nu < -0.8 or self.params[0].nu > 0.5:
+            if self.params[0].nu < -0.6 or self.params[0].nu > 0.55:
                 valid_params *= False
             if self.params[0].hlr < 0.0 or self.params[0].hlr > 1.5:
                 valid_params *= False
