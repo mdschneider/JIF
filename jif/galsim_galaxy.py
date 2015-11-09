@@ -84,6 +84,13 @@ k_galparams_defaults = {
 }
 
 
+def wrap_ellipticity_phase(phase):
+    """
+    Map a phase in radians to [0, pi) to model ellipticity orientation.
+    """
+    return phase % np.pi
+
+
 def lsst_noise(random_seed):
     """
     See GalSim/examples/lsst.yaml
@@ -218,7 +225,9 @@ class GalSimGalaxyModel(object):
         For use in emcee.
         """
         for ip, pname in enumerate(self.active_parameters):
-            if 'flux_sed' in pname:
+            if 'beta' in pname:
+                self.params[pname][0] = wrap_ellipticity_phase(p[ip])
+            elif 'flux_sed' in pname:
                 ### Transform flux variables with exp -- we sample in ln(Flux)
                 self.params[pname][0] = np.exp(p[ip])
             else:
