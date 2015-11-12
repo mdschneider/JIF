@@ -152,6 +152,8 @@ class Roaster(object):
             primary_diams = []
             atmospheres = []
             tel_names = []
+            psfs = []
+            psf_types = []
             self.filters = {}
             self.filter_names = []
             for itel, tel in enumerate(telescopes):
@@ -179,6 +181,9 @@ class Roaster(object):
                         pixel_data.append(np.array(dat))
                         pix_noise_var.append(seg.attrs['variance'])
                         ###
+                        psf_types.append(seg.attrs['psf_type'])
+                        psfs.append(seg['psf'])
+                        ###
                         wavelengths.append(wavelength)
                         ###
                         tel_group = f['telescopes/{}'.format(tel)]
@@ -188,6 +193,7 @@ class Roaster(object):
                         tel_names.append(tel)
                         self.filter_names.append(filter_name)
             print "Have data for instruments:", instruments
+            print "pixel noise variances:", pix_noise_var
         else:
             if segment == None:
                 logging.info("<Roaster> Must specify a segment number as an integer")
@@ -245,7 +251,8 @@ class Roaster(object):
                                 wavelength_meters=wavelengths[idat]*1e-9,
                                 primary_diam_meters=primary_diams[idat],
                                 filters=self.filters,
-                                atmosphere=atmospheres[idat])
+                                atmosphere=atmospheres[idat],
+                                psf_image=psfs[idat])
                             for idat in xrange(nimages)]
                            for isrcs in xrange(self.num_sources)]
         self.n_params = src_models[0][0].n_params
@@ -303,7 +310,9 @@ class Roaster(object):
         for isrcs in xrange(self.num_sources):
             imin = isrcs * self.n_params
             imax = (isrcs + 1) * self.n_params
-            lnp += self.lnprior_omega(omega[imin:imax])
+            ### Pass active + inactive parameters, with names included
+            p = src_models[isrcs][0].params
+            lnp += self.lnprior_omega(p)
         return lnp
 
     def _get_model_image(self, iepochs, add_noise=False):
@@ -372,8 +381,7 @@ def do_sampling(args, roaster):
     nvars = len(omega_interim)
     p0 = walker_ball(omega_interim, 0.05, args.nwalkers)
 
-    logging.debug("Initializing parameters for MCMC to yield finite posterior \
-        values")
+    logging.debug("Initializing parameters for MCMC to yield finite posterior values")
     # while not all([np.isfinite(roaster(p)) for p in p0]):
     #     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
     sampler = emcee.EnsembleSampler(args.nwalkers,
@@ -439,6 +447,24 @@ def write_results(args, pps, lnps, roaster):
 # ---------------------------------------------------------------------------------------
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------
+class DefaultPriorSpergel(object):
+    """
+    A default prior for a single-component Spergel galaxy
+    """
+    def __init__(self):
+        ### Gamma distribution keeping half-light radius from becoming
+        ### much larger than 1 arcsecond or too close to zero.
+        self.hlr_shape = 2.
+        self.hlr_scale = 0.25
+
+    def __call__(self, omega):
+        lnp = 0.0
+        ###
+        hlr = omega[0].hlr
+        lnp += (self.hlr_shape-1.)*np.log(hlr) - (hlr / self.hlr_scale)
+        return lnp
+
+
 class DefaultPriorBulgeDisk(object):
     """
     A default prior for the parameters of a bulge+disk galaxy model
@@ -517,7 +543,9 @@ def main():
         args.segment_numbers = [0 for f in args.infiles]
 
     ### Set priors
-    if args.galaxy_model_type == "BulgeDisk":
+    if args.galaxy_model_type == "Spergel":
+        lnprior_omega = DefaultPriorSpergel()
+    elif args.galaxy_model_type == "BulgeDisk":
         lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
     else:
         lnprior_omega = EmptyPrior()
@@ -525,7 +553,7 @@ def main():
     roaster = Roaster(debug=args.debug, data_format=args.data_format,
                       lnprior_omega=lnprior_omega,
                       galaxy_model_type=args.galaxy_model_type,
-                      model_paramnames=['hlr', 'e', 'beta'],
+                      model_paramnames=['nu', 'hlr', 'e', 'beta', 'flux_sed1', 'dx', 'dy'],
                       telescope=args.telescope)
     roaster.Load(args.infiles[0], segment=args.segment_numbers[0])
 

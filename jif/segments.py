@@ -42,8 +42,9 @@ class Segments(object):
     def save_tel_metadata(self, telescope='lsst',
                           primary_diam=8.4, pixel_scale_arcsec=0.2,
                           atmosphere=True):
-        g = create_group(self.file, 'telescopes/{}'.format(telescope))
-        g.attrs['telescope'] = telescope
+        tel_name = telescope.upper()
+        g = create_group(self.file, 'telescopes/{}'.format(tel_name))
+        g.attrs['telescope'] = tel_name
         g.attrs['primary_diam'] = primary_diam
         g.attrs['pixel_scale_arcsec'] = pixel_scale_arcsec
         g.attrs['atmosphere'] = atmosphere
@@ -128,9 +129,10 @@ class Segments(object):
         """
         Save bandpasses for a single telescope as lookup tables.
         """
+        tel_name = telescope.upper()
         for i, filter_name in enumerate(filters_list):
             group_name = 'telescopes/{}/filters/{}'.format(
-                telescope, filter_name)
+                tel_name, filter_name)
             if group_name not in self.file:
                 bp = create_group(self.file, group_name)
                 bp.create_dataset('waves_nm', data=waves_nm_list[i])
