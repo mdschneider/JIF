@@ -9,6 +9,7 @@ import os
 import math
 import numpy as np
 from operator import add
+import warnings
 import galsim
 import segments
 
@@ -149,6 +150,9 @@ class GalSimGalaxyModel(object):
         ### Load the filters that can be used to draw galaxy images
         if self.filters is None and self.filter_names is not None:
             self._load_filter_files(filter_wavelength_scale)
+        else:
+            warnings.warn("No filters available in GalSimGalaxyModel: supply \
+                          'filters' or 'filter_names' argument")
 
         self.gsparams = galsim.GSParams(
             folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
@@ -263,7 +267,7 @@ class GalSimGalaxyModel(object):
             psf = optics
         return psf
 
-    def get_SED(self, gal_comp='', flux_ref_wavelength=500):
+    def get_SED(self, gal_comp='', flux_ref_wavelength=620.):
         """
         Get the GalSim SED object given the SED parameters and redshift.
 
@@ -301,6 +305,7 @@ class GalSimGalaxyModel(object):
         elif self.galaxy_model == "Sersic":
             mono_gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
                 # flux=self.params[0].gal_flux,
+                flux=1.0,
                 gsparams=self.gsparams)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
@@ -311,6 +316,7 @@ class GalSimGalaxyModel(object):
         elif self.galaxy_model == "BulgeDisk":
             mono_bulge = galsim.Spergel(nu=self.params[0].nu_bulge,
                 half_light_radius=self.params[0].hlr_bulge,
+                flux=1.0,
                 gsparams=self.gsparams)
             SED_bulge = self.get_SED(gal_comp='bulge')
             bulge = galsim.Chromatic(mono_bulge, SED_bulge)
@@ -320,6 +326,7 @@ class GalSimGalaxyModel(object):
 
             mono_disk = galsim.Spergel(nu=self.params[0].nu_disk,
                 half_light_radius=self.params[0].hlr_disk,
+                flux=1.0,
                 gsparams=self.gsparams)
             SED_disk = self.get_SED(gal_comp='disk')
             disk = galsim.Chromatic(mono_disk, SED_disk)

@@ -35,6 +35,9 @@ class RoasterInspector(object):
         self.nburn = f.attrs['nburn']
         f.close()
 
+        if not os.path.exists(self.args.outprefix):
+            os.makedirs(self.args.outprefix)
+
         ### The lists input from HDF5 can lose the commas between entries.
         ### This seems to fix it:
         self.model_paramnames = [m for m in self.model_paramnames]
@@ -60,11 +63,6 @@ class RoasterInspector(object):
 
     def _get_opt_params(self):
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
-
-        # m = self.args.keeplast * self.data.shape[1]
-        # n = self.data.shape[2]
-        # opt_params = self.data[-self.args.keeplast:,...].reshape(
-            # (m, n), order='F')[ndx, :]
         opt_params = np.vstack(self.data[-self.args.keeplast:,...])[ndx,...]
         return opt_params
 
@@ -76,9 +74,6 @@ class RoasterInspector(object):
         return None
 
     def plot(self):
-        if not os.path.exists(self.args.outprefix):
-            os.makedirs(self.args.outprefix)
-
         # Triangle plot
         fig = triangle.corner(np.vstack(self.data[-self.args.keeplast:,...]),
                               labels=self.paramnames, truths=self.args.truths)
