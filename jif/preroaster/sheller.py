@@ -20,7 +20,7 @@ import h5py
 # for now I am just entering the input directly here for debugging purposes
 # later I will make a class structure
 
-# Specify the "gound" fits files
+# Specify the "ground" fits files
 # file name for the sextractor output -BACKGROUND fits file
 img0_minback_name = 'HST_conv_minusbackground.fits'
 # science image

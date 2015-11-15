@@ -79,8 +79,10 @@ class RoasterInspector(object):
         if not os.path.exists(self.args.outprefix):
             os.makedirs(self.args.outprefix)
 
+        n = len(self.paramnames)
+
         # Triangle plot
-        fig = triangle.corner(np.vstack(self.data[-self.args.keeplast:,...]),
+        fig = triangle.corner(np.vstack(self.data[-self.args.keeplast:,:, 0:n]),
                               labels=self.paramnames, truths=self.args.truths)
         outfile = os.path.join(self.args.outprefix,
             "roaster_inspector_triangle.png")

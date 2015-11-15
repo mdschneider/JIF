@@ -303,16 +303,20 @@ class Roaster(object):
         return valid_params
 
     def lnprior(self, omega):
-        ### Iterate over distinct galaxy models in the segment and evaluate the
-        ### prior for each one.
-        lnp = 0.0
+        valid_params = self.set_params(omega)
+        if valid_params:
+            ### Iterate over distinct galaxy models in the segment and evaluate the
+            ### prior for each one.
+            lnp = 0.0
 
-        for isrcs in xrange(self.num_sources):
-            imin = isrcs * self.n_params
-            imax = (isrcs + 1) * self.n_params
-            ### Pass active + inactive parameters, with names included
-            p = src_models[isrcs][0].params
-            lnp += self.lnprior_omega(p)
+            for isrcs in xrange(self.num_sources):
+                imin = isrcs * self.n_params
+                imax = (isrcs + 1) * self.n_params
+                ### Pass active + inactive parameters, with names included
+                p = copy.deepcopy(src_models[isrcs][0].params)
+                lnp += self.lnprior_omega(p)
+        else:
+            lnp = -np.inf
         return lnp
 
     def _get_model_image(self, iepochs, add_noise=False):
@@ -394,6 +398,7 @@ def do_sampling(args, roaster):
     sampler.reset()
     pps = []
     lnps = []
+    lnpriors = []
     logging.info("Sampling")
     for i in range(args.nsamples):
         if np.mod(i+1, 20) == 0:
@@ -404,7 +409,8 @@ def do_sampling(args, roaster):
             print i, np.mean(lnp)
             print np.mean(pp, axis=0)
             print np.std(pp, axis=0)
-        pps.append(pp.copy())
+        lnprior = np.array([roaster.lnprior(omega) for omega in pp])
+        pps.append(np.column_stack((pp.copy(), lnprior)))
         lnps.append(lnp.copy())
 
     write_results(args, pps, lnps, roaster)

@@ -15,7 +15,7 @@ python Roaster.py ../great3/control/ground/constant/segments/seg_000.h5 --segmen
 
 ## labels for proper exit or error
 done:
-    growlnotify -s -n Script -m "Finished run_great3_cgc"
+    growlnotify -n Script -m "Finished run_great3_cgc"
     exit 0
 error:
     exit 1
