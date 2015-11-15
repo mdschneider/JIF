@@ -41,12 +41,28 @@ class Segments(object):
 
     def save_tel_metadata(self, telescope='lsst',
                           primary_diam=8.4, pixel_scale_arcsec=0.2,
+                          gain=1.0,
                           atmosphere=True):
+        """
+        Save metadata about the telescope to a 'telescopes' branch of the
+        segments file.
+
+        @param telescope            A string uniquely naming the telescope
+        @param primary_diam         Diameter of the primary mirror (i.e.,
+                                    entrance pupil) of the telescope in meters.
+                                    Used for optics PSF calculation, if needed.
+        @param pixel_scale_arcsec   Pixel scale of the image plane in arcseconds.
+        @param gain                 Gain of the CCD in e-/ADU.
+        @param atmosphere           Bool indicating whether to model an
+                                    atmosphere PSF (i.e., are the observations
+                                    from ground or space?).
+        """
         tel_name = telescope.upper()
         g = create_group(self.file, 'telescopes/{}'.format(tel_name))
         g.attrs['telescope'] = tel_name
         g.attrs['primary_diam'] = primary_diam
         g.attrs['pixel_scale_arcsec'] = pixel_scale_arcsec
+        g.attrs['gain'] = gain
         g.attrs['atmosphere'] = atmosphere
         return None
 
