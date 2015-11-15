@@ -383,9 +383,9 @@ def do_sampling(args, roaster):
     omega_interim = roaster.get_params()
 
     nvars = len(omega_interim)
-    p0 = walker_ball(omega_interim, 0.05, args.nwalkers)
+    p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
 
-    logging.debug("Initializing parameters for MCMC to yield finite posterior values")
+    # logging.debug("Initializing parameters for MCMC to yield finite posterior values")
     # while not all([np.isfinite(roaster(p)) for p in p0]):
     #     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
     sampler = emcee.EnsembleSampler(args.nwalkers,

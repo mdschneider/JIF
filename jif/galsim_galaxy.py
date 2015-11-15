@@ -89,7 +89,7 @@ def wrap_ellipticity_phase(phase):
     """
     Map a phase in radians to [0, pi) to model ellipticity orientation.
     """
-    return phase % np.pi
+    return (phase % np.pi)
 
 
 def lsst_noise(random_seed):
@@ -229,9 +229,7 @@ class GalSimGalaxyModel(object):
         For use in emcee.
         """
         for ip, pname in enumerate(self.active_parameters):
-            if 'beta' in pname:
-                self.params[pname][0] = wrap_ellipticity_phase(p[ip])
-            elif 'flux_sed' in pname:
+            if 'flux_sed' in pname:
                 ### Transform flux variables with exp -- we sample in ln(Flux)
                 self.params[pname][0] = np.exp(p[ip])
             else:
@@ -245,6 +243,8 @@ class GalSimGalaxyModel(object):
         p = self.params[self.active_parameters].view('<f8').copy()
         ### Transform fluxes to ln(Flux) for MCMC sampling
         for ip, pname in enumerate(self.active_parameters):
+            if 'beta' in pname:
+                p[ip] = wrap_ellipticity_phase(p[ip])
             if 'flux_sed' in pname:
                 p[ip] = np.log(p[ip])
         return p
@@ -261,6 +261,8 @@ class GalSimGalaxyModel(object):
                 valid_params *= False
             if self.params[0].hlr < 0.0:
                 valid_params *= False
+            if self.params[0].beta < 0.0 or self.params[0].beta > np.pi:
+                valid_params *= False
             for i in xrange(len(k_SED_names)):
                 if self.params[0]['flux_sed{:d}'.format(i+1)] <= 0.:
                     valid_params *= False
@@ -270,21 +272,11 @@ class GalSimGalaxyModel(object):
                 valid_params *= False
             if self.params[0].dy < -10. or self.params[0].dy > 10.:
                 valid_params *= False
-        if self.galaxy_model == "Spergel":
-            if self.params[0].redshift < 0.0:
-                valid_params *= False
-            if self.params[0].e < 0. or self.params[0].e > 1.:
-                valid_params *= False
-            if self.params[0].nu < -0.6 or self.params[0].nu > 0.55:
-                valid_params *= False
-            if self.params[0].hlr < 0.0 or self.params[0].hlr > 1.5:
-                valid_params *= False
             for i in xrange(len(k_SED_names)):
                 if self.params[0]['flux_sed{:d}'.format(i+1)] <= 0.:
                     valid_params *= False
-            if self.params[0].dx < -10. or self.params[0].dx > 10.:
-                valid_params *= False
-            if self.params[0].dy < -10. or self.params[0].dy > 10.:
+        if self.galaxy_model == "Spergel":
+            if self.params[0].nu < -0.6 or self.params[0].nu > 0.55:
                 valid_params *= False
         if self.galaxy_model == "BulgeDisk":
             if (self.params[0].e_bulge < 0. or self.params[0].e_bulge > 1. or
@@ -340,24 +332,28 @@ class GalSimGalaxyModel(object):
             raise AttributeError("Unimplemented galaxy model")
 
         elif self.galaxy_model == "Spergel":
-            mono_gal = galsim.Spergel(nu=self.params[0].nu, half_light_radius=self.params[0].hlr,
+            mono_gal = galsim.Spergel(nu=self.params[0].nu,
+                half_light_radius=self.params[0].hlr,
                 # flux=self.params[0].gal_flux,
                 flux=1.0,
                 gsparams=self.gsparams)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
-            gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
+            gal_shape = galsim.Shear(g=self.params[0].e,
+                beta=self.params[0].beta*galsim.radians)
             gal = gal.shear(gal_shape)
             gal = gal.shift(self.params[0].dx, self.params[0].dy)
 
         elif self.galaxy_model == "Sersic":
-            mono_gal = galsim.Sersic(n=self.params[0].n, half_light_radius=self.params[0].hlr,
+            mono_gal = galsim.Sersic(n=self.params[0].n,
+                half_light_radius=self.params[0].hlr,
                 # flux=self.params[0].gal_flux,
                 flux=1.0,
                 gsparams=self.gsparams)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
-            gal_shape = galsim.Shear(g=self.params[0].e, beta=self.params[0].beta*galsim.radians)
+            gal_shape = galsim.Shear(g=self.params[0].e,
+                beta=self.params[0].beta*galsim.radians)
             gal = gal.shear(gal_shape)
             gal = gal.shift(self.params[0].dx, self.params[0].dy)
 

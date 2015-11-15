@@ -69,6 +69,10 @@ class Segments(object):
     def save_source_catalog(self, seg_srcs, segment_index=0):
         """
         List the identified sources and associated properties for each segment.
+
+        @param seg_srcs         An array or other (HDF5 compatible) struct with
+                                the source catalog information for the segment.
+        @param segment_index    Integer index for the segment in the file
         """
         seg = create_group(self.file, 'segments/seg{:d}'.format(segment_index))
         seg.create_dataset('catalog', data=seg_srcs)
