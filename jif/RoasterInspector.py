@@ -20,6 +20,7 @@ class RoasterInspector(object):
     def __init__(self, args):
         self.args = args
         f = h5py.File(args.infile, 'r')
+        self.infile = args.infile
         self.roaster_infile = f.attrs['infile']
         self.segment_number = f.attrs['segment_number']
         self.galaxy_model_type = f.attrs['galaxy_model_type']
@@ -35,8 +36,9 @@ class RoasterInspector(object):
         self.nburn = f.attrs['nburn']
         f.close()
 
-        if not os.path.exists(self.args.outprefix):
-            os.makedirs(self.args.outprefix)
+        outdir = os.path.dirname(args.infile)[0]
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
 
         ### The lists input from HDF5 can lose the commas between entries.
         ### This seems to fix it:
@@ -44,6 +46,9 @@ class RoasterInspector(object):
 
     def __str__(self):
         return ("<RoasterInspector>\n" + "Input file: %s" % self.args.infile)
+
+    def _outfile_head(self):
+        return os.path.splitext(self.infile)[0]
 
     def summary(self):
         print self.__str__()
@@ -64,26 +69,25 @@ class RoasterInspector(object):
     def _get_opt_params(self):
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
         opt_params = np.vstack(self.data[-self.args.keeplast:,...])[ndx,...]
+        # opt_params = np.median(np.vstack(self.data[-self.args.keeplast:,...]), axis=0)
         return opt_params
 
     def _load_roaster_input_data(self):
         self.roaster = Roaster.Roaster(galaxy_model_type=self.galaxy_model_type,
             telescope=self.telescope,
             model_paramnames=self.model_paramnames, debug=False)
-        self.roaster.Load(self.roaster_infile) ### puts data in Roaster.pixel_data
+        ### The following puts data in Roaster.pixel_data
+        self.roaster.Load(self.roaster_infile, segment=self.segment_number)
         return None
 
     def plot(self):
-        if not os.path.exists(self.args.outprefix):
-            os.makedirs(self.args.outprefix)
-
         n = len(self.paramnames)
 
         # Triangle plot
         fig = triangle.corner(np.vstack(self.data[-self.args.keeplast:,:, 0:n]),
                               labels=self.paramnames, truths=self.args.truths)
-        outfile = os.path.join(self.args.outprefix,
-            "roaster_inspector_triangle.png")
+        outfile = (self._outfile_head() +
+            "_roaster_inspector_triangle.png")
         print "Saving {}".format(outfile)
         fig.savefig(outfile)
 
@@ -105,8 +109,8 @@ class RoasterInspector(object):
         ax.plot(self.logprob)
         ax.set_ylabel('ln(prob)')
         fig.tight_layout()
-        outfile = os.path.join(self.args.outprefix,
-            'roaster_inspector_walkers.png')
+        outfile = (self._outfile_head() +
+            '_roaster_inspector_walkers.png')
         print "Saving {}".format(outfile)
         fig.savefig(outfile)
         return None
@@ -161,8 +165,8 @@ class RoasterInspector(object):
             cbar = fig.colorbar(cax)
 
             plt.tight_layout()
-            outfile = os.path.join(self.args.outprefix,
-                'roaster_data_and_model_{:d}.png'.format(idat))
+            outfile = (self._outfile_head() +
+                '_data_and_model_{:d}.png'.format(idat))
             print "Saving {}".format(outfile)
             fig.savefig(outfile)
         return None
@@ -182,8 +186,8 @@ if __name__ == '__main__':
     parser.add_argument("--keeplast", type=int, default=0,
                         help="Keep last N samples.")
 
-    parser.add_argument("--outprefix", default='../output/roasting/', type=str,
-                        help="Prefix to apply to output figures.")
+    # parser.add_argument("--outprefix", default='../output/roasting/', type=str,
+    #                     help="Prefix to apply to output figures.")
 
     args = parser.parse_args()
 

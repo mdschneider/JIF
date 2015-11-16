@@ -72,9 +72,9 @@ k_galparams_types = {
 
 ### The galaxy models are initialized with these values:
 k_galparams_defaults = {
-    "Sersic": [(1., 3.4, 1.0, 0.0, np.pi/4, 3.e1, k_flux_param_minval,
+    "Sersic": [(1., 3.4, 1.0, 0.1, np.pi/4, 5.e1, k_flux_param_minval,
         k_flux_param_minval, k_flux_param_minval, 0., 0.)],
-    "Spergel": [(1., -0.3, 1.0, 0.0, np.pi/4, 3.e1, k_flux_param_minval,
+    "Spergel": [(1., 0.3, 1.0, 0.1, np.pi/4, 5.e1, k_flux_param_minval,
         k_flux_param_minval, k_flux_param_minval, 0., 0.)],
     "BulgeDisk": [(1.,
         0.5, 0.6, 0.05, 0.0,
@@ -151,6 +151,8 @@ class GalSimGalaxyModel(object):
         self.filter_names = filter_names
         self.atmosphere = atmosphere
         self.psf_image = psf_image
+
+        self.achromatic_galaxy = False ### TODO: Finish implementation of achromatic_galaxy feature
 
         ### Set GalSim galaxy model parameters
         self.params = np.core.records.array(k_galparams_defaults[galaxy_model],
@@ -254,15 +256,23 @@ class GalSimGalaxyModel(object):
         Check that all model parameters take values inside allowed ranges.
         """
         valid_params = True
+        ### ===================================================================
+        ### Parameters common to 'Sersic' and 'Spergel' parameterizations
         if self.galaxy_model == "Sersic" or self.galaxy_model == "Spergel":
-            if self.params[0].redshift < 0.0:
+            ### Redshift must be positive and less than a large value
+            if self.params[0].redshift < 0.0 or self.params[0].redshift > 6.0:
                 valid_params *= False
+            ### Ellipticity must be on [0, 1]
             if self.params[0].e < 0. or self.params[0].e > 1.:
                 valid_params *= False
-            if self.params[0].hlr < 0.0:
+            ### Half-light radius must be positive and less than a large value
+            ### (Large value here assumed in arcseconds)
+            if self.params[0].hlr < 0.0 or self.params[0].hlr > 10.:
                 valid_params *= False
+            ### Position angle (in radians) must be on [0, pi]
             if self.params[0].beta < 0.0 or self.params[0].beta > np.pi:
                 valid_params *= False
+            ### Flux must be strictly positive
             for i in xrange(len(k_SED_names)):
                 if self.params[0]['flux_sed{:d}'.format(i+1)] <= 0.:
                     valid_params *= False
@@ -272,18 +282,17 @@ class GalSimGalaxyModel(object):
                 valid_params *= False
             if self.params[0].dy < -10. or self.params[0].dy > 10.:
                 valid_params *= False
-            for i in xrange(len(k_SED_names)):
-                if self.params[0]['flux_sed{:d}'.format(i+1)] <= 0.:
-                    valid_params *= False
+        ### ===================================================================
         if self.galaxy_model == "Spergel":
-            if self.params[0].nu < -0.6 or self.params[0].nu > 0.55:
+            if self.params[0].nu < -0.65 or self.params[0].nu > 0.55:
                 valid_params *= False
-        if self.galaxy_model == "BulgeDisk":
+        ### ===================================================================
+        elif self.galaxy_model == "BulgeDisk":
             if (self.params[0].e_bulge < 0. or self.params[0].e_bulge > 1. or
                 self.params[0].e_disk < 0. or self.params[0].e_disk > 1.):
                 valid_params *= False
-            if (self.params[0].nu_bulge < -0.85 or self.params[0].nu_bulge > 0.8 or
-                self.params[0].nu_disk < -0.85 or self.params[0].nu_disk > 0.8):
+            if (self.params[0].nu_bulge < -0.6 or self.params[0].nu_bulge > 055 or
+                self.params[0].nu_disk < -0.6 or self.params[0].nu_disk > 0.55):
                 valid_params *= False
             for i in xrange(len(k_SED_names)):
                 if self.params[0]['flux_sed{:d}_bulge'.format(i+1)] <= 0.:
@@ -337,8 +346,11 @@ class GalSimGalaxyModel(object):
                 # flux=self.params[0].gal_flux,
                 flux=1.0,
                 gsparams=self.gsparams)
-            SED = self.get_SED()
-            gal = galsim.Chromatic(mono_gal, SED)
+            if self.achromatic_galaxy:
+                gal = mono_gal
+            else:
+                SED = self.get_SED()
+                gal = galsim.Chromatic(mono_gal, SED)
             gal_shape = galsim.Shear(g=self.params[0].e,
                 beta=self.params[0].beta*galsim.radians)
             gal = gal.shear(gal_shape)
@@ -350,6 +362,11 @@ class GalSimGalaxyModel(object):
                 # flux=self.params[0].gal_flux,
                 flux=1.0,
                 gsparams=self.gsparams)
+            if self.achromatic_galaxy:
+                gal = mono_gal
+            else:
+                SED = self.get_SED()
+                gal = galsim.Chromatic(mono_gal, SED)
             SED = self.get_SED()
             gal = galsim.Chromatic(mono_gal, SED)
             gal_shape = galsim.Shear(g=self.params[0].e,

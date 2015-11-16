@@ -130,7 +130,7 @@ class Roaster(object):
         global src_models
 
         logging.info("<Roaster> Loading image data")
-        if self.data_format == "test_galsim_galaxy":
+        if self.data_format == "jif_segment" or self.data_format == "test_galsim_galaxy":
             f = h5py.File(infile, 'r')
             if self.telescope is None:
                 self.num_telescopes = len(f['telescopes'])
@@ -195,38 +195,10 @@ class Roaster(object):
             print "Have data for instruments:", instruments
             print "pixel noise variances:", pix_noise_var
         else:
-            if segment == None:
-                logging.info("<Roaster> Must specify a segment number as an integer")
-            f = h5py.File(infile, 'r')
-            self.num_epochs = len(f)
-            self.num_sources = f['space/observation/sextractor/segments/'+
-                str(segment)+'/stamp_objprops'].shape[0]
-
-            instruments = []
-            pixel_scales = []
-            wavelengths = []
-            primary_diams = []
-            atmospheres = []
-            for i in xrange(self.num_epochs):
-                ### Make this option more generic
-                # setup df5 paths
-                # define the parent branch (i.e. telescope)
-                branch = self._get_branch_name(i)
-                telescope = f[branch]
-                seg = f[branch+'/observation/sextractor/segments/'+str(segment)]
-                obs = f[branch+'/observation']
-
-                dat = seg['image']
-                print i, "dat shape:", dat.shape
-                pixel_data.append(np.array(dat))
-                pix_noise_var.append(seg['noise'])
-                instruments.append(telescope.attrs['instrument'])
-                pixel_scales.append(telescope.attrs['pixel_scale'])
-                wavelengths.append(obs.attrs['filter_central'])
-                primary_diams.append(telescope.attrs['primary_diam'])
-                atmospheres.append(telescope.attrs['atmosphere'])
-                ## TODO: Load and utilize PSF information
-            print "Have data for instruments:", instruments
+            raise KeyError("Unsupported input data format in Roaster")
+            # if segment == None:
+            #     logging.info("<Roaster> Must specify a segment number as an integer")
+            # print "Have data for instruments:", instruments
 
 
         nimages = len(pixel_data)
@@ -422,6 +394,9 @@ def write_results(args, pps, lnps, roaster):
         tel_lab = ""
     else:
         tel_lab = "_{}".format(args.telescope)
+    outdir = os.path.dirname(args.outfile)
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
     outfile = args.outfile + tel_lab + ".h5"
     logging.info("Writing MCMC results to %s" % outfile)
     f = h5py.File(outfile, 'w')
@@ -462,12 +437,32 @@ class DefaultPriorSpergel(object):
         ### much larger than 1 arcsecond or too close to zero.
         self.hlr_shape = 2.
         self.hlr_scale = 0.25
+        ### Gaussian distribution in log flux
+        self.lnflux_mean = 1.5
+        self.lnflux_var = 3.0
+        ### Beta distribution in ellipticity magnitude
+        self.e_beta_a = 1.0
+        self.e_beta_b = 2.5
+        ### Gaussian priors in centroid parameters
+        self.pos_var = 0.5
 
     def __call__(self, omega):
         lnp = 0.0
-        ###
+        ### Half-light radius
         hlr = omega[0].hlr
         lnp += (self.hlr_shape-1.)*np.log(hlr) - (hlr / self.hlr_scale)
+        ### Flux
+        ### FIXME: only SED 1 prior implemented
+        lnflux = np.log(omega[0].flux_sed1)
+        delta = lnflux - self.lnflux_mean
+        lnp += -0.5 * delta * delta / self.lnflux_var
+        ### Ellipticity magnitude
+        e = omega[0].e
+        lnp += (self.e_beta_a-1.)*np.log(e) + (self.e_beta_b-1.)*np.log(1.-e)
+        ### Centroid (x,y) perturbations
+        dx = omega[0].dx
+        dy = omega[0].dy
+        lnp += -0.5 * (dx*dx + dy*dy) / self.pos_var
         return lnp
 
 
@@ -512,9 +507,13 @@ def main():
     parser.add_argument("--galaxy_model_type", type=str, default="Spergel",
                         help="Type of parametric galaxy model (Default: 'Spergel')")
 
-    parser.add_argument("--data_format", type=str, default="test_galsim_galaxy",
+    parser.add_argument("--data_format", type=str, default="jif_segment",
                         help="Format of the input image data file (Default: \
-                             'test_galsim_galaxy')")
+                             'jif_segment')")
+
+    parser.add_argument("--model_params", type=str, nargs='+',
+                        default=['nu', 'hlr', 'e', 'beta', 'flux_sed1', 'dx', 'dy'],
+                        help="Names of the galaxy model parameters for sampling.")
 
     parser.add_argument("--telescope", type=str, default=None,
                         help="Select only a single telescope from the input data file \
@@ -559,7 +558,7 @@ def main():
     roaster = Roaster(debug=args.debug, data_format=args.data_format,
                       lnprior_omega=lnprior_omega,
                       galaxy_model_type=args.galaxy_model_type,
-                      model_paramnames=['nu', 'hlr', 'e', 'beta', 'flux_sed1', 'dx', 'dy'],
+                      model_paramnames=args.model_params,
                       telescope=args.telescope)
     roaster.Load(args.infiles[0], segment=args.segment_numbers[0])
 
