@@ -14,8 +14,8 @@ import numpy as np
 #import matplotlib.pyplot as plt
 
 from astropy.io import fits
-import segments
-import galsim_galaxy as gg
+import jif.segments as segments
+import jif.galsim_galaxy as gg
 
 import logging
 
@@ -39,6 +39,65 @@ k_g3_primary_diameters = {"ground": 8.2, "space": 2.4}
 k_filter_name = 'r'
 k_filter_central_wavelengths = {'r':620.}
 
+def get_background_and_noise_var(data, clip_n_sigma=3, clip_converg_tol=0.1,
+    verbose=False):
+    """
+    Determine the image background level.
+
+    clip_n_sigma = Number of standard deviations used to define outliers to
+        the assumed Gaussian random noise background.
+    convergence_tol = the fractional tolerance that must be met before
+        iterative sigma clipping proceedure is terminated.
+
+    This is currently largely based on the SExtractor method, which is in
+    turn based on the Da Costa (1992) method. Currently the entire image is
+    used in the background estimation proceedure but you could imaging a
+    gridded version of the following which could account for background
+    variation across the image.
+    TODO: Create a background image instead of just a background value.
+    """
+    # Inatilize some of the iterative parameters for the while statement.
+    sigma_frac_change = clip_converg_tol + 1
+    i = 0
+    #
+    x = np.copy(data.ravel())
+    # Calculate the median and standard deviation of the initial image
+    x_median_old = np.median(x)
+    x_std_old = np.std(x)
+    # Iteratively sigma clip the pixel distribution.
+    while sigma_frac_change > clip_converg_tol:
+        # Mask pixel values
+        mask_outliers = np.logical_and(x >= x_median_old -
+                                       clip_n_sigma*x_std_old,
+                                       x <= x_median_old +
+                                       clip_n_sigma*x_std_old)
+        # Clip the data.
+        x = x[mask_outliers]
+        x_std_new = np.std(x)
+        # Check percent difference between latest and previous standard
+        # deviation values.
+        sigma_frac_change = np.abs(x_std_new-x_std_old)/((x_std_new+x_std_old)/2.)
+        if verbose:
+            print 'Masked {0} outlier values from this iteration.'.format(np.sum(~mask_outliers))
+            print 'Current fractional sigma change between clipping iterations = {0:0.2f}'.format(sigma_frac_change)
+        # Replace old values with estimates from this iteration.
+        x_std_old = x_std_new.copy()
+        x_median_old = np.median(x)
+        # Make sure that we don't have a run away while statement.
+        i += 1
+        if i > 100:
+            print 'Background variance failed to converge after 100 sigma clipping iterations, exiting.'
+            sys.exit()
+    # Calculate the clipped image median.
+    x_clip_median = np.median(x)
+    # Calculate the clipped image mean.
+    x_clip_mean = np.mean(x)
+    # Estimate the clipped image mode (SExtractor's version of Da Costa 1992).
+    # This is the estimate of the image background level.
+    background = float(2.5 * x_clip_median - 1.5 * x_clip_mean)
+    # Calculate the standard deviation of the pixel distribution
+    noise_var = float(np.var(x))
+    return background, noise_var
 
 def create_segments(subfield_index=0, experiment="control",
     observation_type="ground", shear_type="constant",
@@ -120,11 +179,14 @@ def create_segments(subfield_index=0, experiment="control",
         images = []
         psfs = []
         noise_vars = []
+        backgrounds = []
         for ifile, infile in enumerate(infiles): # Iterate over epochs, select same galaxy
             f = fits.open(infile)
             images.append(np.asarray(f[0].data[ymin:ymax, xmin:xmax],
                 dtype=np.float64))
-            noise_vars.append(float(np.var(f[0].data))) # FIXME: Make a better noise estimator
+            bkgrnd, noise_var = get_background_and_noise_var(f[0].data)
+            noise_vars.append(noise_var)
+            backgrounds.append(bkgrnd)
             # print "empirical nosie variance: {:5.4g}".format(np.var(f[0].data))
             f.close()
 
@@ -138,7 +200,7 @@ def create_segments(subfield_index=0, experiment="control",
             s.close()
 
         print "noise_vars:", noise_vars
-        seg.save_images(images, noise_vars, [dummy_mask], [dummy_background],
+        seg.save_images(images, noise_vars, [dummy_mask], backgrounds,
             segment_index=igal, telescope=telescope_name)
         seg.save_psf_images(psfs, segment_index=igal, telescope=telescope_name,
             filter_name=filter_name, model_names=None)

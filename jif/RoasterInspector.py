@@ -166,7 +166,7 @@ class RoasterInspector(object):
 
             plt.tight_layout()
             outfile = (self._outfile_head() +
-                '_data_and_model_{:d}.png'.format(idat))
+                '_data_and_model_epoch{:d}.png'.format(idat))
             print "Saving {}".format(outfile)
             fig.savefig(outfile)
         return None
