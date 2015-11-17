@@ -433,29 +433,45 @@ class DefaultPriorSpergel(object):
     A default prior for a single-component Spergel galaxy
     """
     def __init__(self):
+        ### Gaussian mixture in 'nu' parameter
+        self.nu_mean_1 = -0.6 ### ~ de Vacouleur profile
+        self.nu_mean_2 = 0.5 ### ~ exponential profile
+        self.nu_var_1 = 0.05
+        self.nu_var_2 = 0.01
         ### Gamma distribution keeping half-light radius from becoming
         ### much larger than 1 arcsecond or too close to zero.
         self.hlr_shape = 2.
-        self.hlr_scale = 0.25
+        self.hlr_scale = 0.15
         ### Gaussian distribution in log flux
         self.lnflux_mean = 1.5
         self.lnflux_var = 3.0
         ### Beta distribution in ellipticity magnitude
-        self.e_beta_a = 1.0
-        self.e_beta_b = 2.5
+        self.e_beta_a = 1.5
+        self.e_beta_b = 5.0
         ### Gaussian priors in centroid parameters
         self.pos_var = 0.5
 
+    def _lnprior_nu(self, nu):
+        d1 = (nu - self.nu_mean_1)
+        d2 = (nu - self.nu_mean_2)
+        return -0.5 * (d1*d1/self.nu_var_1 + d2*d2/self.nu_var_2)
+
+    def _lnprior_hlr(self, hlr):
+        return (self.hlr_shape-1.)*np.log(hlr) - (hlr / self.hlr_scale)
+
+    def _lnprior_lnflux(self, lnflux):
+        ### FIXME: only SED 1 prior implemented
+        delta = lnflux - self.lnflux_mean
+        return -0.5 * delta * delta / self.lnflux_var
+
     def __call__(self, omega):
         lnp = 0.0
+        ### 'nu' parameter - peaked at exponential and de Vacouleur profile values
+        lnp += self._lnprior_nu(omega[0].nu)
         ### Half-light radius
-        hlr = omega[0].hlr
-        lnp += (self.hlr_shape-1.)*np.log(hlr) - (hlr / self.hlr_scale)
+        lnp += self._lnprior_hlr(omega[0].hlr)
         ### Flux
-        ### FIXME: only SED 1 prior implemented
-        lnflux = np.log(omega[0].flux_sed1)
-        delta = lnflux - self.lnflux_mean
-        lnp += -0.5 * delta * delta / self.lnflux_var
+        lnp += self._lnprior_lnflux(np.log(omega[0].flux_sed1))
         ### Ellipticity magnitude
         e = omega[0].e
         lnp += (self.e_beta_a-1.)*np.log(e) + (self.e_beta_b-1.)*np.log(1.-e)

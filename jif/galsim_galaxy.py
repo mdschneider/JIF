@@ -263,7 +263,7 @@ class GalSimGalaxyModel(object):
             if self.params[0].redshift < 0.0 or self.params[0].redshift > 6.0:
                 valid_params *= False
             ### Ellipticity must be on [0, 1]
-            if self.params[0].e < 0. or self.params[0].e > 1.:
+            if self.params[0].e < 0. or self.params[0].e > 0.9:
                 valid_params *= False
             ### Half-light radius must be positive and less than a large value
             ### (Large value here assumed in arcseconds)
@@ -284,7 +284,7 @@ class GalSimGalaxyModel(object):
                 valid_params *= False
         ### ===================================================================
         if self.galaxy_model == "Spergel":
-            if self.params[0].nu < -0.65 or self.params[0].nu > 0.55:
+            if self.params[0].nu < -0.8 or self.params[0].nu > 0.6:
                 valid_params *= False
         ### ===================================================================
         elif self.galaxy_model == "BulgeDisk":
