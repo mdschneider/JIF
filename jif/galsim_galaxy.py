@@ -216,7 +216,9 @@ class GalSimGalaxyModel(object):
                 self.telescope_name, filter_name))
             dat = np.loadtxt(filter_filename)
             table = galsim.LookupTable(x=dat[:,0]*wavelength_scale, f=dat[:,1])
-            self.filters[filter_name] = galsim.Bandpass(table)
+            bp = galsim.Bandpass(table)
+            self.filters[filter_name] = bp.withZeropoint(zeropoint='AB',
+                effective_diameter=6.4, exptime=15)
             self.filters[filter_name] = self.filters[filter_name].thin(rel_err=1e-4)
         return None
 
