@@ -12,6 +12,7 @@ from operator import add
 import warnings
 import galsim
 import segments
+import psf_model
 
 
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
@@ -137,7 +138,7 @@ class GalSimGalaxyModel(object):
                  filter_names=None,
                  filter_wavelength_scale=1.0,
                  atmosphere=False,
-                 psf_image=None):
+                 psf_model=None):
         self.telescope_name = telescope_name
         self.pixel_scale = pixel_scale_arcsec
         # if noise is None:
@@ -150,7 +151,7 @@ class GalSimGalaxyModel(object):
         self.filters = filters
         self.filter_names = filter_names
         self.atmosphere = atmosphere
-        self.psf_image = psf_image
+        self.psf_model = psf_model
 
         self.achromatic_galaxy = False ### TODO: Finish implementation of achromatic_galaxy feature
 
@@ -164,11 +165,13 @@ class GalSimGalaxyModel(object):
         self.n_params = len(self.active_parameters)
 
         ### Setup the PSF model
-        if isinstance(self.psf_image, np.ndarray):
-            self.psf_model = 'InterpolatedImage'
-            self.psf_image = galsim.InterpolatedImage(self.psf_image)
+        if isinstance(self.psf_model, np.ndarray):
+            self.psf_model_type = 'InterpolatedImage'
+            self.psf_model = galsim.InterpolatedImage(self.psf_model)
+        elif isinstance(self.psf_model, psf_model.PSFModel):
+            self.psf_model_type = 'PSFModel class'
         else:
-            self.psf_model = 'Parametric'
+            self.psf_model_type = 'Parametric'
 
         ### Set GalSim SED model parameters
         self._load_sed_files()
@@ -228,6 +231,14 @@ class GalSimGalaxyModel(object):
         """
         Take a list of (active) parameters and set local variables.
 
+        We assume p is a list or flat numpy array with values listed in the
+        same order as the parameter names in self.active_parameters (which
+        is supplied on instantiation of a GalSimGalaxyModel object).
+
+        If the PSF model for this instance is a PSFModel object, then the
+        active parameters of the PSFModel should be appended to the list input
+        here.
+
         For use in emcee.
         """
         for ip, pname in enumerate(self.active_parameters):
@@ -236,6 +247,8 @@ class GalSimGalaxyModel(object):
                 self.params[pname][0] = np.exp(p[ip])
             else:
                 self.params[pname][0] = p[ip]
+        if self.psf_model_type == "PSFModel class":
+            self.psf_model.set_params(p[len(self.active_parameters):])
         return None
 
     def get_params(self):
@@ -243,6 +256,8 @@ class GalSimGalaxyModel(object):
         Return a list of active model parameter values.
         """
         p = self.params[self.active_parameters].view('<f8').copy()
+        if self.psf_model_type == "PSFModel class":
+            p = np.append(p, self.psf_model.get_params())
         ### Transform fluxes to ln(Flux) for MCMC sampling
         for ip, pname in enumerate(self.active_parameters):
             if 'beta' in pname:
@@ -302,8 +317,10 @@ class GalSimGalaxyModel(object):
         return valid_params
 
     def get_psf(self):
-        if self.psf_model == 'InterpolatedImage':
-            psf = self.psf_image
+        if self.psf_model_type == 'InterpolatedImage':
+            psf = self.psf_model
+        elif self.psf_model_type == 'PSFModel class':
+            psf = self.psf_model.get_psf()
         else:
             lam_over_diam = self.wavelength / self.primary_diam_meters
             lam_over_diam *= 206265. # arcsec
@@ -428,8 +445,11 @@ class GalSimGalaxyModel(object):
 
     def get_psf_image(self, ngrid=None):
         psf = self.get_psf()
-        if self.psf_model == 'InterpolatedImage':
+        if self.psf_model_type == 'InterpolatedImage':
             return psf
+        elif self.psf_model_type == 'PSFModel class':
+            return self.psf_model.get_psf_image(ngrid=ngrid,
+                pixel_scale_arcsec=self.pixel_scale)
         else:
             if ngrid is None:
                 ngrid = 16
