@@ -14,17 +14,28 @@ import warnings
 import galsim
 
 
-k_galsim_psf_types = [('fwhm', '<f8'), ('e', '<f8'), ('beta', '<f8')]
-k_galsim_psf_defaults = [(0.8, 0.0, 0.0)]
+k_galsim_psf_types = [('psf_fwhm', '<f8'), ('psf_e', '<f8'), ('psf_beta', '<f8')]
+k_galsim_psf_defaults = [(0.6, 0.01, 0.4)]
 
 
 class PSFModel(object):
     """
     Parametric PSF models for marginalization in galaxy model fitting.
+
+    NOTE: Only models atmospheric + optics PSFs so far.
+    An option to only model optics will be a future feature.
+
+    @param active_parameters    List of model parameters for sampling
+    @param gsparams             GalSim parameters object for rendering images
+    @param lam_over_diam        Wavelength over the primary diameter in arcseconds
+    @param obscuration          Fractional obscuration of the telescope entrance pupil
     """
-    def __init__(self, active_parameters=['fwhm'], gsparams=None):
+    def __init__(self, active_parameters=['psf_fwhm'], gsparams=None,
+                 lam_over_diam=0.012, obscuration=0.548):
         self.active_parameters = active_parameters
         self.gsparams = gsparams
+        self.lam_over_diam = lam_over_diam
+        self.obscuration = obscuration
 
         self.params = np.core.records.array(k_galsim_psf_defaults,
             dtype=k_galsim_psf_types)
@@ -50,21 +61,24 @@ class PSFModel(object):
         """
         valid_params = True
         ### Width must be positive
-        if self.params[0].fwhm <=0.:
+        if self.params[0].psf_fwhm <=0.:
             valid_params *= False
         ### Ellipticity must be on [0, 1]
-        if self.params[0].e < 0. or self.params[0].e > 0.9:
+        if self.params[0].psf_e < 0. or self.params[0].psf_e > 0.9:
             valid_params *= False
         ### Position angle (in radians) must be on [0, pi]
-        if self.params[0].beta < 0.0 or self.params[0].beta > np.pi:
+        if self.params[0].psf_beta < 0.0 or self.params[0].psf_beta > np.pi:
             valid_params *= False
         return valid_params
 
     def get_psf(self):
-        psf = galsim.Kolmogorov(fwhm=self.params[0]['fwhm'],
+        optics = galsim.Airy(self.lam_over_diam, obscuration=self.obscuration,
+            flux=1., gsparams=self.gsparams)
+        atmos = galsim.Kolmogorov(fwhm=self.params[0]['psf_fwhm'],
             gsparams=self.gsparams)
-        psf_shape = galsim.Shear(g=self.params[0].e,
-            beta=self.params[0].beta*galsim.radians)
+        psf = galsim.Convolve([atmos, optics])
+        psf_shape = galsim.Shear(g=self.params[0].psf_e,
+            beta=self.params[0].psf_beta*galsim.radians)
         psf = psf.shear(psf_shape)
         return psf
 

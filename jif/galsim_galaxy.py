@@ -12,7 +12,7 @@ from operator import add
 import warnings
 import galsim
 import segments
-import psf_model
+import psf_model as pm
 
 
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
@@ -86,6 +86,27 @@ k_galparams_defaults = {
 }
 
 
+def select_psf_paramnames(model_paramnames):
+    """
+    Given a list of galaxy and PSF model parameter names, select just the PSF
+    model parameter names.
+
+    Assumes PSF parameters contain the string 'psf'.
+    """
+    return [p for p in model_paramnames if 'psf' in p]
+
+
+def select_galaxy_paramnames(model_paramnames):
+    """
+    Given a list of galaxy and PSF model parameter names, select just the galaxy
+    model parameter names.
+
+    Assumes PSF parameters contain the string 'psf', while galaxy parameter
+    names do not.
+    """
+    return [p for p in model_paramnames if 'psf' not in p]
+
+
 def wrap_ellipticity_phase(phase):
     """
     Map a phase in radians to [0, pi) to model ellipticity orientation.
@@ -125,6 +146,24 @@ class GalSimGalaxyModel(object):
     Parametric galaxy model from GalSim for MCMC.
 
     Mimics GalSim examples/demo1.py
+
+    @param telescope_name       Name of the telescope to model. Used to identify
+                                filter curves. [Default: "LSST"]
+    @param pixel_scale_arcsec   Pixel scale for image models [Default: 0.11]
+    @param noise                GalSim noise model. [Default: None]
+    @param galaxy_model         Name of the parametric galaxy model
+                                [Default: "Spergel"]
+    @param active_parameters    List of the parameter names for sampling
+    @param wavelength_meters    Wavelength in meters [Default: 1e-6]
+    @param primary_diam_meters  Diameter of the telescope primary [Default: 2.4]
+    @param filters              List of filters
+    @param filter_names         List of filter names to be used instead of the 'filters' parameter
+    @param filter_wavelength_scale Multiplicative scaling to apply to input filter wavelenghts
+    @param atmosphere           Simulate an (infinite exposure) atmosphere PSF? [Default: False]
+    @param psf_model            Specification for the PSF model. Can be:
+                                    1. a GalSim InterpolatedImage instance
+                                    2. a PSFModel instance
+                                    3. a name of a parametric model
     """
     def __init__(self,
                  telescope_name="LSST",
@@ -146,6 +185,8 @@ class GalSimGalaxyModel(object):
         self.noise = noise
         self.galaxy_model = galaxy_model
         self.active_parameters = active_parameters
+        self.active_parameters_galaxy = select_galaxy_paramnames(active_parameters)
+        self.active_parameters_psf = select_psf_paramnames(active_parameters)
         self.wavelength = wavelength_meters
         self.primary_diam_meters = primary_diam_meters
         self.filters = filters
@@ -168,7 +209,7 @@ class GalSimGalaxyModel(object):
         if isinstance(self.psf_model, np.ndarray):
             self.psf_model_type = 'InterpolatedImage'
             self.psf_model = galsim.InterpolatedImage(self.psf_model)
-        elif isinstance(self.psf_model, psf_model.PSFModel):
+        elif isinstance(self.psf_model, pm.PSFModel):
             self.psf_model_type = 'PSFModel class'
         else:
             self.psf_model_type = 'Parametric'
@@ -241,21 +282,22 @@ class GalSimGalaxyModel(object):
 
         For use in emcee.
         """
-        for ip, pname in enumerate(self.active_parameters):
+        for ip, pname in enumerate(self.active_parameters_galaxy):
             if 'flux_sed' in pname:
                 ### Transform flux variables with exp -- we sample in ln(Flux)
                 self.params[pname][0] = np.exp(p[ip])
             else:
                 self.params[pname][0] = p[ip]
         if self.psf_model_type == "PSFModel class":
-            self.psf_model.set_params(p[len(self.active_parameters):])
+            ### Assumes the PSF parameters are appended to the galaxy parameters
+            self.psf_model.set_params(p[len(self.active_parameters_galaxy):])
         return None
 
     def get_params(self):
         """
         Return a list of active model parameter values.
         """
-        p = self.params[self.active_parameters].view('<f8').copy()
+        p = self.params[self.active_parameters_galaxy].view('<f8').copy()
         if self.psf_model_type == "PSFModel class":
             p = np.append(p, self.psf_model.get_params())
         ### Transform fluxes to ln(Flux) for MCMC sampling
@@ -323,7 +365,7 @@ class GalSimGalaxyModel(object):
             psf = self.psf_model.get_psf()
         else:
             lam_over_diam = self.wavelength / self.primary_diam_meters
-            lam_over_diam *= 206265. # arcsec
+            lam_over_diam *= 206264.8 # arcsec
             optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1.,
                 gsparams=self.gsparams)
             if self.atmosphere:

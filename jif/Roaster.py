@@ -17,6 +17,7 @@ import numpy as np
 import h5py
 import emcee
 import galsim_galaxy
+import psf_model
 import galsim
 
 import logging
@@ -70,7 +71,8 @@ class Roaster(object):
     @param debug              Save debugging outputs (including model images
                               per step?)
     @param model_paramnames   Names of the galaxy model parameters to sample in.
-                              These must match names in a galsim_galaxy model.
+                              These must match names in a galsim_galaxy model
+                              and/or a psf_model.
     """
     def __init__(self, lnprior_omega=None,
                  data_format='test_galsim_galaxy',
@@ -87,6 +89,15 @@ class Roaster(object):
         self.telescope = telescope
         self.debug = debug
         self.model_paramnames = model_paramnames
+        ### Check if any of the active parameters are for a PSF model.
+        ### If so, we will sample in the PSF and need to setup accordingly
+        ### when the Load() function is called.
+        self.sample_psf = False
+        self.psf_model_paramnames = []
+        if np.any(['psf' in p for p in model_paramnames]):
+            self.sample_psf = True
+            self.psf_model_paramnames = galsim_galaxy.select_psf_paramnames(
+                model_paramnames)
 
         ### Count the number of calls to self.lnlike
         self.istep = 0
@@ -157,7 +168,7 @@ class Roaster(object):
             self.filters = {}
             self.filter_names = []
             for itel, tel in enumerate(telescopes):
-                g = 'segments/seg{:d}/{}'.format(segment, tel)
+                g = 'segments/seg{:d}/{}'.format(segment, tel.lower())
                 filter_names = f[g].keys()
                 for ifilt, filter_name in enumerate(filter_names):
                     fg = 'telescopes/{}/filters/{}'.format(tel, filter_name)
@@ -167,7 +178,7 @@ class Roaster(object):
                     bp = galsim.Bandpass(galsim.LookupTable(x=waves_nm, f=throughput))
                     self.filters[filter_name] = bp
 
-                    h = 'segments/seg{:d}/{}/{}'.format(segment, tel, filter_name)
+                    h = 'segments/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
                     nepochs = len(f[h])
                     if self.debug:
                         print("Number of epochs for {}: {:d}".format(tel, nepochs))
@@ -181,8 +192,14 @@ class Roaster(object):
                         pixel_data.append(np.array(dat))
                         pix_noise_var.append(seg.attrs['variance'])
                         ###
-                        psf_types.append(seg.attrs['psf_type'])
-                        psfs.append(seg['psf'])
+                        if self.sample_psf:
+                            psf_types.append('PSFModel class')
+                            psfs.append(psf_model.PSFModel(
+                                active_parameters=self.psf_model_paramnames,
+                                gsparams=None))
+                        else:
+                            psf_types.append(seg.attrs['psf_type'])
+                            psfs.append(seg['psf'])
                         ###
                         wavelengths.append(wavelength)
                         ###
@@ -224,7 +241,7 @@ class Roaster(object):
                                 primary_diam_meters=primary_diams[idat],
                                 filters=self.filters,
                                 atmosphere=atmospheres[idat],
-                                psf_image=psfs[idat])
+                                psf_model=psfs[idat])
                             for idat in xrange(nimages)]
                            for isrcs in xrange(self.num_sources)]
         self.n_params = src_models[0][0].n_params
@@ -528,7 +545,7 @@ def main():
                              'jif_segment')")
 
     parser.add_argument("--model_params", type=str, nargs='+',
-                        default=['nu', 'hlr', 'e', 'beta', 'flux_sed1', 'dx', 'dy'],
+                        default=['nu', 'hlr', 'e', 'beta', 'flux_sed1', 'dx', 'dy', 'psf_fwhm'],
                         help="Names of the galaxy model parameters for sampling.")
 
     parser.add_argument("--telescope", type=str, default=None,
