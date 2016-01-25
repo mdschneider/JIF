@@ -356,6 +356,8 @@ class GalSimGalaxyModel(object):
                     valid_params *= False
                 if self.params[0]['flux_sed{:d}_disk'.format(i+1)] <= 0.:
                     valid_params *= False
+        if self.psf_model_type == "PSFModel class":
+            valid_params *= self.psf_model.validate_params()
         return valid_params
 
     def get_psf(self):
