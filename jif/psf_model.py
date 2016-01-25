@@ -95,6 +95,29 @@ class PSFModel(object):
         return None
 
 
+class FlatPriorPSF(object):
+    """
+    A flat prior for the parametric PSF model
+    """
+    def __init__(self):
+        pass
+
+    def __call__(self, Pi):
+        return 0.0
+
+
+class DefaultPriorPSF(object):
+    def __init__(self):
+        self.fwhm_mean = 0.6
+        self.fwhm_var = 0.25
+
+    def _lnprior_fwhm(self, fwhm):
+        return -0.5 * (fwhm - self.fwhm_mean) ** 2 / self.fwhm_var
+
+    def __call__(self, Pi):
+        return self._lnprior_fwhm(Pi[0].psf_fwhm)
+
+
 def make_test_image():
     psfm = PSFModel()
     filename = "../TestData/test_psf_image.fits"

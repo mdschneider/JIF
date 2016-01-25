@@ -17,7 +17,7 @@ import numpy as np
 import h5py
 import emcee
 import galsim_galaxy
-import psf_model
+import psf_model as pm
 import galsim
 
 import logging
@@ -61,6 +61,7 @@ class Roaster(object):
     instrument.
 
     @param lnprior_omega      Prior class for the galaxy model parameters
+    @param lnprior_Pi         Prior class for the PSF model parameters
     @param data_format        Format for the input data file.
     @param galaxy_model_type  Type of parametric galaxy model - see
                               galsim_galaxy types.
@@ -75,6 +76,7 @@ class Roaster(object):
                               and/or a psf_model.
     """
     def __init__(self, lnprior_omega=None,
+                 lnprior_Pi=None,
                  data_format='test_galsim_galaxy',
                  galaxy_model_type='BulgeDisk',
                  telescope=None,
@@ -84,6 +86,10 @@ class Roaster(object):
             self.lnprior_omega = EmptyPrior()
         else:
             self.lnprior_omega = lnprior_omega
+        if lnprior_Pi is None:
+            self.lnprior_Pi = pm.FlatPriorPSF()
+        else:
+            self.lnprior_Pi = lnprior_Pi
         self.data_format = data_format
         self.galaxy_model_type = galaxy_model_type
         self.telescope = telescope
@@ -194,7 +200,7 @@ class Roaster(object):
                         ###
                         if self.sample_psf:
                             psf_types.append('PSFModel class')
-                            psfs.append(psf_model.PSFModel(
+                            psfs.append(pm.PSFModel(
                                 active_parameters=self.psf_model_paramnames,
                                 gsparams=None))
                         else:
@@ -304,6 +310,9 @@ class Roaster(object):
                 ### Pass active + inactive parameters, with names included
                 p = copy.deepcopy(src_models[isrcs][0].params)
                 lnp += self.lnprior_omega(p)
+                if self.sample_psf:
+                    ppsf = copy.deepcopy(src_models[isrcs][0].psf_model.params)
+                    lnp += self.lnprior_Pi(ppsf)
         else:
             lnp = -np.inf
         return lnp
@@ -580,7 +589,7 @@ def main():
     if args.segment_numbers is None:
         args.segment_numbers = [0 for f in args.infiles]
 
-    ### Set priors
+    ### Set galaxy priors
     if args.galaxy_model_type == "Spergel":
         lnprior_omega = DefaultPriorSpergel()
     elif args.galaxy_model_type == "BulgeDisk":
@@ -588,8 +597,12 @@ def main():
     else:
         lnprior_omega = EmptyPrior()
 
+    ### Set PSF priors
+    lnprior_Pi = pm.DefaultPriorPSF()
+
     roaster = Roaster(debug=args.debug, data_format=args.data_format,
                       lnprior_omega=lnprior_omega,
+                      lnprior_Pi=lnprior_Pi,
                       galaxy_model_type=args.galaxy_model_type,
                       model_paramnames=args.model_params,
                       telescope=args.telescope)

@@ -75,7 +75,7 @@ k_galparams_types = {
 k_galparams_defaults = {
     "Sersic": [(1., 3.4, 1.0, 0.1, np.pi/4, 5.e1, k_flux_param_minval,
         k_flux_param_minval, k_flux_param_minval, 0., 0.)],
-    "Spergel": [(1., 0.3, 1.0, 0.1, np.pi/4, 5.e1, k_flux_param_minval,
+    "Spergel": [(1., 0.3, 1.0, 0.1, np.pi/4, 5.e1, 1.e4,
         k_flux_param_minval, k_flux_param_minval, 0., 0.)],
     "BulgeDisk": [(1.,
         0.5, 0.6, 0.05, 0.0,
@@ -371,7 +371,7 @@ class GalSimGalaxyModel(object):
             optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1.,
                 gsparams=self.gsparams)
             if self.atmosphere:
-                atmos = galsim.Kolmogorov(fwhm=0.8, gsparams=self.gsparams)
+                atmos = galsim.Kolmogorov(fwhm=0.6, gsparams=self.gsparams)
                 psf = galsim.Convolve([atmos, optics])
             else:
                 psf = optics
@@ -613,7 +613,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
         filter_names=k_lsst_filter_names,
         filter_wavelength_scale=1.0,
         atmosphere=True)
-    lsst.params[0].flux_sed1 = 1.e4
+    # lsst.params[0].flux_sed1 = 1.e4
 
     # Save the image
     lsst.save_image("../TestData/test_lsst_image" + file_lab + ".fits",
