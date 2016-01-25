@@ -7,7 +7,7 @@ import copy
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
-import triangle
+import corner
 
 import galsim
 import Roaster
@@ -84,12 +84,15 @@ class RoasterInspector(object):
         n = len(self.paramnames)
 
         # Triangle plot
-        fig = triangle.corner(np.vstack(self.data[-self.args.keeplast:,:, 0:n]),
+        # try:
+        fig = corner.corner(np.vstack(self.data[-self.args.keeplast:,:, 0:n]),
                               labels=self.paramnames, truths=self.args.truths)
         outfile = (self._outfile_head() +
             "_roaster_inspector_triangle.png")
         print "Saving {}".format(outfile)
         fig.savefig(outfile)
+        # except ValueError:
+        #     pass
 
         # Walkers plot
 

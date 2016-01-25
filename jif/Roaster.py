@@ -17,6 +17,7 @@ import numpy as np
 import h5py
 import emcee
 import galsim_galaxy
+import psf_model as pm
 import galsim
 
 import logging
@@ -60,6 +61,7 @@ class Roaster(object):
     instrument.
 
     @param lnprior_omega      Prior class for the galaxy model parameters
+    @param lnprior_Pi         Prior class for the PSF model parameters
     @param data_format        Format for the input data file.
     @param galaxy_model_type  Type of parametric galaxy model - see
                               galsim_galaxy types.
@@ -70,9 +72,11 @@ class Roaster(object):
     @param debug              Save debugging outputs (including model images
                               per step?)
     @param model_paramnames   Names of the galaxy model parameters to sample in.
-                              These must match names in a galsim_galaxy model.
+                              These must match names in a galsim_galaxy model
+                              and/or a psf_model.
     """
     def __init__(self, lnprior_omega=None,
+                 lnprior_Pi=None,
                  data_format='test_galsim_galaxy',
                  galaxy_model_type='BulgeDisk',
                  telescope=None,
@@ -82,11 +86,24 @@ class Roaster(object):
             self.lnprior_omega = EmptyPrior()
         else:
             self.lnprior_omega = lnprior_omega
+        if lnprior_Pi is None:
+            self.lnprior_Pi = pm.FlatPriorPSF()
+        else:
+            self.lnprior_Pi = lnprior_Pi
         self.data_format = data_format
         self.galaxy_model_type = galaxy_model_type
         self.telescope = telescope
         self.debug = debug
         self.model_paramnames = model_paramnames
+        ### Check if any of the active parameters are for a PSF model.
+        ### If so, we will sample in the PSF and need to setup accordingly
+        ### when the Load() function is called.
+        self.sample_psf = False
+        self.psf_model_paramnames = []
+        if np.any(['psf' in p for p in model_paramnames]):
+            self.sample_psf = True
+            self.psf_model_paramnames = galsim_galaxy.select_psf_paramnames(
+                model_paramnames)
 
         ### Count the number of calls to self.lnlike
         self.istep = 0
@@ -157,7 +174,7 @@ class Roaster(object):
             self.filters = {}
             self.filter_names = []
             for itel, tel in enumerate(telescopes):
-                g = 'segments/seg{:d}/{}'.format(segment, tel)
+                g = 'segments/seg{:d}/{}'.format(segment, tel.lower())
                 filter_names = f[g].keys()
                 for ifilt, filter_name in enumerate(filter_names):
                     fg = 'telescopes/{}/filters/{}'.format(tel, filter_name)
@@ -167,7 +184,7 @@ class Roaster(object):
                     bp = galsim.Bandpass(galsim.LookupTable(x=waves_nm, f=throughput))
                     self.filters[filter_name] = bp
 
-                    h = 'segments/seg{:d}/{}/{}'.format(segment, tel, filter_name)
+                    h = 'segments/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
                     nepochs = len(f[h])
                     if self.debug:
                         print("Number of epochs for {}: {:d}".format(tel, nepochs))
@@ -181,8 +198,14 @@ class Roaster(object):
                         pixel_data.append(np.array(dat))
                         pix_noise_var.append(seg.attrs['variance'])
                         ###
-                        psf_types.append(seg.attrs['psf_type'])
-                        psfs.append(seg['psf'])
+                        if self.sample_psf:
+                            psf_types.append('PSFModel class')
+                            psfs.append(pm.PSFModel(
+                                active_parameters=self.psf_model_paramnames,
+                                gsparams=None))
+                        else:
+                            psf_types.append(seg.attrs['psf_type'])
+                            psfs.append(seg['psf'])
                         ###
                         wavelengths.append(wavelength)
                         ###
@@ -224,7 +247,7 @@ class Roaster(object):
                                 primary_diam_meters=primary_diams[idat],
                                 filters=self.filters,
                                 atmosphere=atmospheres[idat],
-                                psf_image=psfs[idat])
+                                psf_model=psfs[idat])
                             for idat in xrange(nimages)]
                            for isrcs in xrange(self.num_sources)]
         self.n_params = src_models[0][0].n_params
@@ -287,6 +310,9 @@ class Roaster(object):
                 ### Pass active + inactive parameters, with names included
                 p = copy.deepcopy(src_models[isrcs][0].params)
                 lnp += self.lnprior_omega(p)
+                if self.sample_psf:
+                    ppsf = copy.deepcopy(src_models[isrcs][0].psf_model.params)
+                    lnp += self.lnprior_Pi(ppsf)
         else:
             lnp = -np.inf
         return lnp
@@ -528,7 +554,7 @@ def main():
                              'jif_segment')")
 
     parser.add_argument("--model_params", type=str, nargs='+',
-                        default=['nu', 'hlr', 'e', 'beta', 'flux_sed1', 'dx', 'dy'],
+                        default=['nu', 'hlr', 'e', 'beta', 'flux_sed1', 'dx', 'dy', 'psf_fwhm'],
                         help="Names of the galaxy model parameters for sampling.")
 
     parser.add_argument("--telescope", type=str, default=None,
@@ -563,7 +589,7 @@ def main():
     if args.segment_numbers is None:
         args.segment_numbers = [0 for f in args.infiles]
 
-    ### Set priors
+    ### Set galaxy priors
     if args.galaxy_model_type == "Spergel":
         lnprior_omega = DefaultPriorSpergel()
     elif args.galaxy_model_type == "BulgeDisk":
@@ -571,8 +597,12 @@ def main():
     else:
         lnprior_omega = EmptyPrior()
 
+    ### Set PSF priors
+    lnprior_Pi = pm.DefaultPriorPSF()
+
     roaster = Roaster(debug=args.debug, data_format=args.data_format,
                       lnprior_omega=lnprior_omega,
+                      lnprior_Pi=lnprior_Pi,
                       galaxy_model_type=args.galaxy_model_type,
                       model_paramnames=args.model_params,
                       telescope=args.telescope)

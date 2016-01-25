@@ -12,6 +12,7 @@ from operator import add
 import warnings
 import galsim
 import segments
+import psf_model as pm
 
 
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
@@ -74,7 +75,7 @@ k_galparams_types = {
 k_galparams_defaults = {
     "Sersic": [(1., 3.4, 1.0, 0.1, np.pi/4, 5.e1, k_flux_param_minval,
         k_flux_param_minval, k_flux_param_minval, 0., 0.)],
-    "Spergel": [(1., 0.3, 1.0, 0.1, np.pi/4, 5.e1, k_flux_param_minval,
+    "Spergel": [(1., 0.3, 1.0, 0.1, np.pi/4, 5.e1, 1.e4,
         k_flux_param_minval, k_flux_param_minval, 0., 0.)],
     "BulgeDisk": [(1.,
         0.5, 0.6, 0.05, 0.0,
@@ -83,6 +84,27 @@ k_galparams_defaults = {
         k_flux_param_minval, 1.e4, k_flux_param_minval, k_flux_param_minval,
         0., 0., 0., 0.)]
 }
+
+
+def select_psf_paramnames(model_paramnames):
+    """
+    Given a list of galaxy and PSF model parameter names, select just the PSF
+    model parameter names.
+
+    Assumes PSF parameters contain the string 'psf'.
+    """
+    return [p for p in model_paramnames if 'psf' in p]
+
+
+def select_galaxy_paramnames(model_paramnames):
+    """
+    Given a list of galaxy and PSF model parameter names, select just the galaxy
+    model parameter names.
+
+    Assumes PSF parameters contain the string 'psf', while galaxy parameter
+    names do not.
+    """
+    return [p for p in model_paramnames if 'psf' not in p]
 
 
 def wrap_ellipticity_phase(phase):
@@ -124,6 +146,24 @@ class GalSimGalaxyModel(object):
     Parametric galaxy model from GalSim for MCMC.
 
     Mimics GalSim examples/demo1.py
+
+    @param telescope_name       Name of the telescope to model. Used to identify
+                                filter curves. [Default: "LSST"]
+    @param pixel_scale_arcsec   Pixel scale for image models [Default: 0.11]
+    @param noise                GalSim noise model. [Default: None]
+    @param galaxy_model         Name of the parametric galaxy model
+                                [Default: "Spergel"]
+    @param active_parameters    List of the parameter names for sampling
+    @param wavelength_meters    Wavelength in meters [Default: 1e-6]
+    @param primary_diam_meters  Diameter of the telescope primary [Default: 2.4]
+    @param filters              List of filters
+    @param filter_names         List of filter names to be used instead of the 'filters' parameter
+    @param filter_wavelength_scale Multiplicative scaling to apply to input filter wavelenghts
+    @param atmosphere           Simulate an (infinite exposure) atmosphere PSF? [Default: False]
+    @param psf_model            Specification for the PSF model. Can be:
+                                    1. a GalSim InterpolatedImage instance
+                                    2. a PSFModel instance
+                                    3. a name of a parametric model
     """
     def __init__(self,
                  telescope_name="LSST",
@@ -137,7 +177,7 @@ class GalSimGalaxyModel(object):
                  filter_names=None,
                  filter_wavelength_scale=1.0,
                  atmosphere=False,
-                 psf_image=None):
+                 psf_model=None):
         self.telescope_name = telescope_name
         self.pixel_scale = pixel_scale_arcsec
         # if noise is None:
@@ -145,12 +185,14 @@ class GalSimGalaxyModel(object):
         self.noise = noise
         self.galaxy_model = galaxy_model
         self.active_parameters = active_parameters
+        self.active_parameters_galaxy = select_galaxy_paramnames(active_parameters)
+        self.active_parameters_psf = select_psf_paramnames(active_parameters)
         self.wavelength = wavelength_meters
         self.primary_diam_meters = primary_diam_meters
         self.filters = filters
         self.filter_names = filter_names
         self.atmosphere = atmosphere
-        self.psf_image = psf_image
+        self.psf_model = psf_model
 
         self.achromatic_galaxy = False ### TODO: Finish implementation of achromatic_galaxy feature
 
@@ -164,11 +206,13 @@ class GalSimGalaxyModel(object):
         self.n_params = len(self.active_parameters)
 
         ### Setup the PSF model
-        if isinstance(self.psf_image, np.ndarray):
-            self.psf_model = 'InterpolatedImage'
-            self.psf_image = galsim.InterpolatedImage(self.psf_image)
+        if isinstance(self.psf_model, np.ndarray):
+            self.psf_model_type = 'InterpolatedImage'
+            self.psf_model = galsim.InterpolatedImage(self.psf_model)
+        elif isinstance(self.psf_model, pm.PSFModel):
+            self.psf_model_type = 'PSFModel class'
         else:
-            self.psf_model = 'Parametric'
+            self.psf_model_type = 'Parametric'
 
         ### Set GalSim SED model parameters
         self._load_sed_files()
@@ -230,21 +274,34 @@ class GalSimGalaxyModel(object):
         """
         Take a list of (active) parameters and set local variables.
 
+        We assume p is a list or flat numpy array with values listed in the
+        same order as the parameter names in self.active_parameters (which
+        is supplied on instantiation of a GalSimGalaxyModel object).
+
+        If the PSF model for this instance is a PSFModel object, then the
+        active parameters of the PSFModel should be appended to the list input
+        here.
+
         For use in emcee.
         """
-        for ip, pname in enumerate(self.active_parameters):
+        for ip, pname in enumerate(self.active_parameters_galaxy):
             if 'flux_sed' in pname:
                 ### Transform flux variables with exp -- we sample in ln(Flux)
                 self.params[pname][0] = np.exp(p[ip])
             else:
                 self.params[pname][0] = p[ip]
+        if self.psf_model_type == "PSFModel class":
+            ### Assumes the PSF parameters are appended to the galaxy parameters
+            self.psf_model.set_params(p[len(self.active_parameters_galaxy):])
         return None
 
     def get_params(self):
         """
         Return a list of active model parameter values.
         """
-        p = self.params[self.active_parameters].view('<f8').copy()
+        p = self.params[self.active_parameters_galaxy].view('<f8').copy()
+        if self.psf_model_type == "PSFModel class":
+            p = np.append(p, self.psf_model.get_params())
         ### Transform fluxes to ln(Flux) for MCMC sampling
         for ip, pname in enumerate(self.active_parameters):
             if 'beta' in pname:
@@ -301,18 +358,22 @@ class GalSimGalaxyModel(object):
                     valid_params *= False
                 if self.params[0]['flux_sed{:d}_disk'.format(i+1)] <= 0.:
                     valid_params *= False
+        if self.psf_model_type == "PSFModel class":
+            valid_params *= self.psf_model.validate_params()
         return valid_params
 
     def get_psf(self):
-        if self.psf_model == 'InterpolatedImage':
-            psf = self.psf_image
+        if self.psf_model_type == 'InterpolatedImage':
+            psf = self.psf_model
+        elif self.psf_model_type == 'PSFModel class':
+            psf = self.psf_model.get_psf()
         else:
             lam_over_diam = self.wavelength / self.primary_diam_meters
-            lam_over_diam *= 206265. # arcsec
+            lam_over_diam *= 206264.8 # arcsec
             optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1.,
                 gsparams=self.gsparams)
             if self.atmosphere:
-                atmos = galsim.Kolmogorov(fwhm=0.8, gsparams=self.gsparams)
+                atmos = galsim.Kolmogorov(fwhm=0.6, gsparams=self.gsparams)
                 psf = galsim.Convolve([atmos, optics])
             else:
                 psf = optics
@@ -430,8 +491,11 @@ class GalSimGalaxyModel(object):
 
     def get_psf_image(self, ngrid=None):
         psf = self.get_psf()
-        if self.psf_model == 'InterpolatedImage':
+        if self.psf_model_type == 'InterpolatedImage':
             return psf
+        elif self.psf_model_type == 'PSFModel class':
+            return self.psf_model.get_psf_image(ngrid=ngrid,
+                pixel_scale_arcsec=self.pixel_scale)
         else:
             if ngrid is None:
                 ngrid = 16
@@ -551,7 +615,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
         filter_names=k_lsst_filter_names,
         filter_wavelength_scale=1.0,
         atmosphere=True)
-    lsst.params[0].flux_sed1 = 1.e4
+    # lsst.params[0].flux_sed1 = 1.e4
 
     # Save the image
     lsst.save_image("../TestData/test_lsst_image" + file_lab + ".fits",
