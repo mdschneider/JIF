@@ -327,7 +327,9 @@ class GalSimGalaxyModel(object):
         """
         p = self.params[self.active_parameters_galaxy].view('<f8').copy()
         if self.psf_model_type == "PSFModel class":
-            p = np.append(p, self.psf_model.get_params())
+            psf_active_params = self.psf_model.get_params()
+            if len(psf_active_params) > 0:
+                p = np.append(p, self.psf_model.get_params())
         ### Transform fluxes to ln(Flux) for MCMC sampling
         for ip, pname in enumerate(self.active_parameters):
             if 'beta' in pname:

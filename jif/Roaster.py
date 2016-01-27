@@ -117,7 +117,7 @@ class Roaster(object):
             branch = branches[self.epoch]
         return branch
 
-    def Load(self, infile, segment=None):
+    def Load(self, infile, segment=None, use_PSFModel=False):
         """
         Load image cutouts from file for the given segment, where segment is
         an integer reference.
@@ -141,6 +141,8 @@ class Roaster(object):
         @param infiles  List of input filenames to load.
         @param segment  Index of the segment to load. Choose segment 0 if not
         supplied.
+        @param use_PSFModel Force the use of a PSFModel class instance to model
+        PSFs even if not sampling any PSF model parameters
         """
         global pixel_data
         global pix_noise_var
@@ -203,6 +205,11 @@ class Roaster(object):
                             psfs.append(pm.PSFModel(
                                 active_parameters=self.psf_model_paramnames,
                                 gsparams=None))
+                        elif use_PSFModel:
+                            psf_types.append('PSFModel class')
+                            psfs.append(pm.PSFModel(
+                                active_parameters=[],
+                                gsparams=None))
                         else:
                             psf_types.append(seg.attrs['psf_type'])
                             psfs.append(seg['psf'])
@@ -238,6 +245,8 @@ class Roaster(object):
                 print "primary_diam:", primary_diams[i]
                 print "atmosphere:", atmospheres[i]
 
+        logging.debug("<Roaster> num_epochs: {:d}, num_sources: {:d}".format(
+            self.num_epochs, self.num_sources))
         src_models = [[galsim_galaxy.GalSimGalaxyModel(
                                 telescope_name=tel_names[idat],
                                 galaxy_model=self.galaxy_model_type,
