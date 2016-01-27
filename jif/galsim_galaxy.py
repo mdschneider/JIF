@@ -270,6 +270,32 @@ class GalSimGalaxyModel(object):
         self.wavelength = wavelength
         return None
 
+    def set_param_by_name(self, paramname, value):
+        """
+        Set a single parameter value using the parameter name as a key.
+
+        Can set 'active' or 'inactive' parameters. So, this routine gives a
+        way to set fixed or fiducial values of model parameters that are not
+        used in the MCMC sampling in Roaster.
+        """
+        if 'psf' in paramname and self.psf_model_type == "PSFModel class":
+            self.psf_model.params[paramname][0] = value
+        else:
+            self.params[paramname][0] = value
+        return None
+
+    def get_param_by_name(self, paramname):
+        """
+        Get a single parameter value using the parameter name as a key.
+
+        Can access 'active' or 'inactive' parameters.
+        """
+        if 'psf' in paramname and self.psf_model_type == "PSFModel class":
+            p = self.psf_model.params[paramname][0]
+        else:
+            p = self.params[paramname][0]
+        return p
+
     def set_params(self, p):
         """
         Take a list of (active) parameters and set local variables.

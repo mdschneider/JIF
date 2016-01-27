@@ -47,6 +47,25 @@ class PSFModel(object):
         p = self.params[self.active_parameters].view('<f8').copy()
         return p
 
+    def set_param_by_name(self, paramname, value):
+        """
+        Set a single parameter value using the parameter name as a key.
+
+        Can set 'active' or 'inactive' parameters. So, this routine gives a
+        way to set fixed or fiducial values of model parameters that are not
+        used in the MCMC sampling in Roaster.
+        """
+        self.params[paramname][0] = value        
+        return None
+
+    def get_param_by_name(self, paramname):
+        """
+        Get a single parameter value using the parameter name as a key.
+
+        Can access 'active' or 'inactive' parameters.
+        """
+        return self.params[paramname][0]
+
     def set_params(self, p):
         """
         Take a list of (active) parameters and set local variables.
