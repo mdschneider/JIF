@@ -13,9 +13,9 @@ endif
 
 set outdir=../output/roasting
 
-# python galsim_galaxy.py
+python galsim_galaxy.py
 python Roaster.py ../TestData/test_image_data.h5 --nsamples $1 --telescope LSST --model_params nu hlr e beta flux_sed1 dx dy psf_fwhm psf_e psf_beta --quiet --nwalkers 32
-python RoasterInspector.py $outdir/roaster_out_LSST.h5 --truths 0.3 1.0 0.1 0.785 1.e4 0.0 0.0 0.6 0.01 0.4
+python RoasterInspector.py $outdir/roaster_out_LSST.h5 --truths 0.3 1.0 0.1 0.785 1.e4 0.0 0.0 0.6 0.01 0.4 --keeplast 1000
 open $outdir/roaster_out_LSST_data_and_model_epoch0.png $outdir/roaster_out_LSST_roaster_inspector_triangle.png $outdir/roaster_out_LSST_roaster_inspector_walkers.png
 
 ## labels for proper exit or error
