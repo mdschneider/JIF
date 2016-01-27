@@ -117,7 +117,7 @@ class Roaster(object):
             branch = branches[self.epoch]
         return branch
 
-    def Load(self, infile, segment=None):
+    def Load(self, infile, segment=None, use_PSFModel=False):
         """
         Load image cutouts from file for the given segment, where segment is
         an integer reference.
@@ -141,6 +141,8 @@ class Roaster(object):
         @param infiles  List of input filenames to load.
         @param segment  Index of the segment to load. Choose segment 0 if not
         supplied.
+        @param use_PSFModel Force the use of a PSFModel class instance to model
+        PSFs even if not sampling any PSF model parameters
         """
         global pixel_data
         global pix_noise_var
@@ -203,6 +205,11 @@ class Roaster(object):
                             psfs.append(pm.PSFModel(
                                 active_parameters=self.psf_model_paramnames,
                                 gsparams=None))
+                        elif use_PSFModel:
+                            psf_types.append('PSFModel class')
+                            psfs.append(pm.PSFModel(
+                                active_parameters=[],
+                                gsparams=None))
                         else:
                             psf_types.append(seg.attrs['psf_type'])
                             psfs.append(seg['psf'])
@@ -238,6 +245,8 @@ class Roaster(object):
                 print "primary_diam:", primary_diams[i]
                 print "atmosphere:", atmospheres[i]
 
+        logging.debug("<Roaster> num_epochs: {:d}, num_sources: {:d}".format(
+            self.num_epochs, self.num_sources))
         src_models = [[galsim_galaxy.GalSimGalaxyModel(
                                 telescope_name=tel_names[idat],
                                 galaxy_model=self.galaxy_model_type,
@@ -264,19 +273,23 @@ class Roaster(object):
 
     def get_params(self):
         """
-        Make a flat array of model parameters for all sources
+        Make a flat array of active model parameters for all sources
+
+        For use in MCMC sampling.
         """
         p = np.array([m[0].get_params() for m in src_models]).ravel()
         return p
 
     def set_params(self, p):
         """
-        Set the galaxy model parameters for all galaxies in a segment from a
-        flattened array `p`.
+        Set the active galaxy model parameters for all galaxies in a segment
+        from a flattened array `p`.
 
         `p` is assumed to be packed as [(p1_gal1, ..., pn_gal1), ...,
         (p1_gal_m, ..., pn_gal_m)]
         for n parameters per galaxy and m galaxies in the segment.
+
+        For use in MCMC sampling.
         """
         valid_params = True
         for isrcs in xrange(self.num_sources):
@@ -296,6 +309,28 @@ class Roaster(object):
                 src_models[isrcs][iepochs].set_params(p_set)
                 valid_params *= src_models[isrcs][iepochs].validate_params()
         return valid_params
+
+    def set_param_by_name(self, paramname, value):
+        """
+        Set a galaxy or PSF model parameter by name.
+
+        Can pass a single value that will be set for all source models, or a
+        list of length num_sources with unique values for each source (but
+        common across all epochs).
+        """
+        if isinstance(value, list):
+            if len(value) == self.num_sources:
+                for isrcs in xrange(self.num_sources):
+                    for idat in xrange(self.num_epochs):
+                        src_models[isrcs][idat].set_param_by_name(paramname, value[isrcs])
+            else:
+                raise ValueError("If passing list, must be of length num_sources")
+        elif isinstance(value, float):
+            for isrcs in xrange(self.num_sources):
+                for idat in xrange(self.num_epochs):
+                    src_models[isrcs][idat].set_param_by_name(paramname, value)
+        else:
+            raise ValueError("Unsupported type for input value")
 
     def lnprior(self, omega):
         valid_params = self.set_params(omega)
