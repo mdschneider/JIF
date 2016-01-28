@@ -11,13 +11,15 @@ import sys
 import os
 import h5py
 import numpy as np
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+from scipy.stats.kde import gaussian_kde
 
 import galsim
 import segments
 import galsim_galaxy as gg
 import psf_model as pm
 import Roaster
+import RoasterInspector
 
 import logging
 
@@ -39,11 +41,17 @@ class RoasterArgs(object):
         self.data_format = "jif_segment"
         self.telescope = "LSST"
         self.seed = 543726
-        self.nsamples = 1000
+        self.nsamples = 2500
         self.nwalkers = 32
         self.nburn = 50
         self.nthreads = 1
         self.quiet = True
+
+class RoasterInspectorArgs(object):
+    def __init__(self, infile=""):
+        self.infile = infile
+        self.truths = None
+        self.keeplast = 2000
 
 
 def create_model_image(filter_name_ground='r', file_lab='',
@@ -108,6 +116,19 @@ def create_model_image(filter_name_ground='r', file_lab='',
     gg.save_bandpasses_to_segment(seg, lsst, gg.k_lsst_filter_names, "LSST")
     return None
 
+
+def get_roaster_outfile(fwhm_bias, bias_sign):
+    if bias_sign > 0.5:
+        sgn_lab = "p"
+    elif bias_sign < -0.5:
+        sgn_lab = "m"
+    else:
+        sgn_lab = "marg"
+    outfile = "../output/psf_bias/roaster_out_fwhm_bias_{}{:4.3f}".format(
+        sgn_lab, fwhm_bias)
+    return outfile
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Run Roaster on simulated data with varying degrees of PSF bias')
@@ -133,7 +154,8 @@ def main():
 
             if np.abs(bias_sign) < 0.9:
                 sampling_parameters = galaxy_parameters + ['psf_fwhm', 'psf_e', 'psf_beta']
-            sampling_parameters = galaxy_parameters
+            else:
+                sampling_parameters = galaxy_parameters
             roaster_args.model_params = sampling_parameters
 
             ### Need to reset module level lists in Roaster for multiple
@@ -156,21 +178,43 @@ def main():
             psf_fwhm = (1. + bias_sign * fwhm_bias) * psf_fwhm_fiducial
             roast.set_param_by_name("psf_fwhm", psf_fwhm)
 
-            if bias_sign > 0.5:
-                sgn_lab = "p"
-            elif bias_sign < -0.5:
-                sgn_lab = "m"
-            else:
-                sgn_lab = "marg"
-            outfile = "../output/psf_bias/roaster_out_fwhm_bias_{}{:4.3f}".format(
-                sgn_lab, fwhm_bias)
-            roaster_args.outfile = outfile
+            roaster_args.outfile = get_roaster_outfile(fwhm_bias, bias_sign)
             logging.debug("Calling Roaster sampling")
             Roaster.do_sampling(roaster_args, roast)
             it += 1
 
 
     ### Make plots of posterior galaxy ellipticity
+    fig = plt.figure(figsize=(8, 16/1.618))
+    e_grid = np.linspace(0., 0.2, 250)
+
+    e_fiducial = 0.1
+
+    args_roaster_inspector = RoasterInspectorArgs()
+    it = 0
+    i = 0
+    colors = ['red', 'blue', 'black']
+    for fwhm_bias in [0.0, 0.01, 0.1, 0.5]:
+        i += 1
+        ax = plt.subplot(4, 1, i)
+        for ib, bias_sign in enumerate([1., -1., 0.]):
+            args_roaster_inspector.infile = get_roaster_outfile(fwhm_bias, bias_sign) + "_LSST.h5"
+            ri = RoasterInspector.RoasterInspector(args_roaster_inspector)
+            ri.summary()
+            ri.report()
+            print ri.data.shape
+
+            e_samples = ri.data[:, :, 2].ravel()
+            kde = gaussian_kde(e_samples)
+            ax.plot(e_grid, kde(e_grid), color=colors[ib])
+            ax.axvline(x=np.median(e_samples), color=colors[ib])
+            it += 1
+        ax.axvline(x=e_fiducial, color='grey', linestyle='dashed', linewidth=4)
+    ax.set_xlabel(r"$|e|$")
+    ax.set_ylabel("Marginal density")
+    # plt.show()
+    plt.tight_layout()
+    plt.savefig("../output/psf_bias/psf_bias_marg_e_dens.pdf", bbox_inches="tight")
 
     return 0
 
