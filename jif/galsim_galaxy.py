@@ -14,6 +14,22 @@ import galsim
 import segments
 import psf_model as pm
 
+### Some telescope model parameters
+k_telescopes = {
+    "LSST": {
+        "effective_diameter": 6.4, # meters
+        "pixel_scale": 0.2,        # arcseconds
+        "exptime": 15,             # seconds
+        "zeropoint": 'AB'
+    },
+    "WFIRST": {
+        "effective_diameter": 2.0, # meters
+        "pixel_scale": 0.11,       # arcseconds
+        "exptime": 60.,            # seconds
+        "zeropoint": 'AB'
+    }
+}
+
 
 k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
 k_lsst_filter_names = 'ugrizy'
@@ -261,8 +277,10 @@ class GalSimGalaxyModel(object):
             dat = np.loadtxt(filter_filename)
             table = galsim.LookupTable(x=dat[:,0]*wavelength_scale, f=dat[:,1])
             bp = galsim.Bandpass(table)
-            self.filters[filter_name] = bp.withZeropoint(zeropoint='AB',
-                effective_diameter=6.4, exptime=15)
+            self.filters[filter_name] = bp.withZeropoint(
+                zeropoint=k_telescopes[self.telescope_name]['zeropoint'],
+                effective_diameter=k_telescopes[self.telescope_name]['effective_diameter'],
+                exptime=k_telescopes[self.telescope_name]['exptime'])
             self.filters[filter_name] = self.filters[filter_name].thin(rel_err=1e-4)
         return None
 
@@ -413,7 +431,7 @@ class GalSimGalaxyModel(object):
 
         This routine passes galsim_galaxy flux parameters to the GalSim SED.withFluxDensity()
         method. The flux parameters therefore have units of photons/nm at a reference wavelength
-        (here defined to be 500 nm) as required by GalSim.
+        (here defined to be 620 nm) as required by GalSim.
         """
         if len(gal_comp) > 0:
             gal_comp = '_' + gal_comp
@@ -422,6 +440,17 @@ class GalSimGalaxyModel(object):
             wavelength=flux_ref_wavelength).atRedshift(self.params[0].redshift)
                 for i, SED_name in enumerate(self.SEDs)]
         return reduce(add, SEDs)
+
+    def get_magnitude(self, filter_name='r'):
+        """
+        Get the magnitude of the galaxy model in the named bandpass
+        """
+        if self.achromatic_galaxy:
+            raise NotImplementedError()
+        else:
+            SED = self.get_SED()
+            mag = SED.calculateMagnitude(self.filters[filter_name])
+        return mag
 
     def get_image(self, out_image=None, add_noise=False,
                   filter_name='r', gain=1., snr=None):
@@ -635,7 +664,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
     print("\n----- LSST -----")
     lsst = GalSimGalaxyModel(
         telescope_name="LSST",
-        pixel_scale_arcsec=0.2,
+        pixel_scale_arcsec=k_telescopes['LSST']['pixel_scale'],
         noise=lsst_noise(82357),
         galaxy_model=galaxy_model,
         wavelength_meters=k_lsst_filter_central_wavelengths[filter_name_ground] * 1.e-9,
@@ -662,7 +691,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
     print("\n----- WFIRST -----")
     wfirst = GalSimGalaxyModel(
         telescope_name="WFIRST",
-        pixel_scale_arcsec=0.11,
+        pixel_scale_arcsec=k_telescopes['WFIRST']['pixel_scale'],
         noise=wfirst_noise(82357),
         galaxy_model=galaxy_model,
         wavelength_meters=k_wfirst_filter_central_wavelengths[filter_name_space] * 1.e-9,
@@ -670,6 +699,9 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
         filter_names=k_wfirst_filter_names,
         filter_wavelength_scale=1.0e3, # convert from micrometers to nanometers
         atmosphere=False)
+
+    print("LSST AB magnitude:   {:5.4f}".format(lsst.get_magnitude(filter_name_ground)))
+    print("WFIRST AB magnitude: {:5.4f}".format(wfirst.get_magnitude(filter_name_space)))
 
     ngrid_wfirst = np.ceil(ngrid_lsst * lsst.pixel_scale / wfirst.pixel_scale) #128
 
