@@ -18,14 +18,16 @@ import psf_model as pm
 k_telescopes = {
     "LSST": {
         "effective_diameter": 6.4, # meters
-        "pixel_scale": 0.2,        # arcseconds
-        "exptime": 15,             # seconds
+        "pixel_scale": 0.2,        # arcseconds / pixel
+        # Exposure time for defining the zero point reference
+        "exptime_zeropoint": 180.,  # seconds
         "zeropoint": 'AB'
     },
     "WFIRST": {
         "effective_diameter": 2.0, # meters
-        "pixel_scale": 0.11,       # arcseconds
-        "exptime": 60.,            # seconds
+        "pixel_scale": 0.11,       # arcseconds / pixel
+        # Exposure time for defining the zero point reference
+        "exptime_zeropoint": 180., # seconds
         "zeropoint": 'AB'
     }
 }
@@ -46,7 +48,7 @@ k_wfirst_filter_central_wavelengths = {'Z087':867., 'Y106':1100., 'J129':1300.,
 # k_wfirst_filter_central_wavelengths = k_lsst_filter_central_wavelengths
 
 ### Minimum value a flux parameter can take, since these get log-transformed
-k_flux_param_minval = 1.e-12
+k_flux_param_minval = 1.e-16 # photons / cm^2 / s / nm at reference wavelength
 
 
 k_spergel_paramnames = ['nu', 'hlr', 'e', 'beta']
@@ -91,8 +93,17 @@ k_galparams_types = {
 k_galparams_defaults = {
     "Sersic": [(1., 3.4, 1.0, 0.1, np.pi/4, 5.e1, k_flux_param_minval,
         k_flux_param_minval, k_flux_param_minval, 0., 0.)],
-    "Spergel": [(1., 0.3, 1.0, 0.1, np.pi/4, 5.e1, 1.e4,
-        k_flux_param_minval, k_flux_param_minval, 0., 0.)],
+    "Spergel": [(1.,        # redshift
+                 0.3,       # nu
+                 1.0,       # hlr
+                 0.1,       # e
+                 np.pi/4,   # beta
+                 5.e-2,      # flux_sed1
+                 k_flux_param_minval,   # flux_sed2
+                 k_flux_param_minval,   # flux_sed3
+                 k_flux_param_minval,   # flux_sed4
+                 0.,        # dx
+                 0.)],      # dy
     "BulgeDisk": [(1.,
         0.5, 0.6, 0.05, 0.0,
         -0.6, 1.8, 0.3, np.pi/4,
@@ -130,7 +141,7 @@ def wrap_ellipticity_phase(phase):
     return (phase % np.pi)
 
 
-def lsst_noise(random_seed):
+def lsst_noise(random_seed, gain=2.1, read_noise=3.4, sky_level=18000):
     """
     See GalSim/examples/lsst.yaml
 
@@ -139,7 +150,10 @@ def lsst_noise(random_seed):
     sky_level: ADU / arcsec^2
     """
     rng = galsim.BaseDeviate(random_seed)
-    return galsim.CCDNoise(rng, gain=2.1, read_noise=3.4, sky_level=18000)
+    return galsim.CCDNoise(rng,
+                           gain=gain,
+                           read_noise=read_noise,
+                           sky_level=sky_level)
 
 
 def wfirst_noise(random_seed):
@@ -265,8 +279,13 @@ class GalSimGalaxyModel(object):
         """
         Load filters for drawing chromatic objects.
 
-        Copied from GalSim demo12.py
+        Adapted from GalSim demo12.py
+
+        @param wavelength_scale     Multiplicative scaling of the wavelengths
+                                    input from the filter files to get
+                                    nanometers from whatever the input units are
         """
+        print("--- Loading filter files ---")
         # print(self.filter_names)
         path, filename = os.path.split(__file__)
         datapath = os.path.abspath(os.path.join(path, "../input/"))
@@ -277,11 +296,12 @@ class GalSimGalaxyModel(object):
             dat = np.loadtxt(filter_filename)
             table = galsim.LookupTable(x=dat[:,0]*wavelength_scale, f=dat[:,1])
             bp = galsim.Bandpass(table)
+            bp = bp.thin(rel_err=1e-4)
             self.filters[filter_name] = bp.withZeropoint(
-                zeropoint=k_telescopes[self.telescope_name]['zeropoint'],
+                zeropoint='AB',
                 effective_diameter=k_telescopes[self.telescope_name]['effective_diameter'],
-                exptime=k_telescopes[self.telescope_name]['exptime'])
-            self.filters[filter_name] = self.filters[filter_name].thin(rel_err=1e-4)
+                exptime=k_telescopes[self.telescope_name]['exptime_zeropoint'])
+            print("BP {} zeropoint: {}".format(filter_name, self.filters[filter_name].zeropoint))
         return None
 
     def set_wavelength(self, wavelength):
@@ -295,6 +315,9 @@ class GalSimGalaxyModel(object):
         Can set 'active' or 'inactive' parameters. So, this routine gives a
         way to set fixed or fiducial values of model parameters that are not
         used in the MCMC sampling in Roaster.
+
+        @param paramname    The name of the galaxy or PSF model parameter to set
+        @param value        The value to assign to the model parameter
         """
         if 'psf' in paramname and self.psf_model_type == "PSFModel class":
             self.psf_model.params[paramname][0] = value
@@ -320,13 +343,15 @@ class GalSimGalaxyModel(object):
 
         We assume p is a list or flat numpy array with values listed in the
         same order as the parameter names in self.active_parameters (which
-        is supplied on instantiation of a GalSimGalaxyModel object).
+        is supplied on instantiation of a `GalSimGalaxyModel` object).
 
-        If the PSF model for this instance is a PSFModel object, then the
+        If the PSF model for this instance is a `PSFModel` object, then the
         active parameters of the PSFModel should be appended to the list input
         here.
 
         For use in emcee.
+
+        @param p    A list or array of galaxy (and PSF) model parameter values
         """
         for ip, pname in enumerate(self.active_parameters_galaxy):
             if 'flux_sed' in pname:
@@ -342,6 +367,10 @@ class GalSimGalaxyModel(object):
     def get_params(self):
         """
         Return a list of active model parameter values.
+
+        @returns a flat array of model parameter values in the order specified
+                 in the `active_parameters` argument to the `GalSimGalaxyModel`
+                 constructor
         """
         p = self.params[self.active_parameters_galaxy].view('<f8').copy()
         if self.psf_model_type == "PSFModel class":
@@ -359,6 +388,9 @@ class GalSimGalaxyModel(object):
     def validate_params(self):
         """
         Check that all model parameters take values inside allowed ranges.
+
+        @returns a boolean indicating the validity of the current model
+                 parameters
         """
         valid_params = True
         ### ===================================================================
@@ -409,6 +441,19 @@ class GalSimGalaxyModel(object):
         return valid_params
 
     def get_psf(self):
+        """
+        Get the PSF as a `GSObject` for use in GalSim image rendering or
+        convolutions
+
+        The type of PSF model is determined by the `psf_model` argument to the
+        class constructor. The PSF object returned here could be:
+            1. a GalSim `InterpolatedImage`
+            2. a JIF `PSFModel`
+            3. a GalSim model PSF composed of optics and, optionally,
+               atmosphere components
+
+        @returns the PSF model instance
+        """
         if self.psf_model_type == 'InterpolatedImage':
             psf = self.psf_model
         elif self.psf_model_type == 'PSFModel class':
@@ -441,9 +486,28 @@ class GalSimGalaxyModel(object):
                 for i, SED_name in enumerate(self.SEDs)]
         return reduce(add, SEDs)
 
+    def get_flux(self, filter_name='r'):
+        """
+        Get the flux of the galaxy model in the named bandpass
+
+        @param filter_name  Name of the bandpass for the desired magnitude
+
+        @returns the flux in the requested bandpass (in photon counts)
+        """
+        if self.achromatic_galaxy:
+            raise NotImplementedError()
+        else:
+            SED = self.get_SED()
+            flux = SED.calculateFlux(self.filters[filter_name])
+        return flux
+
     def get_magnitude(self, filter_name='r'):
         """
         Get the magnitude of the galaxy model in the named bandpass
+
+        @param filter_name  Name of the bandpass for the desired magnitude
+
+        @returns the magnitude in the requested bandpass
         """
         if self.achromatic_galaxy:
             raise NotImplementedError()
@@ -453,7 +517,7 @@ class GalSimGalaxyModel(object):
         return mag
 
     def get_image(self, out_image=None, add_noise=False,
-                  filter_name='r', gain=1., snr=None):
+                  filter_name='r', gain=2.1, snr=None):
         if self.galaxy_model == "Gaussian":
             # gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
             # gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
@@ -578,11 +642,12 @@ class GalSimGalaxyModel(object):
             out_image = galsim.Image(ngrid, ngrid)
         else:
             out_image = None
+
+        im = self.get_image(out_image, add_noise=True, filter_name=filter_name)
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
-        im = ax.imshow(self.get_image(out_image, add_noise=True,
-                                      filter_name=filter_name).array / 1.e3,
+        im = ax.imshow(im.array,
             cmap=plt.get_cmap('pink'), origin='lower',
             interpolation='none',
             extent=[0, ngrid*self.pixel_scale, 0, ngrid*self.pixel_scale])
@@ -591,7 +656,7 @@ class GalSimGalaxyModel(object):
         if title is not None:
             ax.set_title(title)
         cbar = fig.colorbar(im)
-        cbar.set_label(r"$10^3$ photons / pixel")
+        cbar.set_label(r"photons / pixel")
         fig.savefig(file_name)
         return None
 
@@ -648,7 +713,7 @@ def save_bandpasses_to_segment(seg, gg, filter_names, telescope_name="LSST", sca
     return None
 
 
-def make_test_images(filter_name_ground='r', filter_name_space='Z087',
+def make_test_images(filter_name_ground='i', filter_name_space='Z087',
                      file_lab='', galaxy_model="Spergel"):
     """
     Use the GalSimGalaxyModel class to make test images of a galaxy for LSST and WFIRST.
@@ -701,7 +766,10 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
         atmosphere=False)
 
     print("LSST AB magnitude:   {:5.4f}".format(lsst.get_magnitude(filter_name_ground)))
+    print("LSST flux:   {:5.4f}".format(lsst.get_flux(filter_name_ground)))
+
     print("WFIRST AB magnitude: {:5.4f}".format(wfirst.get_magnitude(filter_name_space)))
+    print("WFIRST flux: {:5.4f}".format(wfirst.get_flux(filter_name_space)))
 
     ngrid_wfirst = np.ceil(ngrid_lsst * lsst.pixel_scale / wfirst.pixel_scale) #128
 
