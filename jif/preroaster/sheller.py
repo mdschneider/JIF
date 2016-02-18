@@ -16,6 +16,8 @@ from scipy import ndimage
 from scipy.ndimage import measurements, filters
 import h5py
 
+import segments
+
 ## Input
 # for now I am just entering the input directly here for debugging purposes
 # later I will make a class structure
@@ -99,104 +101,127 @@ data_img1_rms = data_img1_rms[mask_clean]
 data_img1_segmentation = data_img1_segmentation[mask_clean]
 
 # Setup the hdf5 data structure
-f = h5py.File('spaceground.hdf5',mode='w')
-# Define the (sub)groups
-g = f.create_group('ground')
-g_obs = f.create_group('ground/observation')
-g_obs_sex = f.create_group('ground/observation/sextractor')
-g_obs_sex_grp = f.create_group('ground/observation/sextractor/segments')
+seg = segments.Segments('spaceground.hdf5')
+# f = h5py.File('spaceground.hdf5',mode='w')
+# # Define the (sub)groups
+# g = f.create_group('ground')
+# g_obs = f.create_group('ground/observation')
+# g_obs_sex = f.create_group('ground/observation/sextractor')
+# g_obs_sex_grp = f.create_group('ground/observation/sextractor/segments')
+#
+# s = f.create_group('space')
+# s_obs = f.create_group('space/observation')
+# s_obs_sex = f.create_group('space/observation/sextractor')
+# s_obs_sex_grp = f.create_group('space/observation/sextractor/segments')
 
-s = f.create_group('space')
-s_obs = f.create_group('space/observation')
-s_obs_sex = f.create_group('space/observation/sextractor')
-s_obs_sex_grp = f.create_group('space/observation/sextractor/segments')
+seg.save_tel_metadata(telescope="HST",
+                      primary_diam=2.4,
+                      pixel_scale_arcsec=0.05,
+                      atmosphere=False)
 
+seg.save_tel_metadata(telescope="fauxSubaru",
+                      primary_diam=8.0,
+                      pixel_scale_arcsec=0.2,
+                      atmosphere=True)
 
-# Save some basic metadata, later this will be copied from the fits headers
-# instrument specific
-s.attrs['telescope'] = 'HST'
-s.attrs['primary_diam'] = 2.4
-s.attrs['instrument'] = 'ACS'
-s.attrs['detector'] = 'WFC'
-s.attrs['pixel_scale'] = 0.05
-s.attrs['atmosphere'] = False
-# observation specific
-s_obs.attrs['filter'] = 'F814W'
-# note that we should just have a group for filter curves with datasets
-# containing througput as a function of wavelength
-s_obs.attrs['filter_central'] = 805.98e-9 #meters
-s_obs.attrs['filter_mean'] = 808.74e-9 #meters
-s_obs.attrs['filter_peak'] = 746.02e-9 #meters
-s_obs.attrs['filter_fwhm'] = 154.16e-9 #meters
-s_obs.attrs['filter_range'] = 287e-9 #meters
-s_obs.attrs['crpix'] = numpy.array([[6142.33544921875],
-                                    [1764.46228027344]])
-s_obs.attrs['crval'] = numpy.array([[139.076115042054],
-                                    [29.8330615113333]])
-s_obs.attrs['cd'] = numpy.array([[9.489339000000001E-06,-1.0141681E-05],
-                                 [-1.0141681E-05,-9.489339000000001E-06]])
-# copy some metadata from the fits header
-s_obs.attrs['TELESCOP'] = 'HST' # telescope name
-s_obs.attrs['INSTRUME'] = 'ACS' # instrument name
-s_obs.attrs['DETECTOR'] = 'WFC' # detector name
-s_obs.attrs['FILTER1'] = 'CLEAR1L' # a clear filter
-s_obs.attrs['FILTER2'] = 'F814W' # non-clear filter
-s_obs.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel
-s_obs.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel
-s_obs.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel
-s_obs.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel
-s_obs.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis
-s_obs.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis
-s_obs.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x
-s_obs.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y
-s_obs.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x
-s_obs.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y
-s_obs.attrs['LTV1']  = 0.0 # offset in X to subsection start
-s_obs.attrs['LTV2']  = 0.0 # offset in Y to subsection start
-s_obs.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X
-s_obs.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
+seg.save_bandpasses(filters_list=['F814W'],
+                    waves_nm_list=[],
+                    throughputs_list=[],
+                    effective_wavelengths=[808.74], # nanometers
+                    telescope="HST")
+
+seg.save_bandpasses(filters_list=['r'],
+                    waves_nm_list=[],
+                    throughputs_list=[],
+                    effective_wavelengths=[620.0], # nanometers
+                    telescope="fauxSubaru")
+
+# # Save some basic metadata, later this will be copied from the fits headers
+# # instrument specific
+# s.attrs['telescope'] = 'HST'
+# s.attrs['primary_diam'] = 2.4
+# s.attrs['instrument'] = 'ACS'
+# s.attrs['detector'] = 'WFC'
+# s.attrs['pixel_scale'] = 0.05
+# s.attrs['atmosphere'] = False
+# # observation specific
+# s_obs.attrs['filter'] = 'F814W'
+# # note that we should just have a group for filter curves with datasets
+# # containing througput as a function of wavelength
+# s_obs.attrs['filter_central'] = 805.98e-9 #meters
+# s_obs.attrs['filter_mean'] = 808.74e-9 #meters
+# s_obs.attrs['filter_peak'] = 746.02e-9 #meters
+# s_obs.attrs['filter_fwhm'] = 154.16e-9 #meters
+# s_obs.attrs['filter_range'] = 287e-9 #meters
+# s_obs.attrs['crpix'] = numpy.array([[6142.33544921875],
+#                                     [1764.46228027344]])
+# s_obs.attrs['crval'] = numpy.array([[139.076115042054],
+#                                     [29.8330615113333]])
+# s_obs.attrs['cd'] = numpy.array([[9.489339000000001E-06,-1.0141681E-05],
+#                                  [-1.0141681E-05,-9.489339000000001E-06]])
+# # copy some metadata from the fits header
+# s_obs.attrs['TELESCOP'] = 'HST' # telescope name
+# s_obs.attrs['INSTRUME'] = 'ACS' # instrument name
+# s_obs.attrs['DETECTOR'] = 'WFC' # detector name
+# s_obs.attrs['FILTER1'] = 'CLEAR1L' # a clear filter
+# s_obs.attrs['FILTER2'] = 'F814W' # non-clear filter
+# s_obs.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel
+# s_obs.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel
+# s_obs.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel
+# s_obs.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel
+# s_obs.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis
+# s_obs.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis
+# s_obs.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x
+# s_obs.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y
+# s_obs.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x
+# s_obs.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y
+# s_obs.attrs['LTV1']  = 0.0 # offset in X to subsection start
+# s_obs.attrs['LTV2']  = 0.0 # offset in Y to subsection start
+# s_obs.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X
+# s_obs.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
+
 
 # ground based attributes
 # instrument specific
-g.attrs['telescope'] = 'fauxSubaru'
-g.attrs['primary_diam'] = 2.4
-g.attrs['instrument'] = 'ACS'
-g.attrs['detector'] = 'WFC'
-g.attrs['pixel_scale'] = 0.05
-g.attrs['atmosphere'] = True
+# g.attrs['telescope'] = 'fauxSubaru'
+# g.attrs['primary_diam'] = 2.4
+# g.attrs['instrument'] = 'ACS'
+# g.attrs['detector'] = 'WFC'
+# g.attrs['pixel_scale'] = 0.05
+# g.attrs['atmosphere'] = True
 # observation specific
-g_obs.attrs['filter_central'] = 805.98e-9 #meters
-g_obs.attrs['filter_mean'] = 808.74e-9 #meters
-g_obs.attrs['filter_peak'] = 746.02e-9 #meters
-g_obs.attrs['filter_fwhm'] = 154.16e-9 #meters
-g_obs.attrs['filter_range'] = 287e-9 #meters
-g_obs.attrs['crpix'] = numpy.array([[6142.33544921875],
-                                    [1764.46228027344]])
-g_obs.attrs['crval'] = numpy.array([[139.076115042054],
-                                    [29.8330615113333]])
-g_obs.attrs['cd'] = numpy.array([[9.489339000000001E-06,-1.0141681E-05],
-                                 [-1.0141681E-05,-9.489339000000001E-06]])
-# copy some metadata from the fits header
-g_obs.attrs['TELESCOP'] = 'HST' # telescope name
-g_obs.attrs['INSTRUME'] = 'ACS' # instrument name
-g_obs.attrs['DETECTOR'] = 'WFC' # detector name
-g_obs.attrs['FILTER1'] = 'CLEAR1L' # a clear filter
-g_obs.attrs['FILTER2'] = 'F814W' # non-clear filter
-g_obs.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel
-g_obs.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel
-g_obs.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel
-g_obs.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel
-g_obs.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis
-g_obs.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis
-g_obs.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x
-g_obs.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y
-g_obs.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x
-g_obs.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y
-g_obs.attrs['LTV1']  = 0.0 # offset in X to subsection start
-g_obs.attrs['LTV2']  = 0.0 # offset in Y to subsection start
-g_obs.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X
-g_obs.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
-
+# g_obs.attrs['filter_central'] = 805.98e-9 #meters
+# g_obs.attrs['filter_mean'] = 808.74e-9 #meters
+# g_obs.attrs['filter_peak'] = 746.02e-9 #meters
+# g_obs.attrs['filter_fwhm'] = 154.16e-9 #meters
+# g_obs.attrs['filter_range'] = 287e-9 #meters
+# g_obs.attrs['crpix'] = numpy.array([[6142.33544921875],
+#                                     [1764.46228027344]])
+# g_obs.attrs['crval'] = numpy.array([[139.076115042054],
+#                                     [29.8330615113333]])
+# g_obs.attrs['cd'] = numpy.array([[9.489339000000001E-06,-1.0141681E-05],
+#                                  [-1.0141681E-05,-9.489339000000001E-06]])
+# # copy some metadata from the fits header
+# g_obs.attrs['TELESCOP'] = 'HST' # telescope name
+# g_obs.attrs['INSTRUME'] = 'ACS' # instrument name
+# g_obs.attrs['DETECTOR'] = 'WFC' # detector name
+# g_obs.attrs['FILTER1'] = 'CLEAR1L' # a clear filter
+# g_obs.attrs['FILTER2'] = 'F814W' # non-clear filter
+# g_obs.attrs['CRPIX1']  = 6142.33544921875 # x-coordinate of reference pixel
+# g_obs.attrs['CRPIX2']  = 1764.46228027344 # y-coordinate of reference pixel
+# g_obs.attrs['CRVAL1']  = 139.076115042054 # first axis value at reference pixel
+# g_obs.attrs['CRVAL2']  = 29.8330615113333 # second axis value at reference pixel
+# g_obs.attrs['CTYPE1']  = 'RA---TAN' # the coordinate type for the first axis
+# g_obs.attrs['CTYPE2']  = 'DEC--TAN' # the coordinate type for the second axis
+# g_obs.attrs['CD1_1']  = 9.489339000000001E-06 # partial of first axis coordinate w.r.t. x
+# g_obs.attrs['CD1_2']  = -1.0141681E-05 # partial of first axis coordinate w.r.t. y
+# g_obs.attrs['CD2_1']  = -1.0141681E-05 # partial of second axis coordinate w.r.t. x
+# g_obs.attrs['CD2_2']  = -9.489339000000001E-06 # partial of second axis coordinate w.r.t. y
+# g_obs.attrs['LTV1']  = 0.0 # offset in X to subsection start
+# g_obs.attrs['LTV2']  = 0.0 # offset in Y to subsection start
+# g_obs.attrs['LTM1_1']  = 1.0 # reciprocal of sampling rate in X
+# g_obs.attrs['LTM2_2']  = 1.0 # reciprocal of sampling rate in Y
+#
 
 
 # To do: write full field images to the data structure.
@@ -280,33 +305,50 @@ for i in range(N_img0_seg):
     # get the pixel coordinates bounding the local group
     stamp_i = stamps[i]
 
-    # Create groups for this segment
-    group_name_s = 'space/observation/sextractor/segments/'+str(i)
-    group_name_g = 'ground/observation/sextractor/segments/'+str(i)
+    # # Create groups for this segment
+    # group_name_s = 'space/observation/sextractor/segments/'+str(i)
+    # group_name_g = 'ground/observation/sextractor/segments/'+str(i)
+    #
+    # s_obs_sex_grp_i = f.create_group(group_name_s)
+    # g_obs_sex_grp_i = f.create_group(group_name_g)
+    #
+    # # Ground Datasets
+    # # Create the image-background dataset
+    # g_obs_sex_grp_i.create_dataset('image', data=data_img0_minback[stamp_i])
+    # # Create the rms noise dataset
+    # g_obs_sex_grp_i_noise = g_obs_sex_grp_i.create_dataset('noise', data=data_img0_rms[stamp_i])
+    # # estimate the varinace of this noise image and save as attribute
+    # g_obs_sex_grp_i_noise.attrs['variance'] = np.var(g_obs_sex_grp_i_noise) #numpy.median(g_obs_sex_grp_i_noise)**2
+    # # Create the local group segment mask dataset
+    # g_obs_sex_grp_i.create_dataset('segmask', data=mask_img0[stamp_i])
 
-    s_obs_sex_grp_i = f.create_group(group_name_s)
-    g_obs_sex_grp_i = f.create_group(group_name_g)
+    ### The input lists here are for multiple epochs for a given telescope.
+    ### We only have one epoch per telescope in this script.
+    ### Save ground images
+    seg.save_images(image_list=[data_img0_minback[stamp_i]],
+                    noise_list=[data_img0_rms[stamp_i]],
+                    mask_list=[mask_img0[stamp_i]],
+                    background_list=[0.],
+                    segment_index=i, telescope='fauxSubaru', filter_name='r'
+                    )
+    ### Save space images
+    seg.save_images(image_list=[data_img1_minback[stamp_i]],
+                    noise_list=[data_img1_rms[stamp_i]],
+                    mask_list=[mask_img0[stamp_i]],
+                    background_list=[0.],
+                    segment_index=i, telescope="HST", filter_name='F814W'
+                    )
 
-    # Ground Datasets
-    # Create the image-background dataset
-    g_obs_sex_grp_i.create_dataset('image', data=data_img0_minback[stamp_i])
-    # Create the rms noise dataset
-    g_obs_sex_grp_i_noise = g_obs_sex_grp_i.create_dataset('noise', data=data_img0_rms[stamp_i])
-    # estimate the varinace of this noise image and save as attribute
-    g_obs_sex_grp_i_noise.attrs['variance'] = np.var(g_obs_sex_grp_i_noise) #numpy.median(g_obs_sex_grp_i_noise)**2
-    # Create the local group segment mask dataset
-    g_obs_sex_grp_i.create_dataset('segmask', data=mask_img0[stamp_i])
-
-    # Space Datasets
-    # Create the image-background dataset
-    s_obs_sex_grp_i.create_dataset('image', data=data_img1_minback[stamp_i])
-    # Create the rms noise dataset
-    s_obs_sex_grp_i_noise = s_obs_sex_grp_i.create_dataset('noise', data=data_img1_rms[stamp_i])
-    # estimate the varinace of this noise image and save as attribute
-    s_obs_sex_grp_i_noise.attrs['variance'] = numpy.median(s_obs_sex_grp_i_noise)**2
-    # Create the local group segment mask dataset,
-    # for now just the same as the ground
-    s_obs_sex_grp_i.create_dataset('segmask', data=mask_img0[stamp_i])
+    # # Space Datasets
+    # # Create the image-background dataset
+    # s_obs_sex_grp_i.create_dataset('image', data=data_img1_minback[stamp_i])
+    # # Create the rms noise dataset
+    # s_obs_sex_grp_i_noise = s_obs_sex_grp_i.create_dataset('noise', data=data_img1_rms[stamp_i])
+    # # estimate the varinace of this noise image and save as attribute
+    # s_obs_sex_grp_i_noise.attrs['variance'] = numpy.median(s_obs_sex_grp_i_noise)**2
+    # # Create the local group segment mask dataset,
+    # # for now just the same as the ground
+    # s_obs_sex_grp_i.create_dataset('segmask', data=mask_img0[stamp_i])
 
     # Determine which objects from the sextractor analysis are within the
     # postage stamp
@@ -327,11 +369,11 @@ for i in range(N_img0_seg):
     N_stamp_1 = numpy.sum(mask_stamp_1)
     # Save the object properties for those objects within the stamp bounds
     # note that this might not work, since the fits table may need to be
-    # processed a bit more to get it in the correc format
+    # processed a bit more to get it in the correct format
     data_stamp0 = data_cat0[mask_stamp_0]
     data_stamp1 = data_cat1[mask_stamp_1]
-    g_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_stamp0)
-    s_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_stamp1)
+    # g_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_stamp0)
+    # s_obs_sex_grp_i.create_dataset('stamp_objprops', data = data_stamp1)
 
     # Determine which objects from the sextractor analysis are within the
     # segmentation region
@@ -351,13 +393,13 @@ for i in range(N_img0_seg):
     # create a compound dataset with the column labels and dtypes
     # note that some of this may not be necessary since the data_cat0 is a
     # recarray, thus we might be able to just plug it in the create_dataset
-    ds_temp = g_obs_sex_grp_i.create_dataset('seg_objprops', (N_seg_0,), dtype = dt)
-    ds_temp[...] = data_stamp0[mask_seg_0]
+    # ds_temp = g_obs_sex_grp_i.create_dataset('seg_objprops', (N_seg_0,), dtype = dt)
+    # ds_temp[...] = data_stamp0[mask_seg_0]
 
-    ds_temp = s_obs_sex_grp_i.create_dataset('seg_objprops', (N_seg_1,), dtype = dt)
-    ds_temp[...] = data_stamp1[mask_seg_1]
+    # ds_temp = s_obs_sex_grp_i.create_dataset('seg_objprops', (N_seg_1,), dtype = dt)
+    # ds_temp[...] = data_stamp1[mask_seg_1]
 
-f.close()
+# f.close()
 
 plt.show()
 
