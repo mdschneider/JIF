@@ -7,6 +7,7 @@ Wrapper for GalSim galaxy models to use in MCMC.
 """
 import os
 import math
+import copy
 import numpy as np
 from operator import add
 import warnings
@@ -138,6 +139,35 @@ def select_galaxy_paramnames(model_paramnames):
     return [p for p in model_paramnames if 'psf' not in p]
 
 
+def load_filter_file_to_bandpass(table, wavelength_scale=1.0,
+                                 effective_diameter_meters=6.4,
+                                 exptime_sec=30.):
+    """
+    Create a Galsim.Bandpass object from a lookup table
+
+    @param table Either (1) the name of a file for reading the lookup table
+                 values for a bandpass, or (2) an instance of a
+                 galsim.LookupTable
+    @param wavelength_scale The multiplicative scaling of the wavelengths in the
+                            input bandpass file to get units of nm (not used if
+                            table argument is a LookupTable instance)
+    @param effective_diameter_meters The effective diameter of the telescope
+                                     (including obscuration) for the zeropoint
+                                     calculation
+    @param exptime_sec The exposure time for the zeropoint calculation
+    """
+    if isinstance(table, str):
+        dat = np.loadtxt(table)
+        table = galsim.LookupTable(x=dat[:,0]*wavelength_scale, f=dat[:,1])
+    elif not isinstance(table, galsim.LookupTable):
+        raise ValueError("table must be a file name or galsim.LookupTable")
+    bp = galsim.Bandpass(table)
+    bp = bp.thin(rel_err=1e-4)
+    return bp.withZeropoint(zeropoint='AB',
+        effective_diameter=100. * effective_diameter_meters,
+        exptime=exptime_sec)
+
+
 def wrap_ellipticity_phase(phase):
     """
     Map a phase in radians to [0, pi) to model ellipticity orientation.
@@ -179,7 +209,7 @@ class GalSimGalaxyModel(object):
     """
     Parametric galaxy model from GalSim for MCMC.
 
-    Mimics GalSim examples/demo1.py
+    Derived originally from GalSim examples/demo1.py
 
     @param telescope_name       Name of the telescope to model. Used to identify
                                 filter curves. [Default: "LSST"]
@@ -188,10 +218,13 @@ class GalSimGalaxyModel(object):
     @param galaxy_model         Name of the parametric galaxy model
                                 [Default: "Spergel"]
     @param active_parameters    List of the parameter names for sampling
-    @param wavelength_meters    Wavelength in meters [Default: 1e-6]
+    @param wavelength_meters    Wavelength in meters to set the scale for the
+                                optics PSF [Default: 620e-9]
     @param primary_diam_meters  Diameter of the telescope primary [Default: 2.4]
-    @param filters              List of filters
-    @param filter_names         List of filter names to be used instead of the 'filters' parameter
+    @param filters              List of galsim.Bandpass instances
+    @param filter_names         List of filter names to be used instead of the 'filters' parameter.
+                                If supplied, the names in this list must match those
+                                in the ../input directory with tables of bandpasses.
     @param filter_wavelength_scale Multiplicative scaling to apply to input filter wavelenghts
     @param atmosphere           Simulate an (infinite exposure) atmosphere PSF? [Default: False]
     @param psf_model            Specification for the PSF model. Can be:
@@ -199,13 +232,15 @@ class GalSimGalaxyModel(object):
                                     2. a PSFModel instance
                                     3. a name of a parametric model
     """
+    ### Define a reference filter with respect to which magnitude parameters are defined
+    ref_filter = 'r'
     def __init__(self,
                  telescope_name="LSST",
                  pixel_scale_arcsec=0.11, ### arcseconds
                  noise=None,
                  galaxy_model="Spergel",
                  active_parameters=['hlr'], #, 'e', 'beta'],
-                 wavelength_meters=1.e-6,
+                 wavelength_meters=620e-9,
                  primary_diam_meters=2.4,
                  filters=None,
                  filter_names=None,
@@ -223,7 +258,7 @@ class GalSimGalaxyModel(object):
         self.active_parameters_psf = select_psf_paramnames(active_parameters)
         self.wavelength = wavelength_meters
         self.primary_diam_meters = primary_diam_meters
-        self.filters = filters
+        self.filters = copy.deepcopy(filters)
         self.filter_names = filter_names
         self.atmosphere = atmosphere
         self.psf_model = psf_model
@@ -251,11 +286,20 @@ class GalSimGalaxyModel(object):
         ### Set GalSim SED model parameters
         self._load_sed_files()
         ### Load the filters that can be used to draw galaxy images
-        if self.filters is None and self.filter_names is not None:
-            self._load_filter_files(filter_wavelength_scale)
+        if self.filters is None:
+            if self.filter_names is not None:
+                self._load_filter_files(filter_wavelength_scale)
+            else:
+                warnings.warn("No filters available in GalSimGalaxyModel: supply \
+                              'filters' or 'filter_names' argument")
         else:
-            warnings.warn("No filters available in GalSimGalaxyModel: supply \
-                          'filters' or 'filter_names' argument")
+            self.filter_names = self.filters.keys()
+        ### Add the reference filter for defining the magnitude parameters
+        path, filename = os.path.split(__file__)
+        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        ref_filename = os.path.join(datapath, '{}_{}.dat'.format('LSST',
+            GalSimGalaxyModel.ref_filter))
+        self.filters['ref'] = load_filter_file_to_bandpass(ref_filename)
 
         self.gsparams = galsim.GSParams(
             folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
@@ -301,15 +345,13 @@ class GalSimGalaxyModel(object):
         for filter_name in self.filter_names:
             filter_filename = os.path.join(datapath, '{}_{}.dat'.format(
                 self.telescope_name, filter_name))
-            dat = np.loadtxt(filter_filename)
-            table = galsim.LookupTable(x=dat[:,0]*wavelength_scale, f=dat[:,1])
-            bp = galsim.Bandpass(table)
-            bp = bp.thin(rel_err=1e-4)
-            self.filters[filter_name] = bp.withZeropoint(
-                zeropoint='AB',
-                effective_diameter=100*k_telescopes[self.telescope_name]['effective_diameter'],
-                exptime=k_telescopes[self.telescope_name]['exptime_zeropoint'])
-            print("BP {} zeropoint: {}".format(filter_name, self.filters[filter_name].zeropoint))
+            self.filters[filter_name] = load_filter_file_to_bandpass(
+                filter_filename, wavelength_scale,
+                k_telescopes[self.telescope_name]['effective_diameter'],
+                k_telescopes[self.telescope_name]['exptime_zeropoint']
+            )
+            print("BP {} zeropoint: {}".format(filter_name,
+                self.filters[filter_name].zeropoint))
         return None
 
     def set_wavelength(self, wavelength):
@@ -497,7 +539,7 @@ class GalSimGalaxyModel(object):
         """
         if len(gal_comp) > 0:
             gal_comp = '_' + gal_comp
-        bp =self.filters[k_telescopes[self.telescope_name]['ref_filter_mag_param']]
+        bp =self.filters['ref']
         SEDs = [self.SEDs[SED_name].withMagnitude(
             target_magnitude=self.params[0]['mag_sed{:d}{}'.format(i+1, gal_comp)],
             bandpass=bp).atRedshift(self.params[0].redshift)
@@ -729,6 +771,7 @@ def save_bandpasses_to_segment(seg, gg, filter_names, telescope_name="LSST", sca
         waves_nm_list.append(bp[:,0]*scale)
         throughputs_list.append(bp[:,1])
         effective_wavelengths.append(gg.filters[f].effective_wavelength)
+    # print "effective wavelengths (nm):", effective_wavelengths
     seg.save_bandpasses(filter_names,
         waves_nm_list, throughputs_list,
         effective_wavelengths=effective_wavelengths,
@@ -851,7 +894,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='r',
     seg.save_psf_images([wfirst.get_psf_image().array], segment_index=seg_ndx,
         telescope='wfirst',
         filter_name=filter_name_space)
-    save_bandpasses_to_segment(seg, wfirst, k_wfirst_filter_names, "WFIRST", scale=1e3)
+    save_bandpasses_to_segment(seg, wfirst, k_wfirst_filter_names, "WFIRST", scale=1)
 
     # -------------------------------------------------------------------------
 
