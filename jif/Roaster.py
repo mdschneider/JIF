@@ -179,11 +179,15 @@ class Roaster(object):
                 g = 'segments/seg{:d}/{}'.format(segment, tel.lower())
                 filter_names = f[g].keys()
                 for ifilt, filter_name in enumerate(filter_names):
+                    ### Load filter information and instantiate the galsim Bandpass
                     fg = 'telescopes/{}/filters/{}'.format(tel, filter_name)
                     waves_nm = f[fg + '/waves_nm']
                     throughput = f[fg + '/throughput']
                     wavelength = f[fg].attrs['effective_wavelength']
-                    bp = galsim.Bandpass(galsim.LookupTable(x=waves_nm, f=throughput))
+                    table = galsim.LookupTable(x=waves_nm, f=throughput)
+                    bp = galsim_galaxy.load_filter_file_to_bandpass(table,
+                        effective_diameter_meters=galsim_galaxy.k_telescopes[tel]['effective_diameter'],
+                        exptime_sec=galsim_galaxy.k_telescopes[tel]['exptime_zeropoint'])
                     self.filters[filter_name] = bp
 
                     h = 'segments/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
@@ -230,6 +234,7 @@ class Roaster(object):
             #     logging.info("<Roaster> Must specify a segment number as an integer")
             # print "Have data for instruments:", instruments
 
+        print "Filters:", self.filters.keys()
 
         nimages = len(pixel_data)
         self.num_epochs = nimages
@@ -240,9 +245,9 @@ class Roaster(object):
             if self.debug:
                 print "nx, ny, i:", self.nx[i], self.ny[i], i
                 print "tel_name:", tel_names[i]
-                print "pixel_scale:", pixel_scales[i]
-                print "wavelength:", wavelengths[i]
-                print "primary_diam:", primary_diams[i]
+                print "pixel_scale (arcsec):", pixel_scales[i]
+                print "wavelength (nm):", wavelengths[i]
+                print "primary_diam (m):", primary_diams[i]
                 print "atmosphere:", atmospheres[i]
 
         logging.debug("<Roaster> num_epochs: {:d}, num_sources: {:d}".format(
@@ -504,8 +509,8 @@ class DefaultPriorSpergel(object):
         self.hlr_shape = 2.
         self.hlr_scale = 0.15
         ### Gaussian distribution in log flux
-        self.lnflux_mean = 1.5
-        self.lnflux_var = 3.0
+        self.mag_mean = 20.0
+        self.mag_var = 5.0
         ### Beta distribution in ellipticity magnitude
         self.e_beta_a = 1.5
         self.e_beta_b = 5.0
@@ -520,10 +525,10 @@ class DefaultPriorSpergel(object):
     def _lnprior_hlr(self, hlr):
         return (self.hlr_shape-1.)*np.log(hlr) - (hlr / self.hlr_scale)
 
-    def _lnprior_lnflux(self, lnflux):
+    def _lnprior_mag(self, mag):
         ### FIXME: only SED 1 prior implemented
-        delta = lnflux - self.lnflux_mean
-        return -0.5 * delta * delta / self.lnflux_var
+        delta = mag - self.mag_mean
+        return -0.5 * delta * delta / self.mag_var
 
     def __call__(self, omega):
         lnp = 0.0
@@ -532,7 +537,7 @@ class DefaultPriorSpergel(object):
         ### Half-light radius
         lnp += self._lnprior_hlr(omega[0].hlr)
         ### Flux
-        lnp += self._lnprior_lnflux(np.log(omega[0].flux_sed1))
+        lnp += self._lnprior_mag(omega[0].mag_sed1)
         ### Ellipticity magnitude
         e = omega[0].e
         lnp += (self.e_beta_a-1.)*np.log(e) + (self.e_beta_b-1.)*np.log(1.-e)
@@ -589,7 +594,7 @@ def main():
                              'jif_segment')")
 
     parser.add_argument("--model_params", type=str, nargs='+',
-                        default=['nu', 'hlr', 'e', 'beta', 'flux_sed1', 'dx', 'dy', 'psf_fwhm'],
+                        default=['nu', 'hlr', 'e', 'beta', 'mag_sed1', 'dx', 'dy', 'psf_fwhm'],
                         help="Names of the galaxy model parameters for sampling.")
 
     parser.add_argument("--telescope", type=str, default=None,
