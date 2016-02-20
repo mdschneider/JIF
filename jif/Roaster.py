@@ -510,7 +510,7 @@ class DefaultPriorSpergel(object):
         self.hlr_scale = 0.15
         ### Gaussian distribution in log flux
         self.mag_mean = 20.0
-        self.mag_var = 5.0
+        self.mag_var = 7.0
         ### Beta distribution in ellipticity magnitude
         self.e_beta_a = 1.5
         self.e_beta_b = 5.0
@@ -526,7 +526,6 @@ class DefaultPriorSpergel(object):
         return (self.hlr_shape-1.)*np.log(hlr) - (hlr / self.hlr_scale)
 
     def _lnprior_mag(self, mag):
-        ### FIXME: only SED 1 prior implemented
         delta = mag - self.mag_mean
         return -0.5 * delta * delta / self.mag_var
 
@@ -538,6 +537,9 @@ class DefaultPriorSpergel(object):
         lnp += self._lnprior_hlr(omega[0].hlr)
         ### Flux
         lnp += self._lnprior_mag(omega[0].mag_sed1)
+        lnp += self._lnprior_mag(omega[0].mag_sed2)
+        lnp += self._lnprior_mag(omega[0].mag_sed3)
+        lnp += self._lnprior_mag(omega[0].mag_sed4)
         ### Ellipticity magnitude
         e = omega[0].e
         lnp += (self.e_beta_a-1.)*np.log(e) + (self.e_beta_b-1.)*np.log(1.-e)
