@@ -34,9 +34,9 @@ logging.basicConfig(level=logging.DEBUG,
 
 # Store the pixel data as global (module scope) variables so emcee
 # mutlithreading doesn't need to repeatedly pickle these all the time.
-pixel_data = []
-pix_noise_var = []
-src_models = []
+# self.pixel_data = []
+# self.pix_noise_var = []
+# self.src_models = []
 
 
 class EmptyPrior(object):
@@ -144,9 +144,14 @@ class Roaster(object):
         @param use_PSFModel Force the use of a PSFModel class instance to model
         PSFs even if not sampling any PSF model parameters
         """
-        global pixel_data
-        global pix_noise_var
-        global src_models
+        # global self.pixel_data
+        # global self.pix_noise_var
+        # global self.src_models
+
+        ### Reset the global data lists in case Roaster had been used before
+        self.pixel_data = []
+        self.pix_noise_var = []
+        self.src_models = []
 
         logging.info("<Roaster> Loading image data")
         if self.data_format == "jif_segment" or self.data_format == "test_galsim_galaxy":
@@ -201,8 +206,8 @@ class Roaster(object):
                         noise = seg['noise']
                         if self.debug:
                             print itel, ifilt, iepoch, "dat shape:", dat.shape
-                        pixel_data.append(np.array(dat))
-                        pix_noise_var.append(seg.attrs['variance'])
+                        self.pixel_data.append(np.array(dat))
+                        self.pix_noise_var.append(seg.attrs['variance'])
                         ###
                         if self.sample_psf:
                             psf_types.append('PSFModel class')
@@ -227,7 +232,7 @@ class Roaster(object):
                         tel_names.append(tel)
                         self.filter_names.append(filter_name)
             print "Have data for instruments:", instruments
-            print "pixel noise variances:", pix_noise_var
+            print "pixel noise variances:", self.pix_noise_var
         else:
             raise KeyError("Unsupported input data format in Roaster")
             # if segment == None:
@@ -236,12 +241,12 @@ class Roaster(object):
 
         print "Filters:", self.filters.keys()
 
-        nimages = len(pixel_data)
+        nimages = len(self.pixel_data)
         self.num_epochs = nimages
         self.nx = np.zeros(nimages, dtype=int)
         self.ny = np.zeros(nimages, dtype=int)
         for i in xrange(nimages):
-            self.nx[i], self.ny[i] = pixel_data[i].shape
+            self.nx[i], self.ny[i] = self.pixel_data[i].shape
             if self.debug:
                 print "nx, ny, i:", self.nx[i], self.ny[i], i
                 print "tel_name:", tel_names[i]
@@ -252,7 +257,7 @@ class Roaster(object):
 
         logging.debug("<Roaster> num_epochs: {:d}, num_sources: {:d}".format(
             self.num_epochs, self.num_sources))
-        src_models = [[galsim_galaxy.GalSimGalaxyModel(
+        self.src_models = [[galsim_galaxy.GalSimGalaxyModel(
                                 telescope_name=tel_names[idat],
                                 galaxy_model=self.galaxy_model_type,
                                 active_parameters=self.model_paramnames,
@@ -264,17 +269,17 @@ class Roaster(object):
                                 psf_model=psfs[idat])
                             for idat in xrange(nimages)]
                            for isrcs in xrange(self.num_sources)]
-        self.n_params = src_models[0][0].n_params
+        self.n_params = self.src_models[0][0].n_params
         logging.debug("<Roaster> Finished loading data")
         if self.debug:
-            print "\npixel data shapes:", [dat.shape for dat in pixel_data]
+            print "\npixel data shapes:", [dat.shape for dat in self.pixel_data]
         return None
 
     def _get_noise_var(self, i=0):
-        return pix_noise_var[i]
+        return self.pix_noise_var[i]
 
     def _get_raw_params(self):
-        return src_models[0][0].params
+        return self.src_models[0][0].params
 
     def get_params(self):
         """
@@ -282,7 +287,7 @@ class Roaster(object):
 
         For use in MCMC sampling.
         """
-        p = np.array([m[0].get_params() for m in src_models]).ravel()
+        p = np.array([m[0].get_params() for m in self.src_models]).ravel()
         return p
 
     def set_params(self, p):
@@ -301,7 +306,7 @@ class Roaster(object):
             imin = isrcs * self.n_params
             imax = (isrcs + 1) * self.n_params
 
-            p_set = src_models[isrcs][0].get_params()
+            p_set = self.src_models[isrcs][0].get_params()
             if self.debug:
                 print "input p:", p
                 print "p_set before indexing:", p_set
@@ -311,8 +316,8 @@ class Roaster(object):
                 print "p_set after indexing:", p_set
 
             for iepochs in xrange(self.num_epochs):
-                src_models[isrcs][iepochs].set_params(p_set)
-                valid_params *= src_models[isrcs][iepochs].validate_params()
+                self.src_models[isrcs][iepochs].set_params(p_set)
+                valid_params *= self.src_models[isrcs][iepochs].validate_params()
         return valid_params
 
     def set_param_by_name(self, paramname, value):
@@ -327,13 +332,13 @@ class Roaster(object):
             if len(value) == self.num_sources:
                 for isrcs in xrange(self.num_sources):
                     for idat in xrange(self.num_epochs):
-                        src_models[isrcs][idat].set_param_by_name(paramname, value[isrcs])
+                        self.src_models[isrcs][idat].set_param_by_name(paramname, value[isrcs])
             else:
                 raise ValueError("If passing list, must be of length num_sources")
         elif isinstance(value, float):
             for isrcs in xrange(self.num_sources):
                 for idat in xrange(self.num_epochs):
-                    src_models[isrcs][idat].set_param_by_name(paramname, value)
+                    self.src_models[isrcs][idat].set_param_by_name(paramname, value)
         else:
             raise ValueError("Unsupported type for input value")
 
@@ -348,10 +353,10 @@ class Roaster(object):
                 imin = isrcs * self.n_params
                 imax = (isrcs + 1) * self.n_params
                 ### Pass active + inactive parameters, with names included
-                p = copy.deepcopy(src_models[isrcs][0].params)
+                p = copy.deepcopy(self.src_models[isrcs][0].params)
                 lnp += self.lnprior_omega(p)
                 if self.sample_psf:
-                    ppsf = copy.deepcopy(src_models[isrcs][0].psf_model.params)
+                    ppsf = copy.deepcopy(self.src_models[isrcs][0].psf_model.params)
                     lnp += self.lnprior_Pi(ppsf)
         else:
             lnp = -np.inf
@@ -362,13 +367,13 @@ class Roaster(object):
         Create a galsim.Image from the source model(s)
         """
         model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs],
-            scale=src_models[0][iepochs].pixel_scale)
+            scale=self.src_models[0][iepochs].pixel_scale)
 
         for isrcs in xrange(self.num_sources):
             ### Draw every source using the full output array
             b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
             sub_image = model_image[b]
-            model = src_models[isrcs][iepochs].get_image(sub_image,
+            model = self.src_models[isrcs][iepochs].get_image(sub_image,
                 filter_name=self.filter_names[iepochs], add_noise=add_noise)
         return model_image
 
@@ -399,9 +404,9 @@ class Roaster(object):
                         logging.debug('Wrote model image to %r',
                             model_image_file_name)
 
-                    lnlike += (-0.5 * np.sum((pixel_data[iepochs] -
+                    lnlike += (-0.5 * np.sum((self.pixel_data[iepochs] -
                         model_image.array) ** 2) /
-                        pix_noise_var[iepochs])
+                        self.pix_noise_var[iepochs])
         else:
             lnlike = -np.inf
         return lnlike
@@ -417,7 +422,13 @@ def walker_ball(omega, spread, nwalkers):
             for i in xrange(nwalkers)]
 
 
-def do_sampling(args, roaster):
+def do_sampling(args, roaster, return_samples=False):
+    """
+    Execute the MCMC chain to fit galaxy (and PSF) model parameters to a segment
+
+    Save the MCMC chain steps to an HDF5 file, and optionally also return the
+    steps if `return_samples` is True.
+    """
     omega_interim = roaster.get_params()
 
     nvars = len(omega_interim)
@@ -452,7 +463,10 @@ def do_sampling(args, roaster):
         lnps.append(lnp.copy())
 
     write_results(args, pps, lnps, roaster)
-    return None
+    if return_samples:
+        return pps, lnps
+    else:
+        return None
 
 
 def write_results(args, pps, lnps, roaster):
@@ -482,7 +496,7 @@ def write_results(args, pps, lnps, roaster):
     if "post" in f:
         del f["post"]
     post = f.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
-    pnames = np.array(src_models[0][0].paramnames)
+    pnames = np.array(roaster.src_models[0][0].paramnames)
     post.attrs['paramnames'] = pnames
     if "logprobs" in f:
         del f["logprobs"]
@@ -653,7 +667,7 @@ def main():
 
     if not args.quiet:
         print("\nsource model 0:")
-        pp.pprint(src_models[0][0].__dict__)
+        pp.pprint(self.src_models[0][0].__dict__)
 
     do_sampling(args, roaster)
 
