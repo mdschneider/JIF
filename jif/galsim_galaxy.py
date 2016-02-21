@@ -11,7 +11,10 @@ import copy
 import numpy as np
 from operator import add
 import warnings
+###
 import galsim
+import galsim.wfirst
+###
 import segments
 import psf_model as pm
 
@@ -44,7 +47,7 @@ k_lsst_filter_names = 'ugrizy'
 k_lsst_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,
                                 'z':880., 'y':1000.}
 
-k_wfirst_filter_names = ['r'] #, 'Z087', 'Y106', 'J129', 'H158', 'F184', 'W149']
+k_wfirst_filter_names = ['Z087', 'Y106', 'J129', 'H158', 'F184', 'W149']
 ### 'Central' passband wavelengths in nanometers
 k_wfirst_filter_central_wavelengths = {'r':620., 'Z087':867., 'Y106':1100.,
     'J129':1300., 'H158':994., 'F184':1880., 'W149':1410.}
@@ -337,21 +340,24 @@ class GalSimGalaxyModel(object):
                                     input from the filter files to get
                                     nanometers from whatever the input units are
         """
-        print("--- Loading filter files ---")
-        # print(self.filter_names)
-        path, filename = os.path.split(__file__)
-        datapath = os.path.abspath(os.path.join(path, "../input/"))
-        self.filters = {}
-        for filter_name in self.filter_names:
-            filter_filename = os.path.join(datapath, '{}_{}.dat'.format(
-                self.telescope_name, filter_name))
-            self.filters[filter_name] = load_filter_file_to_bandpass(
-                filter_filename, wavelength_scale,
-                k_telescopes[self.telescope_name]['effective_diameter'],
-                k_telescopes[self.telescope_name]['exptime_zeropoint']
-            )
-            print("BP {} zeropoint: {}".format(filter_name,
-                self.filters[filter_name].zeropoint))
+        if self.telescope_name == "WFIRST":
+            ### Use the Galsim WFIRST module
+            self.filters = galsim.wfirst.getBandpasses(AB_zeropoint=True)
+        else:
+            ### Use filter information in this module
+            path, filename = os.path.split(__file__)
+            datapath = os.path.abspath(os.path.join(path, "../input/"))
+            self.filters = {}
+            for filter_name in self.filter_names:
+                filter_filename = os.path.join(datapath, '{}_{}.dat'.format(
+                    self.telescope_name, filter_name))
+                self.filters[filter_name] = load_filter_file_to_bandpass(
+                    filter_filename, wavelength_scale,
+                    k_telescopes[self.telescope_name]['effective_diameter'],
+                    k_telescopes[self.telescope_name]['exptime_zeropoint']
+                )
+                # print("BP {} zeropoint: {}".format(filter_name,
+                #     self.filters[filter_name].zeropoint))
         return None
 
     def set_wavelength(self, wavelength):
@@ -779,7 +785,7 @@ def save_bandpasses_to_segment(seg, gg, filter_names, telescope_name="LSST", sca
     return None
 
 
-def make_test_images(filter_name_ground='r', filter_name_space='r',
+def make_test_images(filter_name_ground='r', filter_name_space='Z087',
                      file_lab='', galaxy_model="Spergel"):
     """
     Use the GalSimGalaxyModel class to make test images of a galaxy for LSST and WFIRST.
