@@ -30,10 +30,10 @@ k_telescopes = {
         "ref_filter_mag_param": 'r'
     },
     "WFIRST": {
-        "effective_diameter": 2.0, # meters
-        "pixel_scale": 0.11,       # arcseconds / pixel
+        "effective_diameter": galsim.wfirst.diameter, # meters
+        "pixel_scale": galsim.wfirst.pixel_scale,       # arcseconds / pixel
         # Exposure time for defining the zero point reference
-        "exptime_zeropoint": 150., # seconds
+        "exptime_zeropoint": galsim.wfirst.exptime, # seconds
         "zeropoint": 'AB',
         # Referenc filter name for defining the magnitude model parameter
         "ref_filter_mag_param": 'r'
@@ -178,13 +178,13 @@ def wrap_ellipticity_phase(phase):
     return (phase % np.pi)
 
 
-def lsst_noise(random_seed, gain=2.1, read_noise=3.4, sky_level=18000):
+def lsst_noise(random_seed, gain=2.1, read_noise=3.6, sky_level=720.):
     """
     See GalSim/examples/lsst.yaml
 
     gain: e- / ADU
-    read_noise: Variance in ADU^2
-    sky_level: ADU / arcsec^2
+    read_noise: rms of read noise in electrons (if gain > 0)
+    sky_level: ADU / pixel
     """
     rng = galsim.BaseDeviate(random_seed)
     return galsim.CCDNoise(rng,
@@ -195,6 +195,8 @@ def lsst_noise(random_seed, gain=2.1, read_noise=3.4, sky_level=18000):
 
 def wfirst_noise(random_seed):
     """
+    Deprecated in favor of GalSim WFIRST module
+
     From http://wfirst-web.ipac.caltech.edu/wfDepc/visitor/temp1927222740/results.jsp
     """
     rng = galsim.BaseDeviate(random_seed)
@@ -206,6 +208,20 @@ def wfirst_noise(random_seed):
     return galsim.CCDNoise(rng, gain=gain,
         read_noise=(read_noise_e_rms / gain) ** 2,
         sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
+
+
+def wfirst_sky_background(filter_name, bandpass):
+    """
+    Calculate the approximate sky background in e-/pixel using the GalSim
+    WFIRST module
+    """
+    sky_level = galsim.wfirst.getSkyLevel(bandpass)
+    sky_level *= (1.0 + galsim.wfirst.stray_light_fraction)
+    ### Approximate sky level in e-/pix, ignoring variable pixel scale
+    ### See GalSim demo13.py
+    sky_level *= galsim.wfirst.pixel_scale**2
+    sky_level += galsim.wfirst.thermal_backgrounds[filter_name]*galsim.wfirst.exptime
+    return sky_level
 
 
 class GalSimGalaxyModel(object):
@@ -666,14 +682,20 @@ class GalSimGalaxyModel(object):
                 add_to_image=False,
                 method='fft')
             if add_noise:
-                if self.noise is not None:
-                    if snr is None:
-                        image.addNoise(self.noise)
-                    else:
-                        image.addNoiseSNR(self.noise, snr=snr)
+                if self.telescope_name == "WFIRST":
+                    sky_level = wfirst_sky_background(filter_name, self.filters[filter_name])
+                    image += sky_level
+                    galsim.wfirst.allDetectorEffects(image)
+                    image -= (sky_level + galsim.wfirst.dark_current*galsim.wfirst.exptime) / galsim.wfirst.gain
                 else:
-                    raise AttributeError("A GalSim noise model must be \
-                                          specified to add noise to an image.")
+                    if self.noise is not None:
+                        if snr is None:
+                            image.addNoise(self.noise)
+                        else:
+                            image.addNoiseSNR(self.noise, snr=snr)
+                    else:
+                        raise AttributeError("A GalSim noise model must be \
+                                              specified to add noise to an image.")
         except RuntimeError:
             print "Trying to make an image that's too big."
             print self.get_params()
