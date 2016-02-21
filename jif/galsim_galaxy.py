@@ -259,7 +259,6 @@ class GalSimGalaxyModel(object):
                  noise=None,
                  galaxy_model="Spergel",
                  active_parameters=['hlr'], #, 'e', 'beta'],
-                 wavelength_meters=620e-9,
                  primary_diam_meters=2.4,
                  filters=None,
                  filter_names=None,
@@ -275,7 +274,6 @@ class GalSimGalaxyModel(object):
         self.active_parameters = active_parameters
         self.active_parameters_galaxy = select_galaxy_paramnames(active_parameters)
         self.active_parameters_psf = select_psf_paramnames(active_parameters)
-        self.wavelength = wavelength_meters
         self.primary_diam_meters = primary_diam_meters
         self.filters = copy.deepcopy(filters)
         self.filter_names = filter_names
@@ -374,10 +372,6 @@ class GalSimGalaxyModel(object):
                 )
                 # print("BP {} zeropoint: {}".format(filter_name,
                 #     self.filters[filter_name].zeropoint))
-        return None
-
-    def set_wavelength(self, wavelength):
-        self.wavelength = wavelength
         return None
 
     def set_param_by_name(self, paramname, value):
@@ -513,7 +507,7 @@ class GalSimGalaxyModel(object):
             valid_params *= self.psf_model.validate_params()
         return valid_params
 
-    def get_psf(self):
+    def get_psf(self, filter_name='r'):
         """
         Get the PSF as a `GSObject` for use in GalSim image rendering or
         convolutions
@@ -532,7 +526,7 @@ class GalSimGalaxyModel(object):
         elif self.psf_model_type == 'PSFModel class':
             psf = self.psf_model.get_psf()
         else:
-            lam_over_diam = self.wavelength / self.primary_diam_meters
+            lam_over_diam = self.filters[filter_name].effective_wavelength*1.e-9 / self.primary_diam_meters
             lam_over_diam *= 206264.8 # arcsec
             optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1.,
                 gsparams=self.gsparams)
@@ -673,7 +667,7 @@ class GalSimGalaxyModel(object):
 
         else:
             raise AttributeError("Unimplemented galaxy model")
-        final = galsim.Convolve([gal, self.get_psf()])
+        final = galsim.Convolve([gal, self.get_psf(filter_name)])
         # wcs = galsim.PixelScale(self.pixel_scale)'
 
         try:
@@ -702,8 +696,8 @@ class GalSimGalaxyModel(object):
             image = None
         return image
 
-    def get_psf_image(self, ngrid=None):
-        psf = self.get_psf()
+    def get_psf_image(self, filter_name='r', ngrid=None):
+        psf = self.get_psf(filter_name)
         if self.psf_model_type == 'InterpolatedImage':
             return psf
         elif self.psf_model_type == 'PSFModel class':
@@ -723,8 +717,8 @@ class GalSimGalaxyModel(object):
         image.write(file_name)
         return None
 
-    def save_psf(self, file_name, ngrid=None):
-        image_epsf = self.get_psf_image(ngrid)
+    def save_psf(self, file_name, ngrid=None, filter_name='r'):
+        image_epsf = self.get_psf_image(filter_name, ngrid)
         image_epsf.write(file_name)
         return None
 
@@ -755,7 +749,7 @@ class GalSimGalaxyModel(object):
 
     def plot_psf(self, file_name, ngrid=None, title=None, filter_name='r'):
         import matplotlib.pyplot as plt
-        psf = self.get_psf()
+        psf = self.get_psf(filter_name)
         if ngrid is None:
             ngrid = 16
         image_epsf = psf.drawImage(image=None,
@@ -841,9 +835,10 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
         filter_name=filter_name_ground, title="LSST " + filter_name_ground)
     # Save the corresponding PSF
     lsst.save_psf("../TestData/test_lsst_psf" + file_lab + ".fits",
-        ngrid=ngrid_lsst/4)
+        ngrid=ngrid_lsst/4, filter_name=filter_name_ground)
     lsst.plot_psf("../TestData/test_lsst_psf" + file_lab + ".png",
-        ngrid=ngrid_lsst/4, title="LSST " + filter_name_ground)
+        ngrid=ngrid_lsst/4, title="LSST " + filter_name_ground,
+        filter_name=filter_name_ground)
 
     # WFIRST
     print("\n----- WFIRST -----")
@@ -873,9 +868,10 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
         filter_name=filter_name_space, title="WFIRST " + filter_name_space)
     # Save the corresponding PSF
     wfirst.save_psf("../TestData/test_wfirst_psf" + file_lab + ".fits",
-        ngrid=ngrid_wfirst/4)
+        ngrid=ngrid_wfirst/4, filter_name=filter_name_space)
     wfirst.plot_psf("../TestData/test_wfirst_psf" + file_lab + ".png",
-        ngrid=ngrid_wfirst/4, title="WFIRST " + filter_name_space)
+        ngrid=ngrid_wfirst/4, title="WFIRST " + filter_name_space,
+        filter_name=filter_name_space)
 
     lsst_data = lsst.get_image(galsim.Image(ngrid_lsst, ngrid_lsst), add_noise=True,
         filter_name=filter_name_ground).array
@@ -905,7 +901,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
         primary_diam=lsst.primary_diam_meters,
         pixel_scale_arcsec=lsst.pixel_scale,
         atmosphere=lsst.atmosphere)
-    seg.save_psf_images([lsst.get_psf_image().array], segment_index=seg_ndx,
+    seg.save_psf_images([lsst.get_psf_image(filter_name_ground).array], segment_index=seg_ndx,
         telescope='lsst',
         filter_name=filter_name_ground)
     save_bandpasses_to_segment(seg, lsst, k_lsst_filter_names, "LSST")
@@ -919,7 +915,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
         primary_diam=wfirst.primary_diam_meters,
         pixel_scale_arcsec=wfirst.pixel_scale,
         atmosphere=wfirst.atmosphere)
-    seg.save_psf_images([wfirst.get_psf_image().array], segment_index=seg_ndx,
+    seg.save_psf_images([wfirst.get_psf_image(filter_name_space).array], segment_index=seg_ndx,
         telescope='wfirst',
         filter_name=filter_name_space)
     save_bandpasses_to_segment(seg, wfirst, k_wfirst_filter_names, "WFIRST", scale=1)
