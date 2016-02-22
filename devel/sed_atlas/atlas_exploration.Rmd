@@ -1,0 +1,53 @@
+---
+title: "SED Atlas Exploration"
+author: "Michael D. Schneider"
+date: "February 22, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load}
+setwd("devel/sed_atlas/123/605")
+library(plyr)
+library(reshape2)
+library(ggplot2)
+
+files <- list.files(pattern = "\\.dat$")
+
+dat <- alply(files, 1, function(f) read.table(f, col.names=c("wavelength", "flux", "obs_wavelength", "source")))
+```
+
+
+```{r plot_all_spectra, echo=FALSE}
+pdat <- ldply(dat)
+
+p <- ggplot(pdat, aes(x=wavelength, y=flux)) + 
+  geom_line(aes(colour=X1)) + 
+  scale_x_log10("Wavelength (Angstroms)") + 
+  scale_y_log10(expression(Flux~(erg/s/cm^2/Angstrom)))
+p <- p + guides(colour=FALSE)
+print(p)
+```
+
+```{r pca}
+# Interpolate to a common wavelength array
+waves <- exp(seq(log(103), log(330557), length.out=500))
+flux.common <- llply(dat, function(x) {
+  # Can't interpolate in log(flux) because some values are negative
+  flux <- approx(log(x$wavelength), x$flux, log(waves))$y
+  return(flux)
+})
+
+flux.mat <- laply(flux.common, 'c')
+
+#pc <- prcomp(flux.mat)
+
+library(fastICA)
+ic <- fastICA(flux.mat, n.comp=4)
+```
+
+

@@ -41,7 +41,11 @@ k_telescopes = {
 }
 
 
-k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
+### These SEDs do not go to long enough wavelengths for WFIRST bands
+# k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
+### From the Brown et al. (2014) atlas:
+k_SED_names = ['NGC_0695_spec', 'NGC_4125_spec', 'NGC_4552_spec', 'CGCG_049-057_spec']
+
 k_lsst_filter_names = 'ugrizy'
 ### 'Central' passband wavelengths in nanometers
 k_lsst_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,

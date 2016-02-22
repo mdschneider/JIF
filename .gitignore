@@ -68,3 +68,7 @@ jif/.ipynb_checkpoints
 git_tag.tex
 *.fls
 roaster_example.pdf
+.Rproj.user
+*.tar
+devel/sed_atlas/123
+*.Rproj
