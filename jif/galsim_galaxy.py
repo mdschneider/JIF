@@ -30,7 +30,7 @@ k_telescopes = {
         "ref_filter_mag_param": 'r'
     },
     "WFIRST": {
-        "effective_diameter": galsim.wfirst.diameter, # meters
+        "effective_diameter": galsim.wfirst.diameter * (1. - galsim.wfirst.obscuration), # meters
         "pixel_scale": galsim.wfirst.pixel_scale,       # arcseconds / pixel
         # Exposure time for defining the zero point reference
         "exptime_zeropoint": galsim.wfirst.exptime, # seconds
@@ -56,7 +56,7 @@ k_wfirst_filter_central_wavelengths = {'r':620., 'Z087':867., 'Y106':1100.,
 # k_wfirst_filter_central_wavelengths = k_lsst_filter_central_wavelengths
 
 ### Minimum brightness a magnitude parameter can take
-k_mag_param_minval = 60.
+k_mag_param_minval = 99.
 
 
 k_spergel_paramnames = ['nu', 'hlr', 'e', 'beta']
@@ -801,7 +801,7 @@ def save_bandpasses_to_segment(seg, gg, filter_names, telescope_name="LSST", sca
     return None
 
 
-def make_test_images(filter_name_ground='r', filter_name_space='Z087',
+def make_test_images(filter_name_ground='r', filter_name_space='F184',
                      file_lab='', galaxy_model="Spergel"):
     """
     Use the GalSimGalaxyModel class to make test images of a galaxy for LSST and WFIRST.
@@ -820,7 +820,6 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
         pixel_scale_arcsec=k_telescopes['LSST']['pixel_scale'],
         noise=lsst_noise(82357),
         galaxy_model=galaxy_model,
-        wavelength_meters=k_lsst_filter_central_wavelengths[filter_name_ground] * 1.e-9,
         primary_diam_meters=8.4,
         filter_names=k_lsst_filter_names,
         filter_wavelength_scale=1.0,
@@ -847,8 +846,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='Z087',
         pixel_scale_arcsec=k_telescopes['WFIRST']['pixel_scale'],
         noise=wfirst_noise(82357),
         galaxy_model=galaxy_model,
-        wavelength_meters=k_wfirst_filter_central_wavelengths[filter_name_space] * 1.e-9,
-        primary_diam_meters=2.4,
+        primary_diam_meters=galsim.wfirst.diameter,
         filter_names=k_wfirst_filter_names,
         filter_wavelength_scale=1.0, #1.0e3, # convert from micrometers to nanometers
         atmosphere=False)
@@ -956,7 +954,7 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
         src_model = GalSimGalaxyModel(pixel_scale=lsst_pixel_scale_arcsec,
             noise=lsst_noise(82357),
             galaxy_model="Spergel",
-            wavelength=770.e-9, primary_diam_meters=8.4, atmosphere=True)
+            primary_diam_meters=8.4, atmosphere=True)
         src_model.params[0]["e"] = ellipticities[isrcs]
         src_model.params[0]["beta"] = orientations[isrcs]
         src_model.params[0]["hlr"] = hlrs[isrcs]
