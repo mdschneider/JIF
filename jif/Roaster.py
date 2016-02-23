@@ -68,7 +68,12 @@ class Roaster(object):
                               ['Sersic', 'Spergel', 'BulgeDisk' (default)]
     @param telescope          Select only this telescope observations from the
                               input, if provided.
-                              If not provided, then get all telescopes.
+                              If not provided, then get data for all available
+                              telescopes.
+    @param filters_to_load    Select only data for these named filters from the
+                              input, if provided.
+                              If not provided, then get data for all available
+                              filters (for each telescope).
     @param debug              Save debugging outputs (including model images
                               per step?)
     @param model_paramnames   Names of the galaxy model parameters to sample in.
@@ -80,6 +85,7 @@ class Roaster(object):
                  data_format='test_galsim_galaxy',
                  galaxy_model_type='BulgeDisk',
                  telescope=None,
+                 filters_to_load=None,
                  debug=False,
                  model_paramnames=['hlr', 'e', 'beta']):
         if lnprior_omega is None:
@@ -93,6 +99,7 @@ class Roaster(object):
         self.data_format = data_format
         self.galaxy_model_type = galaxy_model_type
         self.telescope = telescope
+        self.filters_to_load = filters_to_load
         self.debug = debug
         self.model_paramnames = model_paramnames
         ### Check if any of the active parameters are for a PSF model.
@@ -184,7 +191,14 @@ class Roaster(object):
             for itel, tel in enumerate(telescopes):
                 g = 'segments/seg{:d}/{}'.format(segment, tel.lower())
                 filter_names = f[g].keys()
+                if self.filters_to_load is not None:
+                    filter_names = [filt for filt in filter_names
+                                    if filt in self.filters_to_load]
+                if len(filter_names) == 0:
+                    raise ValueError("No data available in the requested filters")
                 for ifilt, filter_name in enumerate(filter_names):
+                    logging.debug("Loading data for filter {} in telescope {}".format(
+                        filter_name, tel))
                     ### If present in the segments file,
                     ### load filter information and instantiate the galsim Bandpass.
                     ### If the filters section is not found, then revert to using
@@ -628,6 +642,10 @@ def main():
                         help="Select only a single telescope from the input data file \
                         (Default: None - get all telescopes data)")
 
+    parser.add_argument("--filters", type=str, nargs='+',
+                        help="Names of a subset of filters to load from the input data file \
+                        (Default: None - use data in all available filters)")
+
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
 
@@ -672,7 +690,8 @@ def main():
                       lnprior_Pi=lnprior_Pi,
                       galaxy_model_type=args.galaxy_model_type,
                       model_paramnames=args.model_params,
-                      telescope=args.telescope)
+                      telescope=args.telescope,
+                      filters_to_load=args.filters)
     roaster.Load(args.infiles[0], segment=args.segment_numbers[0])
 
     import pprint
