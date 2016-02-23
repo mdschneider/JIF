@@ -244,10 +244,14 @@ class GalSimGalaxyModel(object):
     @param wavelength_meters    Wavelength in meters to set the scale for the
                                 optics PSF [Default: 620e-9]
     @param primary_diam_meters  Diameter of the telescope primary [Default: 2.4]
-    @param filters              List of galsim.Bandpass instances
-    @param filter_names         List of filter names to be used instead of the 'filters' parameter.
-                                If supplied, the names in this list must match those
+    @param filters              List of galsim.Bandpass instances. This argument, if not 'None',
+                                takes precedence over 'filter_names' and defines which filters can
+                                be used with this galaxy model instance.
+    @param filter_names         List of filter names to be used if the 'filters' parameter is not
+                                specified. If supplied, the names in this list must match those
                                 in the ../input directory with tables of bandpasses.
+                                If neither 'filters' or 'filter_names' ares supplied, a Warning
+                                is raised and subsequent execution may produce unexpected results.
     @param filter_wavelength_scale Multiplicative scaling to apply to input filter wavelenghts
     @param atmosphere           Simulate an (infinite exposure) atmosphere PSF? [Default: False]
     @param psf_model            Specification for the PSF model. Can be:

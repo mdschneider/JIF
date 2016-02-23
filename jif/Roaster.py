@@ -171,8 +171,9 @@ class Roaster(object):
 
             instruments = telescopes
 
+            have_bandpasses = False
+
             pixel_scales = []
-            wavelengths = []
             primary_diams = []
             atmospheres = []
             tel_names = []
@@ -184,16 +185,24 @@ class Roaster(object):
                 g = 'segments/seg{:d}/{}'.format(segment, tel.lower())
                 filter_names = f[g].keys()
                 for ifilt, filter_name in enumerate(filter_names):
-                    ### Load filter information and instantiate the galsim Bandpass
+                    ### If present in the segments file,
+                    ### load filter information and instantiate the galsim Bandpass.
+                    ### If the filters section is not found, then revert to using
+                    ### a known filter selection given the 'telescope' name in
+                    ### the segments file. If the telescope name is not known by
+                    ### galsim_galaxy then raise an error and stop.
                     fg = 'telescopes/{}/filters/{}'.format(tel, filter_name)
-                    waves_nm = f[fg + '/waves_nm']
-                    throughput = f[fg + '/throughput']
-                    wavelength = f[fg].attrs['effective_wavelength']
-                    table = galsim.LookupTable(x=waves_nm, f=throughput)
-                    bp = galsim_galaxy.load_filter_file_to_bandpass(table,
-                        effective_diameter_meters=galsim_galaxy.k_telescopes[tel]['effective_diameter'],
-                        exptime_sec=galsim_galaxy.k_telescopes[tel]['exptime_zeropoint'])
-                    self.filters[filter_name] = bp
+                    try:
+                        waves_nm = f[fg + '/waves_nm']
+                        throughput = f[fg + '/throughput']
+                        table = galsim.LookupTable(x=waves_nm, f=throughput)
+                        bp = galsim_galaxy.load_filter_file_to_bandpass(table,
+                            effective_diameter_meters=galsim_galaxy.k_telescopes[tel]['effective_diameter'],
+                            exptime_sec=galsim_galaxy.k_telescopes[tel]['exptime_zeropoint'])
+                        self.filters[filter_name] = bp
+                        have_bandpasses = True
+                    except KeyError:
+                        have_bandpasses = False
 
                     h = 'segments/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
                     nepochs = len(f[h])
@@ -223,8 +232,6 @@ class Roaster(object):
                             psf_types.append(seg.attrs['psf_type'])
                             psfs.append(seg['psf'])
                         ###
-                        wavelengths.append(wavelength)
-                        ###
                         tel_group = f['telescopes/{}'.format(tel)]
                         pixel_scales.append(tel_group.attrs['pixel_scale_arcsec'])
                         primary_diams.append(tel_group.attrs['primary_diam'])
@@ -239,7 +246,10 @@ class Roaster(object):
             #     logging.info("<Roaster> Must specify a segment number as an integer")
             # print "Have data for instruments:", instruments
 
-        print "Filters:", self.filters.keys()
+        if have_bandpasses:
+            print "Filters:", self.filters.keys()
+        else:
+            self.filters = None
 
         nimages = len(self.pixel_data)
         self.num_epochs = nimages
@@ -262,9 +272,9 @@ class Roaster(object):
                                 galaxy_model=self.galaxy_model_type,
                                 active_parameters=self.model_paramnames,
                                 pixel_scale_arcsec=pixel_scales[idat],
-                                wavelength_meters=wavelengths[idat]*1e-9,
                                 primary_diam_meters=primary_diams[idat],
                                 filters=self.filters,
+                                filter_names=self.filter_names[idat],
                                 atmosphere=atmospheres[idat],
                                 psf_model=psfs[idat])
                             for idat in xrange(nimages)]
@@ -430,6 +440,7 @@ def do_sampling(args, roaster, return_samples=False):
     steps if `return_samples` is True.
     """
     omega_interim = roaster.get_params()
+    logging.info("Have {:d} sampling parameters".format(len(omega_interim)))
 
     nvars = len(omega_interim)
     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
@@ -669,7 +680,7 @@ def main():
 
     if not args.quiet:
         print("\nsource model 0:")
-        pp.pprint(self.src_models[0][0].__dict__)
+        pp.pprint(roaster.src_models[0][0].__dict__)
 
     do_sampling(args, roaster)
 
