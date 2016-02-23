@@ -30,7 +30,8 @@ class RoasterInspector(object):
         self.model_paramnames = f.attrs['model_paramnames']
         self.paramnames = f['post'].attrs['paramnames']
         if len(self.paramnames.shape) > 1:
-            self.paramnames = self.paramnames[0]
+            self.paramnames = np.array(self.paramnames).ravel()
+        #     self.paramnames = self.paramnames[0]
         self.data = f['post'][...]
         self.logprob = f['logprobs'][...]
         self.nburn = f.attrs['nburn']

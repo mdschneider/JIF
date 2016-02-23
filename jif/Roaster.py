@@ -515,14 +515,21 @@ def write_results(args, pps, lnps, roaster):
         f.attrs['telescope'] = roaster.telescope
     else:
         f.attrs['telescope'] = 'None'
+
     f.attrs['model_paramnames'] = roaster.model_paramnames
+
+    if roaster.num_sources == 1:
+        paramnames = roaster.model_paramnames
+    elif roaster.num_sources > 1:
+        paramnames = [[p + '_src{:d}'.format(isrc) for p in roaster.model_paramnames]
+                      for isrc in xrange(roaster.num_sources)]
 
     ### Write the MCMC samples and log probabilities
     if "post" in f:
         del f["post"]
     post = f.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
-    pnames = np.array(roaster.src_models[0][0].paramnames)
-    post.attrs['paramnames'] = pnames
+    # pnames = np.array(roaster.src_models[0][0].paramnames)
+    post.attrs['paramnames'] = paramnames
     if "logprobs" in f:
         del f["logprobs"]
     logprobs = f.create_dataset("logprobs", data=np.vstack(lnps))
