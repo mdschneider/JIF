@@ -561,17 +561,17 @@ class GalSimGalaxyModel(object):
                 psf = optics
         return psf
 
-    def get_SED(self, gal_comp='', flux_ref_wavelength=620.):
+    def get_SED(self, gal_comp=''):
         """
         Get the GalSim SED object given the SED parameters and redshift.
 
         This routine passes galsim_galaxy magnitude parameters to the GalSim
         SED.withMagnitude() method.
 
-        [Deprecated 2016-02-17]
-        This routine passes galsim_galaxy flux parameters to the GalSim SED.withFluxDensity()
-        method. The flux parameters therefore have units of photons/nm at a reference wavelength
-        (here defined to be 620 nm) as required by GalSim.
+        The magnitude GalSimGalaxyModel magnitude parameters are defined for redshift zero. If a
+        model is requested for a different redshift, then the SED amplitude is set before the
+        redshift, resulting in output apparent magnitudes that may not match the input apparent
+        magnitude parameter (unless z=0).
 
         @param gal_comp             Name of the galaxy component (bulge,disk) to
                                     select. Can be the empty string to get the
@@ -580,14 +580,10 @@ class GalSimGalaxyModel(object):
         if len(gal_comp) > 0:
             gal_comp = '_' + gal_comp
         bp =self.filters['ref']
-        SEDs = [self.SEDs[SED_name].atRedshift(self.params[0].redshift).withMagnitude(
+        SEDs = [self.SEDs[SED_name].withMagnitude(
             target_magnitude=self.params[0]['mag_sed{:d}{}'.format(i+1, gal_comp)],
-            bandpass=bp)
+            bandpass=bp).atRedshift(self.params[0].redshift)
                 for i, SED_name in enumerate(self.SEDs)]
-        # SEDs = [self.SEDs[SED_name].withFluxDensity(
-        #     target_flux_density=self.params[0]['flux_sed{:d}{}'.format(i+1, gal_comp)],
-        #     wavelength=flux_ref_wavelength).atRedshift(self.params[0].redshift)
-        #         for i, SED_name in enumerate(self.SEDs)]
         return reduce(add, SEDs)
 
     def get_flux(self, filter_name='r'):
