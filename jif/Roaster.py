@@ -511,6 +511,10 @@ def write_results(args, pps, lnps, roaster):
     f.attrs['infile'] = args.infiles[0]
     f.attrs['segment_number'] = args.segment_numbers[0]
     f.attrs['galaxy_model_type'] = roaster.galaxy_model_type
+    if roaster.filters_to_load is not None:
+        f.attrs['filters_to_load'] = roaster.filters_to_load
+    else:
+        f.attrs['filters_to_load'] = 'None'
     if roaster.telescope is not None:
         f.attrs['telescope'] = roaster.telescope
     else:

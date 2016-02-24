@@ -24,6 +24,12 @@ class RoasterInspector(object):
         self.roaster_infile = f.attrs['infile']
         self.segment_number = f.attrs['segment_number']
         self.galaxy_model_type = f.attrs['galaxy_model_type']
+        self.filters_to_load = f.attrs['filters_to_load']
+        if isinstance(self.filters_to_load, str):
+            if self.filters_to_load == 'None':
+                self.filters_to_load = None
+            else:
+                self.filters_to_load = [self.filters_to_load]
         self.telescope = f.attrs['telescope']
         if self.telescope == 'None':
             self.telescope = None
@@ -54,7 +60,11 @@ class RoasterInspector(object):
     def summary(self):
         print self.__str__()
         # print "Parameter names:", self.paramnames
+        print "Roaster input file: ", self.roaster_infile
+        print "Segment number: {:d}".format(self.segment_number)
         print "data: ", self.data.shape
+        print "galaxy model: {}".format(self.galaxy_model_type)
+        print "filter subset: ", self.filters_to_load
         print "paramnames:", self.paramnames.shape, "\n", self.paramnames
         # print self.data
         # print self.logprob
@@ -76,9 +86,12 @@ class RoasterInspector(object):
     def _load_roaster_input_data(self):
         self.roaster = Roaster.Roaster(galaxy_model_type=self.galaxy_model_type,
             telescope=self.telescope,
-            model_paramnames=self.model_paramnames, debug=False)
-        ### The following puts data in Roaster.pixel_data
+            model_paramnames=self.model_paramnames,
+            filters_to_load=self.filters_to_load,
+            debug=False)
+        ### The following puts data in self.roaster.pixel_data
         self.roaster.Load(self.roaster_infile, segment=self.segment_number)
+        print "Length of Roaster pixel data list: {:d}".format(len(self.roaster.pixel_data))
         return None
 
     def plot(self):
@@ -124,7 +137,7 @@ class RoasterInspector(object):
         Plot panels of pixel data, model, and residuals
         """
         self._load_roaster_input_data()
-        for idat, dat in enumerate(Roaster.pixel_data):
+        for idat, dat in enumerate(self.roaster.pixel_data):
             fig = plt.figure(figsize=(10, 10/1.618))
 
             vmin = dat.min()

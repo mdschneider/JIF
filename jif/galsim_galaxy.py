@@ -110,7 +110,7 @@ k_galparams_defaults = {
                  1.0,       # hlr
                  0.1,       # e
                  np.pi/4,   # beta
-                 17.,      # mag_sed1
+                 20.,      # mag_sed1
                  k_mag_param_minval,   # mag_sed2
                  k_mag_param_minval,   # mag_sed3
                  k_mag_param_minval,   # mag_sed4
@@ -173,6 +173,16 @@ def load_filter_file_to_bandpass(table, wavelength_scale=1.0,
     return bp.withZeropoint(zeropoint='AB',
         effective_diameter=100. * effective_diameter_meters,
         exptime=exptime_sec)
+
+
+def flux_from_AB_mag(mag, exposure_time_s=30, gain=1.0):
+    """
+    Convert an AB apparent magnitude to a flux
+    """
+    # flux_AB = 3.63e-20 # ergs / s / Hz / cm^2
+    mag_AB = 48.6 - 84. ### kludgey offset here to make fluxes look okay in GalSim units
+    flux = 10. ** (-(mag + mag_AB) / 2.5)
+    return flux
 
 
 def wrap_ellipticity_phase(phase):
@@ -258,6 +268,11 @@ class GalSimGalaxyModel(object):
                                     1. a GalSim InterpolatedImage instance
                                     2. a PSFModel instance
                                     3. a name of a parametric model
+    @param achromatic_galaxy    If True, don't use the GalSim Chromatic features. Instead, model
+                                galaxies with a flux set by the 'mag_sed1' model parameter (with
+                                appropriate transformation to flux for AB mags). For multiple
+                                bands observed, this effectively assumes a flat SED model if all
+                                passbands were of equivalent shapes.
     """
     ### Define a reference filter with respect to which magnitude parameters are defined
     ref_filter = 'r'
@@ -272,7 +287,8 @@ class GalSimGalaxyModel(object):
                  filter_names=None,
                  filter_wavelength_scale=1.0,
                  atmosphere=False,
-                 psf_model=None):
+                 psf_model=None,
+                 achromatic_galaxy=False):
         self.telescope_name = telescope_name
         self.pixel_scale = pixel_scale_arcsec
         # if noise is None:
@@ -288,7 +304,7 @@ class GalSimGalaxyModel(object):
         self.atmosphere = atmosphere
         self.psf_model = psf_model
 
-        self.achromatic_galaxy = False ### TODO: Finish implementation of achromatic_galaxy feature
+        self.achromatic_galaxy = achromatic_galaxy ### TODO: Finish implementation of achromatic_galaxy feature
 
         ### Set GalSim galaxy model parameters
         self.params = np.core.records.array(k_galparams_defaults[galaxy_model],
@@ -564,9 +580,9 @@ class GalSimGalaxyModel(object):
         if len(gal_comp) > 0:
             gal_comp = '_' + gal_comp
         bp =self.filters['ref']
-        SEDs = [self.SEDs[SED_name].withMagnitude(
+        SEDs = [self.SEDs[SED_name].atRedshift(self.params[0].redshift).withMagnitude(
             target_magnitude=self.params[0]['mag_sed{:d}{}'.format(i+1, gal_comp)],
-            bandpass=bp).atRedshift(self.params[0].redshift)
+            bandpass=bp)
                 for i, SED_name in enumerate(self.SEDs)]
         # SEDs = [self.SEDs[SED_name].withFluxDensity(
         #     target_flux_density=self.params[0]['flux_sed{:d}{}'.format(i+1, gal_comp)],
@@ -620,6 +636,8 @@ class GalSimGalaxyModel(object):
                 gsparams=self.gsparams)
             if self.achromatic_galaxy:
                 gal = mono_gal
+                gal = gal.withFlux(flux_from_AB_mag(self.params[0].mag_sed1))
+                # gal = gal.withFlux(1.e6)
             else:
                 SED = self.get_SED()
                 gal = galsim.Chromatic(mono_gal, SED)
@@ -679,10 +697,14 @@ class GalSimGalaxyModel(object):
         # wcs = galsim.PixelScale(self.pixel_scale)'
 
         try:
-            image = final.drawImage(bandpass=self.filters[filter_name],
-                image=out_image, scale=self.pixel_scale, gain=gain,
-                add_to_image=False,
-                method='fft')
+            if self.achromatic_galaxy:
+                image = final.drawImage(image=out_image, scale=self.pixel_scale,
+                    gain=gain, add_to_image=False, method='fft')
+            else:
+                image = final.drawImage(bandpass=self.filters[filter_name],
+                    image=out_image, scale=self.pixel_scale, gain=gain,
+                    add_to_image=False,
+                    method='fft')
             if add_noise:
                 if self.telescope_name == "WFIRST":
                     sky_level = wfirst_sky_background(filter_name, self.filters[filter_name])
@@ -810,7 +832,8 @@ def save_bandpasses_to_segment(seg, gg, filter_names, telescope_name="LSST", sca
 
 
 def make_test_images(filter_name_ground='r', filter_name_space='F184',
-                     file_lab='', galaxy_model="Spergel"):
+                     file_lab='', galaxy_model="Spergel",
+                     achromatic_galaxy=False):
     """
     Use the GalSimGalaxyModel class to make test images of a galaxy for LSST and WFIRST.
     """
@@ -831,7 +854,8 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
         primary_diam_meters=8.4,
         filter_names=k_lsst_filter_names,
         filter_wavelength_scale=1.0,
-        atmosphere=True)
+        atmosphere=True,
+        achromatic_galaxy=achromatic_galaxy)
 
     # Save the image
     lsst.save_image("../TestData/test_lsst_image" + file_lab + ".fits",
@@ -857,13 +881,15 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
         primary_diam_meters=galsim.wfirst.diameter,
         filter_names=k_wfirst_filter_names,
         filter_wavelength_scale=1.0, #1.0e3, # convert from micrometers to nanometers
-        atmosphere=False)
+        atmosphere=False,
+        achromatic_galaxy=achromatic_galaxy)
 
-    print("LSST AB magnitude:   {:5.4f}".format(lsst.get_magnitude(filter_name_ground)))
-    print("LSST flux:   {:5.4f}".format(lsst.get_flux(filter_name_ground)))
+    if not achromatic_galaxy:
+        print("LSST AB magnitude:   {:5.4f}".format(lsst.get_magnitude(filter_name_ground)))
+        print("LSST flux:   {:5.4f}".format(lsst.get_flux(filter_name_ground)))
 
-    print("WFIRST AB magnitude: {:5.4f}".format(wfirst.get_magnitude(filter_name_space)))
-    print("WFIRST flux: {:5.4f}".format(wfirst.get_flux(filter_name_space)))
+        print("WFIRST AB magnitude: {:5.4f}".format(wfirst.get_magnitude(filter_name_space)))
+        print("WFIRST flux: {:5.4f}".format(wfirst.get_flux(filter_name_space)))
 
     ngrid_wfirst = np.ceil(ngrid_lsst * lsst.pixel_scale / wfirst.pixel_scale) #128
 
@@ -995,5 +1021,5 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
 
 if __name__ == "__main__":
-    make_test_images()
+    make_test_images(achromatic_galaxy=False)
     # make_blended_test_image()
