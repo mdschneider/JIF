@@ -531,6 +531,26 @@ class GalSimGalaxyModel(object):
             valid_params *= self.psf_model.validate_params()
         return valid_params
 
+    def set_mag_from_obs(self, sed_index, appr_mag, redshift=0.0, filter_name='r', gal_comp=''):
+        """
+        Set the magnitude model parameter given an apparent magnitude at a specified redshift in
+        a specified filter.
+
+        @param sed_index    Index into the SED template name list
+        @param appr_mag     Apparent magnitude to use in setting the model magnitude parameter
+        @param redshift     Redshift at which the input apparent magnitude is defined.
+        @param filter_name  Name of the filter to use to calculate magnitudes. (Default: 'r')
+        @param gal_comp     Name of the galaxy component (bulge,disk) to select. Can be the empty
+                            string to get the composite galaxy model SED.
+        """
+        bp = self.filters[filter_name]
+        bp_ref = self.filters['ref']
+        SED = self.SEDs[k_SED_names[sed_index]]
+        SED = SED.atRedshift(redshift).withMagnitude(target_magnitude=appr_mag, bandpass=bp)
+        mag_model = SED.atRedshift(0.).calculateMagnitude(bp_ref)
+        self.params['mag_sed{:d}'.format(sed_index+1)][0] = mag_model
+        return None
+
     def get_psf(self, filter_name='r'):
         """
         Get the PSF as a `GSObject` for use in GalSim image rendering or
