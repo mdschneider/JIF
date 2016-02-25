@@ -531,26 +531,6 @@ class GalSimGalaxyModel(object):
             valid_params *= self.psf_model.validate_params()
         return valid_params
 
-    def set_mag_from_obs(self, sed_index, appr_mag, redshift=0.0, filter_name='r', gal_comp=''):
-        """
-        Set the magnitude model parameter given an apparent magnitude at a specified redshift in
-        a specified filter.
-
-        @param sed_index    Index into the SED template name list
-        @param appr_mag     Apparent magnitude to use in setting the model magnitude parameter
-        @param redshift     Redshift at which the input apparent magnitude is defined.
-        @param filter_name  Name of the filter to use to calculate magnitudes. (Default: 'r')
-        @param gal_comp     Name of the galaxy component (bulge,disk) to select. Can be the empty
-                            string to get the composite galaxy model SED.
-        """
-        bp = self.filters[filter_name]
-        bp_ref = self.filters['ref']
-        SED = self.SEDs[k_SED_names[sed_index]]
-        SED = SED.atRedshift(redshift).withMagnitude(target_magnitude=appr_mag, bandpass=bp)
-        mag_model = SED.atRedshift(0.).calculateMagnitude(bp_ref)
-        self.params['mag_sed{:d}'.format(sed_index+1)][0] = mag_model
-        return None
-
     def get_psf(self, filter_name='r'):
         """
         Get the PSF as a `GSObject` for use in GalSim image rendering or
@@ -581,6 +561,37 @@ class GalSimGalaxyModel(object):
                 psf = optics
         return psf
 
+    def set_mag_from_obs(self, sed_index, appr_mag, redshift=0.0, filter_name='r', gal_comp=''):
+        """
+        Set the magnitude model parameter given an apparent magnitude at a specified redshift in
+        a specified filter.
+
+        @param sed_index    Index into the SED template name list
+        @param appr_mag     Apparent magnitude to use in setting the model magnitude parameter
+        @param redshift     Redshift at which the input apparent magnitude is defined.
+        @param filter_name  Name of the filter to use to calculate magnitudes. (Default: 'r')
+        @param gal_comp     Name of the galaxy component (bulge,disk) to select. Can be the empty
+                            string to get the composite galaxy model SED.
+        """
+        if appr_mag < 98.:
+            bp = self.filters[filter_name]
+            bp_ref = self.filters['ref']
+            ### FIXME: The 2 choices of SED here should be equivalent for setting this parameter,
+            ### but they're not.
+            # SED = self.SEDs[k_SED_names[sed_index]]
+            SED = self.get_SED()
+            SED = SED.atRedshift(redshift).withMagnitude(target_magnitude=appr_mag, bandpass=bp)
+            mag_model = SED.atRedshift(0.).calculateMagnitude(bp_ref)
+            # print "appr_mag: {:8.6f}".format(appr_mag)
+            # print "mag_model: {:8.6f}".format(mag_model)
+            # print "mag out:  {:8.6f}".format(SED.atRedshift(redshift).calculateMagnitude(bp))
+            # print "mag out:  {:8.6f}".format(SED.atRedshift(0.).withMagnitude(mag_model, bandpass=bp_ref).atRedshift(redshift).calculateMagnitude(bp))
+            self.params['mag_sed{:d}'.format(sed_index+1)][0] = mag_model
+            # print "mag out:  {:8.6f}".format(self.get_SED().atRedshift(redshift).calculateMagnitude(bp))
+        else:
+            self.params['mag_sed{:d}'.format(sed_index+1)][0] = 99.
+        return None
+
     def get_SED(self, gal_comp=''):
         """
         Get the GalSim SED object given the SED parameters and redshift.
@@ -600,7 +611,7 @@ class GalSimGalaxyModel(object):
         if len(gal_comp) > 0:
             gal_comp = '_' + gal_comp
         bp =self.filters['ref']
-        SEDs = [self.SEDs[SED_name].withMagnitude(
+        SEDs = [self.SEDs[SED_name].atRedshift(0.).withMagnitude(
             target_magnitude=self.params[0]['mag_sed{:d}{}'.format(i+1, gal_comp)],
             bandpass=bp).atRedshift(self.params[0].redshift)
                 for i, SED_name in enumerate(self.SEDs)]
