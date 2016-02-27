@@ -270,6 +270,8 @@ class Roaster(object):
             self.filters = None
 
         nimages = len(self.pixel_data)
+        ### Here 'epoch' refers to any repeat observation of a source, whether it's in a different
+        ### filter, telescope, or just a different time with the same telescope and filter.
         self.num_epochs = nimages
         self.nx = np.zeros(nimages, dtype=int)
         self.ny = np.zeros(nimages, dtype=int)
@@ -314,9 +316,17 @@ class Roaster(object):
         """
         Make a flat array of active model parameters for all sources
 
+        If sampling PSF parameters as well as galaxy parameters, then append distinct PSF model
+        parameters for each observation of the given segment.
+
         For use in MCMC sampling.
         """
+        ### Get the galaxy model parameters, and, if PSF sampling, the epoch-0 PSF model parameters
         p = np.array([m[0].get_params() for m in self.src_models]).ravel()
+        ### If PSF sampling, append the PSF model parameters for the remaining epochs
+        if self.sample_psf and self.num_epochs > 1:
+            p_psf = np.array([[m[i].get_psf_params() for i in xrange(1, self.num_epochs)]
+                for m in self.src_models]).ravel()
         return p
 
     def set_params(self, p):
@@ -382,11 +392,16 @@ class Roaster(object):
                 imin = isrcs * self.n_params
                 imax = (isrcs + 1) * self.n_params
                 ### Pass active + inactive parameters, with names included
+                ### We index only the first 'epoch' here, because the source model parameters should
+                ### be the same for all epochs.
                 p = copy.deepcopy(self.src_models[isrcs][0].params)
                 lnp += self.lnprior_omega(p)
                 if self.sample_psf:
-                    ppsf = copy.deepcopy(self.src_models[isrcs][0].psf_model.params)
-                    lnp += self.lnprior_Pi(ppsf)
+                    ### Iterate over epochs and evaluate the PSF model prior for each epoch.
+                    ### Each epoch has a different PSF, so the PSF model parameters are distinct.
+                    for iepoch in xrange(self.num_epochs):
+                        ppsf = copy.deepcopy(self.src_models[isrcs][iepoch].psf_model.params)
+                        lnp += self.lnprior_Pi(ppsf)
         else:
             lnp = -np.inf
         return lnp

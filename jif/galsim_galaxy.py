@@ -476,6 +476,17 @@ class GalSimGalaxyModel(object):
             #     p[ip] = np.log(p[ip])
         return p
 
+    def get_psf_params(self):
+        """
+        Return a list of active model parameter values if using a parametric PSF model
+
+        If the PSF is modeled as a static image then return an empty list.
+        """
+        if self.psf_model_type == "PSFModel class":
+            return self.psf_model.get_params()
+        else:
+            return []
+
     def validate_params(self):
         """
         Check that all model parameters take values inside allowed ranges.
