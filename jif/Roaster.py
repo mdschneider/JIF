@@ -79,6 +79,8 @@ class Roaster(object):
     @param model_paramnames   Names of the galaxy model parameters to sample in.
                               These must match names in a galsim_galaxy model
                               and/or a psf_model.
+    @param achromatic_galaxy  Use an achromatic galaxy model (or, by default use
+                              chromatic GalSim features)
     """
     def __init__(self, lnprior_omega=None,
                  lnprior_Pi=None,
@@ -87,7 +89,8 @@ class Roaster(object):
                  telescope=None,
                  filters_to_load=None,
                  debug=False,
-                 model_paramnames=['hlr', 'e', 'beta']):
+                 model_paramnames=['hlr', 'e', 'beta'],
+                 achromatic_galaxy=False):
         if lnprior_omega is None:
             self.lnprior_omega = EmptyPrior()
         else:
@@ -102,6 +105,7 @@ class Roaster(object):
         self.filters_to_load = filters_to_load
         self.debug = debug
         self.model_paramnames = model_paramnames
+        self.achromatic_galaxy = achromatic_galaxy
         ### Check if any of the active parameters are for a PSF model.
         ### If so, we will sample in the PSF and need to setup accordingly
         ### when the Load() function is called.
@@ -290,7 +294,8 @@ class Roaster(object):
                                 filters=self.filters,
                                 filter_names=self.filter_names[idat],
                                 atmosphere=atmospheres[idat],
-                                psf_model=psfs[idat])
+                                psf_model=psfs[idat],
+                                achromatic_galaxy=self.achromatic_galaxy)
                             for idat in xrange(nimages)]
                            for isrcs in xrange(self.num_sources)]
         self.n_params = self.src_models[0][0].n_params
@@ -509,7 +514,10 @@ def write_results(args, pps, lnps, roaster):
     ### Save attributes so we can later instantiate Roaster with the same
     ### settings.
     f.attrs['infile'] = args.infiles[0]
-    f.attrs['segment_number'] = args.segment_numbers[0]
+    if isinstance(args.segment_numbers, list):
+        f.attrs['segment_number'] = args.segment_numbers[0]
+    else:
+        f.attrs['segment_number'] = 'all'
     f.attrs['galaxy_model_type'] = roaster.galaxy_model_type
     if roaster.filters_to_load is not None:
         f.attrs['filters_to_load'] = roaster.filters_to_load
@@ -519,8 +527,8 @@ def write_results(args, pps, lnps, roaster):
         f.attrs['telescope'] = roaster.telescope
     else:
         f.attrs['telescope'] = 'None'
-
     f.attrs['model_paramnames'] = roaster.model_paramnames
+    f.attrs['achromatic_galaxy'] = roaster.achromatic_galaxy
 
     if roaster.num_sources == 1:
         paramnames = roaster.model_paramnames

@@ -109,7 +109,7 @@ k_galparams_defaults = {
                  0.3,       # nu
                  1.0,       # hlr
                  0.1,       # e
-                 np.pi/4,   # beta
+                 np.pi/6,   # beta
                  20.,      # mag_sed1
                  k_mag_param_minval,   # mag_sed2
                  k_mag_param_minval,   # mag_sed3
@@ -603,9 +603,6 @@ class GalSimGalaxyModel(object):
         if len(gal_comp) > 0:
             gal_comp = '_' + gal_comp
         bp = self.filters['ref']
-        # print "gg redshift: {:8.6f}".format(self.params[0].redshift)
-        # for i in xrange(4):
-        #     print "\tised: {:d}, mag: {:8.6f}".format(i, self.params[0]['mag_sed{:d}{}'.format(i+1, gal_comp)])
         SEDs = [self.SEDs[SED_name].atRedshift(0.).withMagnitude(
             target_magnitude=self.params[0]['mag_sed{:d}{}'.format(i+1, gal_comp)],
             bandpass=bp).atRedshift(self.params[0].redshift)

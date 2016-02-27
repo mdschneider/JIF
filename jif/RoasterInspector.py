@@ -34,6 +34,7 @@ class RoasterInspector(object):
         if self.telescope == 'None':
             self.telescope = None
         self.model_paramnames = f.attrs['model_paramnames']
+        self.achromatic_galaxy = f.attrs['achromatic_galaxy']
         self.paramnames = f['post'].attrs['paramnames']
         if len(self.paramnames.shape) > 1:
             self.paramnames = np.array(self.paramnames).ravel()
@@ -88,7 +89,8 @@ class RoasterInspector(object):
             telescope=self.telescope,
             model_paramnames=self.model_paramnames,
             filters_to_load=self.filters_to_load,
-            debug=False)
+            debug=False,
+            achromatic_galaxy=self.achromatic_galaxy)
         ### The following puts data in self.roaster.pixel_data
         self.roaster.Load(self.roaster_infile, segment=self.segment_number)
         print "Length of Roaster pixel data list: {:d}".format(len(self.roaster.pixel_data))
