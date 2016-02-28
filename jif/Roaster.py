@@ -303,7 +303,7 @@ class Roaster(object):
                            for isrcs in xrange(self.num_sources)]
         ### Count galaxy 'active' parameters plus distinct PSF parameters for all epochs.
         self.n_psf_params = self.src_models[0][0].n_psf_params
-        self.n_gal_params = self.src_models[0][0].n_params - n_psf_params
+        self.n_gal_params = self.src_models[0][0].n_params - self.n_psf_params
         self.n_params = self.n_gal_params + self.num_epochs * self.n_psf_params
         logging.debug("<Roaster> Finished loading data")
         if self.debug:
