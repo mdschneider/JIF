@@ -12,6 +12,7 @@ instances of the script to process multiple segments).
 import argparse
 import sys
 import os.path
+import string
 import copy
 import numpy as np
 import h5py
@@ -300,7 +301,10 @@ class Roaster(object):
                                 achromatic_galaxy=self.achromatic_galaxy)
                             for idat in xrange(nimages)]
                            for isrcs in xrange(self.num_sources)]
-        self.n_params = self.src_models[0][0].n_params
+        ### Count galaxy 'active' parameters plus distinct PSF parameters for all epochs.
+        self.n_psf_params = self.src_models[0][0].n_psf_params
+        self.n_gal_params = self.src_models[0][0].n_params - n_psf_params
+        self.n_params = self.n_gal_params + self.num_epochs * self.n_psf_params
         logging.debug("<Roaster> Finished loading data")
         if self.debug:
             print "\npixel data shapes:", [dat.shape for dat in self.pixel_data]
@@ -341,21 +345,28 @@ class Roaster(object):
         For use in MCMC sampling.
         """
         valid_params = True
+        n = self.n_gal_params + self.n_psf_params
         for isrcs in xrange(self.num_sources):
             imin = isrcs * self.n_params
             imax = (isrcs + 1) * self.n_params
 
-            p_set = self.src_models[isrcs][0].get_params()
             if self.debug:
+                p_set = self.src_models[isrcs][0].get_params()
+                if self.sample_psf and self.num_epochs > 1:
+                    p_set.append([m.get_psf_params() for m in self.src_models[isrcs]]).ravel()
                 print "input p:", p
                 print "p_set before indexing:", p_set
+
             p_set = p[imin:imax]
-            # p_set = p[isrcs]
             if self.debug:
                 print "p_set after indexing:", p_set
 
+            p_set_iepoch = p_set[0:n]
             for iepochs in xrange(self.num_epochs):
-                self.src_models[isrcs][iepochs].set_params(p_set)
+                jmin = self.n_gal_params + iepochs * self.n_psf_params
+                jmax = jmin + self.n_psf_params
+                p_set_iepoch[self.n_gal_params:n] = p_set[jmin:jmax]
+                self.src_models[isrcs][iepochs].set_params(p_set_iepoch)
                 valid_params *= self.src_models[isrcs][iepochs].validate_params()
         return valid_params
 
@@ -366,6 +377,10 @@ class Roaster(object):
         Can pass a single value that will be set for all source models, or a
         list of length num_sources with unique values for each source (but
         common across all epochs).
+
+        But, if the named parameter is a PSF model parameter, then set the
+        value only for the matching epoch (passing a list is not defined in
+        this case)
         """
         if isinstance(value, list):
             if len(value) == self.num_sources:
@@ -375,9 +390,18 @@ class Roaster(object):
             else:
                 raise ValueError("If passing list, must be of length num_sources")
         elif isinstance(value, float):
-            for isrcs in xrange(self.num_sources):
-                for idat in xrange(self.num_epochs):
-                    self.src_models[isrcs][idat].set_param_by_name(paramname, value)
+            if 'psf' in paramname:
+                p = paramname.split("_")
+                if len(p) != 3:
+                    raise ValueError("PSF parameter names must have the epoch index appended")
+                epoch_num = int(p[2]) - 1
+                pname = string.join(p[0:2], "_")
+                for isrcs in xrange(self.num_sources):
+                    self.src_models[isrcs][epoch_num].set_param_by_name(pname, value)
+            else:
+                for isrcs in xrange(self.num_sources):
+                    for idat in xrange(self.num_epochs):
+                        self.src_models[isrcs][idat].set_param_by_name(paramname, value)
         else:
             raise ValueError("Unsupported type for input value")
 
@@ -389,8 +413,8 @@ class Roaster(object):
             lnp = 0.0
 
             for isrcs in xrange(self.num_sources):
-                imin = isrcs * self.n_params
-                imax = (isrcs + 1) * self.n_params
+                # imin = isrcs * self.n_params
+                # imax = (isrcs + 1) * self.n_params
                 ### Pass active + inactive parameters, with names included
                 ### We index only the first 'epoch' here, because the source model parameters should
                 ### be the same for all epochs.

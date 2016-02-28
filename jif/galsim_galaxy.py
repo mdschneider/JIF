@@ -242,6 +242,27 @@ class GalSimGalaxyModel(object):
     """
     Parametric galaxy model from GalSim for MCMC.
 
+    This class has methods to store and parse model parameter lists for use in MCMC sampling. The
+    working model is that an MCMC chain uses a flat list or array of (unnamed) parameters and this
+    class provides a way to transform this flat list into a set of named parameters that are
+    generally a subset of all the parameters needed to render a galaxy image.
+
+    As such, this class also holds the methods to render galaxy images (with or without noise),
+    in a specified passband with a given SED model, or as a GalSim monochromatic object.
+
+    Of course, a PSF is also needed to render an image. So this class also stores a PSF model,
+    which can be a GalSim InterpolatedImage set from the input 'segment' file (via the 'Load'
+    method) or as a parametric model with parameters that can be sampled just as the galaxy model
+    parameters (via the JIF PSFModel class). If PSF sampling is used, then the PSF model parameters
+    are appended to the flat array of galaxy model parameters wherever apprpriate.
+
+    **There is only one PSF model (i.e., one epoch or exposure modeled) for any GalsimGalaxyModel
+    instance**
+
+    To model multiple epochs, even of the same galaxy model, the user should instantiate a new
+    GalsimGalaxyModel instance for each epoch and ensure that the galaxy model parameters are
+    appropriately copied for each instance - see how this is done in JIF Roaster.py.
+
     Derived originally from GalSim examples/demo1.py
 
     @param telescope_name       Name of the telescope to model. Used to identify
@@ -314,6 +335,7 @@ class GalSimGalaxyModel(object):
         self.paramnames = self.active_parameters
         # self.n_params = len(self.paramnames)
         self.n_params = len(self.active_parameters)
+        self.n_psf_params = len(select_psf_paramnames(self.active_parameters))
 
         ### Setup the PSF model
         if isinstance(self.psf_model, np.ndarray):
