@@ -129,7 +129,7 @@ class Roaster(object):
             branch = branches[self.epoch]
         return branch
 
-    def Load(self, infile, segment=None, use_PSFModel=False):
+    def Load(self, infile, segment=None, epoch_num=None, use_PSFModel=False):
         """
         Load image cutouts from file for the given segment, where segment is
         an integer reference.
@@ -150,11 +150,14 @@ class Roaster(object):
         These values will be used to initialize any model-fitting (e.g., MCMC)
         algorithm.
 
-        @param infiles  List of input filenames to load.
-        @param segment  Index of the segment to load. Choose segment 0 if not
-        supplied.
-        @param use_PSFModel Force the use of a PSFModel class instance to model
-        PSFs even if not sampling any PSF model parameters
+        @param infiles      List of input filenames to load.
+        @param segment      Index of the segment to load. Choose segment 0 if not supplied.
+        @param epoch_num    Specify a single epoch number to load (indexed from 0). If not supplied
+                            load all available epochs for each available telescope and filter.
+                            Requires specification of a single telescope and filter_to_load at
+                            instantiation of the Roaster instance.
+        @param use_PSFModel Force the use of a PSFModel class instance to model PSFs even if not
+                            sampling any PSF model parameters
         """
         # global self.pixel_data
         # global self.pix_noise_var
@@ -164,6 +167,13 @@ class Roaster(object):
         self.pixel_data = []
         self.pix_noise_var = []
         self.src_models = []
+
+        if epoch_num is not None:
+            if self.telescope is None or self.filters_to_load is None:
+                raise ValueError("Must set telescope and filters_to_load before requesting 1 epoch \
+                                  to Load")
+            else:
+                epochs = [epoch_num]
 
         logging.info("<Roaster> Loading image data")
         if self.data_format == "jif_segment" or self.data_format == "test_galsim_galaxy":
@@ -224,10 +234,12 @@ class Roaster(object):
                         have_bandpasses = False
 
                     h = 'segments/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
-                    nepochs = len(f[h])
+                    if epoch_num is None:
+                        nepochs = len(f[h])
+                        epochs = range(nepochs)
                     if self.debug:
                         print("Number of epochs for {}: {:d}".format(tel, nepochs))
-                    for iepoch in xrange(nepochs):
+                    for iepoch in epochs:
                         seg = f[h + '/epoch_{:d}'.format(iepoch)]
                         # obs = f[branch+'/observation']
                         dat = seg['image']
@@ -282,7 +294,6 @@ class Roaster(object):
                 print "nx, ny, i:", self.nx[i], self.ny[i], i
                 print "tel_name:", tel_names[i]
                 print "pixel_scale (arcsec):", pixel_scales[i]
-                print "wavelength (nm):", wavelengths[i]
                 print "primary_diam (m):", primary_diams[i]
                 print "atmosphere:", atmospheres[i]
 
@@ -499,6 +510,7 @@ def do_sampling(args, roaster, return_samples=False):
     """
     omega_interim = roaster.get_params()
     logging.info("Have {:d} sampling parameters".format(len(omega_interim)))
+    print "Starting parameters: ", omega_interim
 
     nvars = len(omega_interim)
     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
