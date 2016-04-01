@@ -104,11 +104,10 @@ class PSFModel(object):
         psf = psf.shear(psf_shape)
         return psf
 
-    def get_psf_image(self, ngrid=None, pixel_scale_arcsec=0.2):
+    def get_psf_image(self, ngrid=None, pixel_scale_arcsec=0.2, out_image=None, gain=1.0):
         psf = self.get_psf()
-        if ngrid is None:
-            ngrid = 16
-        image_epsf = psf.drawImage(scale=pixel_scale_arcsec, nx=ngrid, ny=ngrid)
+        image_epsf = psf.drawImage(image=out_image, scale=pixel_scale_arcsec, nx=ngrid, ny=ngrid,
+                                   gain=gain)
         return image_epsf
 
     def save_image(self, file_name, ngrid=None, pixel_scale_arcsec=0.2):

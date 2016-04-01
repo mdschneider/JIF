@@ -674,7 +674,9 @@ class GalSimGalaxyModel(object):
 
     def get_image(self, out_image=None, add_noise=False,
                   filter_name='r', gain=2.1, snr=None):
-        if self.galaxy_model == "Gaussian":
+        if self.galaxy_model == "star":
+            return self.get_psf_image(filter_name=filter_name)
+        elif self.galaxy_model == "Gaussian":
             # gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
             # gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
             # gal = gal.shear(gal_shape)
@@ -778,17 +780,16 @@ class GalSimGalaxyModel(object):
             image = None
         return image
 
-    def get_psf_image(self, filter_name='r', ngrid=None):
+    def get_psf_image(self, filter_name='r', ngrid=None, out_image=None, gain=1.0):
         psf = self.get_psf(filter_name)
         if self.psf_model_type == 'InterpolatedImage':
             return psf
         elif self.psf_model_type == 'PSFModel class':
-            return self.psf_model.get_psf_image(ngrid=ngrid,
-                pixel_scale_arcsec=self.pixel_scale)
+            return self.psf_model.get_psf_image(out_image=out_image, ngrid=ngrid,
+                pixel_scale_arcsec=self.pixel_scale, gain=gain)
         else:
-            if ngrid is None:
-                ngrid = 16
-            image_epsf = psf.drawImage(scale=self.pixel_scale, nx=ngrid, ny=ngrid)
+            image_epsf = psf.drawImage(image=out_image, scale=self.pixel_scale, nx=ngrid, ny=ngrid,
+                                       gain=gain)
             return image_epsf
 
     def get_segment(self):
