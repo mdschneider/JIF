@@ -97,7 +97,8 @@ k_galparams_type_bulgedisk += [('dx_disk', '<f8'), ('dy_disk', '<f8')]
 k_galparams_types = {
     "Sersic": k_galparams_type_sersic,
     "Spergel": k_galparams_type_spergel,
-    "BulgeDisk": k_galparams_type_bulgedisk
+    "BulgeDisk": k_galparams_type_bulgedisk,
+    "star": pm.k_galsim_psf_types
 }
 
 
@@ -121,7 +122,8 @@ k_galparams_defaults = {
         -0.6, 1.8, 0.3, np.pi/4,
         22., k_mag_param_minval, k_mag_param_minval, k_mag_param_minval,
         k_mag_param_minval, 22., k_mag_param_minval, k_mag_param_minval,
-        0., 0., 0., 0.)]
+        0., 0., 0., 0.)],
+    "star": pm.k_galsim_psf_defaults
 }
 
 

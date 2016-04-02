@@ -82,8 +82,9 @@ class PSFModel(object):
         Check that all model parameters take values inside allowed ranges.
         """
         valid_params = True
-        ### Width must be positive
-        if self.params[0].psf_fwhm <=0.:
+        ### Width must be greater than a small value (in arcseconds)
+        ### Note that very small PSF widths will require large GalSim FFTs - so bound it here.
+        if self.params[0].psf_fwhm <=0.1:
             valid_params *= False
         ### Ellipticity must be on [0, 1]
         if self.params[0].psf_e < 0. or self.params[0].psf_e > 0.9:

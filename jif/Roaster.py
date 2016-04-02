@@ -66,7 +66,10 @@ class Roaster(object):
     @param data_format        Format for the input data file.
     @param galaxy_model_type  Type of parametric galaxy model - see
                               galsim_galaxy types.
-                              ['Sersic', 'Spergel', 'BulgeDisk' (default)]
+                              ['Sersic', 'Spergel', 'BulgeDisk' (default), 'star']
+                              If 'star' is specified, then any PSF model sampling is turned off.
+                              This takes precedence over any other PSF sampling arguments or
+                              settings.
     @param telescope          Select only this telescope observations from the
                               input, if provided.
                               If not provided, then get data for all available
@@ -112,6 +115,10 @@ class Roaster(object):
         ### when the Load() function is called.
         self.sample_psf = False
         self.psf_model_paramnames = []
+        # if galaxy_model_type == 'star':
+        #     if not np.all(['psf' in p for p in model_paramnames]):
+        #         raise ValueError("All parameters must have 'psf' label for 'star' model_type")
+        # else:
         if np.any(['psf' in p for p in model_paramnames]):
             self.sample_psf = True
             self.psf_model_paramnames = galsim_galaxy.select_psf_paramnames(
