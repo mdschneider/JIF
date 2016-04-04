@@ -244,8 +244,8 @@ class Roaster(object):
                     if epoch_num is None:
                         nepochs = len(f[h])
                         epochs = range(nepochs)
-                    if self.debug:
-                        print("Number of epochs for {}: {:d}".format(tel, nepochs))
+                        if self.debug:
+                            print("Number of epochs for {}: {:d}".format(tel, nepochs))
                     for iepoch in epochs:
                         seg = f[h + '/epoch_{:d}'.format(iepoch)]
                         # obs = f[branch+'/observation']
@@ -368,16 +368,16 @@ class Roaster(object):
             imin = isrcs * self.n_params
             imax = (isrcs + 1) * self.n_params
 
-            if self.debug:
-                p_set = self.src_models[isrcs][0].get_params()
-                if self.sample_psf and self.num_epochs > 1:
-                    p_set.append([m.get_psf_params() for m in self.src_models[isrcs]]).ravel()
-                print "input p:", p
-                print "p_set before indexing:", p_set
+            # if self.debug:
+            #     p_set = self.src_models[isrcs][0].get_params()
+            #     if self.sample_psf and self.num_epochs > 1:
+            #         p_set.append([m.get_psf_params() for m in self.src_models[isrcs]]).ravel()
+            #     print "input p:", p
+            #     print "p_set before indexing:", p_set
 
             p_set = p[imin:imax]
-            if self.debug:
-                print "p_set after indexing:", p_set
+            # if self.debug:
+            #     print "p_set after indexing:", p_set
 
             p_set_iepoch = p_set[0:n]
             for iepochs in xrange(self.num_epochs):
@@ -483,12 +483,22 @@ class Roaster(object):
                     lnlike = -np.inf
                 else:
                     if self.debug:
+                        if not os.path.exists('debug'):
+                            os.makedirs('debug')
                         model_image_file_name = os.path.join('debug',
                             'model_image_iepoch%d_istep%d.fits' % (iepochs,
                                 self.istep))
                         model_image.write(model_image_file_name)
                         logging.debug('Wrote model image to %r',
                             model_image_file_name)
+
+                        import matplotlib.pyplot as plt
+                        fig = plt.figure(figsize=(10,10))
+                        plt.imshow(self.pixel_data[iepochs], # - model_image.array,
+                                   interpolation='none', cmap=plt.cm.pink)
+                        plt.colorbar()
+                        plt.savefig(os.path.join('debug', 'resid_iepoch%d_istep%d.png' % (iepochs,
+                            self.istep)))
 
                     lnlike += (-0.5 * np.sum((self.pixel_data[iepochs] -
                         model_image.array) ** 2) /

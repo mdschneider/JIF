@@ -14,8 +14,9 @@ import warnings
 import galsim
 
 
-k_galsim_psf_types = [('psf_fwhm', '<f8'), ('psf_e', '<f8'), ('psf_beta', '<f8')]
-k_galsim_psf_defaults = [(0.6, 0.01, 0.4)]
+k_galsim_psf_types = [('psf_fwhm', '<f8'), ('psf_e', '<f8'), ('psf_beta', '<f8'),
+                      ('psf_ln_flux', '<f8')]
+k_galsim_psf_defaults = [(0.6, 0.01, 0.4, 0.0)]
 
 
 class PSFModel(object):
@@ -84,13 +85,16 @@ class PSFModel(object):
         valid_params = True
         ### Width must be greater than a small value (in arcseconds)
         ### Note that very small PSF widths will require large GalSim FFTs - so bound it here.
-        if self.params[0].psf_fwhm <=0.1:
+        if self.params[0].psf_fwhm <=0.1 or self.params[0].psf_fwhm > 2.:
             valid_params *= False
-        ### Ellipticity must be on [0, 1]
-        if self.params[0].psf_e < 0. or self.params[0].psf_e > 0.9:
+        ### Ellipticity must be on [0, 1]. But highly elliptical PSFs probably indicated artifacts
+        ### or other failure modes of the fit, so bound to be something less than 1.
+        if self.params[0].psf_e < 0. or self.params[0].psf_e > 0.6:
             valid_params *= False
         ### Position angle (in radians) must be on [0, pi]
         if self.params[0].psf_beta < 0.0 or self.params[0].psf_beta > np.pi:
+            valid_params *= False
+        if self.params[0].psf_ln_flux < -18.:
             valid_params *= False
         return valid_params
 
@@ -103,6 +107,7 @@ class PSFModel(object):
         psf_shape = galsim.Shear(g=self.params[0].psf_e,
             beta=self.params[0].psf_beta*galsim.radians)
         psf = psf.shear(psf_shape)
+        psf = psf.withFlux(np.exp(self.params[0].psf_ln_flux))
         return psf
 
     def get_psf_image(self, ngrid=None, pixel_scale_arcsec=0.2, out_image=None, gain=1.0):

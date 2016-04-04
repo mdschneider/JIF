@@ -677,7 +677,7 @@ class GalSimGalaxyModel(object):
     def get_image(self, out_image=None, add_noise=False,
                   filter_name='r', gain=2.1, snr=None):
         if self.galaxy_model == "star":
-            return self.get_psf_image(filter_name=filter_name)
+            return self.get_psf_image(filter_name=filter_name, out_image=out_image, gain=gain)
         elif self.galaxy_model == "Gaussian":
             # gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
             # gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
