@@ -782,17 +782,22 @@ class GalSimGalaxyModel(object):
             image = None
         return image
 
-    def get_psf_image(self, filter_name='r', ngrid=None, out_image=None, gain=1.0):
+    def get_psf_image(self, filter_name='r', ngrid=None, out_image=None, gain=1.0, add_noise=False):
         psf = self.get_psf(filter_name)
         if self.psf_model_type == 'InterpolatedImage':
-            return psf
+            image = psf
         elif self.psf_model_type == 'PSFModel class':
-            return self.psf_model.get_psf_image(out_image=out_image, ngrid=ngrid,
-                pixel_scale_arcsec=self.pixel_scale, gain=gain)
+            image = self.psf_model.get_psf_image(out_image=out_image, ngrid=ngrid,
+                                                 pixel_scale_arcsec=self.pixel_scale, gain=gain)
+            if add_noise:
+                image.addNoise(self.noise)
         else:
             image_epsf = psf.drawImage(image=out_image, scale=self.pixel_scale, nx=ngrid, ny=ngrid,
                                        gain=gain)
-            return image_epsf
+            image = image_epsf
+            if add_noise:
+                image.addNoise(self.noise)
+        return image
 
     def get_segment(self):
         pass
@@ -832,13 +837,14 @@ class GalSimGalaxyModel(object):
         fig.savefig(file_name)
         return None
 
-    def plot_psf(self, file_name, ngrid=None, title=None, filter_name='r'):
+    def plot_psf(self, file_name, ngrid=None, title=None, filter_name='r', add_noise=False):
         import matplotlib.pyplot as plt
         psf = self.get_psf(filter_name)
         if ngrid is None:
             ngrid = 16
-        image_epsf = psf.drawImage(image=None,
-            scale=self.pixel_scale, nx=ngrid, ny=ngrid)
+        # image_epsf = psf.drawImage(image=None,
+        #     scale=self.pixel_scale, nx=ngrid, ny=ngrid)
+        image_epsf = self.get_psf_image(ngrid=ngrid, add_noise=add_noise)
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)

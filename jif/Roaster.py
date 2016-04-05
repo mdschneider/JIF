@@ -494,7 +494,7 @@ class Roaster(object):
 
                         import matplotlib.pyplot as plt
                         fig = plt.figure(figsize=(10,10))
-                        plt.imshow(self.pixel_data[iepochs], # - model_image.array,
+                        plt.imshow(self.pixel_data[iepochs] - model_image.array,
                                    interpolation='none', cmap=plt.cm.pink)
                         plt.colorbar()
                         plt.savefig(os.path.join('debug', 'resid_iepoch%d_istep%d.png' % (iepochs,
