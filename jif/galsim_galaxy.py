@@ -148,6 +148,23 @@ def select_galaxy_paramnames(model_paramnames):
     return [p for p in model_paramnames if 'psf' not in p]
 
 
+def replace_psf_parameters(model_params, model_params_new_psf, active_parameters):
+    """
+    Put the PSF parameter values from 'model_params_new_psf' into 'model_params'.
+
+    Used in calculating the Multiple Importance Sampling (MIS) weights when marginalizing PSFs
+    in different observation epochs of a single galaxy.
+
+    @param model_params          Array of model parameter values
+    @param model_params_new_psf  Array of model parameter values
+    """
+    # psf_paramnames = select_psf_paramnames(active_parameters)
+    psf_param_ndx = ['psf' in p for p in active_parameters]
+    p_out = model_params
+    p_out[psf_param_ndx] = model_params_new_psf[psf_param_ndx]
+    return p_out
+
+
 def load_filter_file_to_bandpass(table, wavelength_scale=1.0,
                                  effective_diameter_meters=6.4,
                                  exptime_sec=30.):
