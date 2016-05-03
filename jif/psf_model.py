@@ -12,11 +12,7 @@ import math
 import numpy as np
 import warnings
 import galsim
-
-
-k_galsim_psf_types = [('psf_fwhm', '<f8'), ('psf_e', '<f8'), ('psf_beta', '<f8'),
-                      ('psf_lnflux', '<f8')]
-k_galsim_psf_defaults = [(0.6, 0.01, 0.4, 0.0)]
+import parameters as jifparams
 
 
 class PSFModel(object):
@@ -38,8 +34,8 @@ class PSFModel(object):
         self.lam_over_diam = lam_over_diam
         self.obscuration = obscuration
 
-        self.params = np.core.records.array(k_galsim_psf_defaults,
-            dtype=k_galsim_psf_types)
+        self.params = np.core.records.array(jifparams.k_galsim_psf_defaults,
+            dtype=jifparams.k_galsim_psf_types)
 
     def get_params(self):
         """

@@ -306,6 +306,7 @@ class Roaster(object):
 
         logging.debug("<Roaster> num_epochs: {:d}, num_sources: {:d}".format(
             self.num_epochs, self.num_sources))
+        print "Active parameters: ", self.model_paramnames
         self.src_models = [[galsim_galaxy.GalSimGalaxyModel(
                                 telescope_name=tel_names[idat],
                                 galaxy_model=self.galaxy_model_type,
