@@ -17,43 +17,8 @@ import galsim.wfirst
 ###
 import segments
 import parameters as jifparams
+import telescopes
 import psf_model as pm
-
-### Some telescope model parameters
-k_telescopes = {
-    "LSST": {
-        "effective_diameter": 6.4, # meters
-        "pixel_scale": 0.2,        # arcseconds / pixel
-        # Exposure time for defining the zero point reference
-        "exptime_zeropoint": 30.,  # seconds
-        "zeropoint": 'AB',
-        # Referenc filter name for defining the magnitude model parameter
-        "ref_filter_mag_param": 'r'
-    },
-    "WFIRST": {
-        "effective_diameter": galsim.wfirst.diameter * (1. - galsim.wfirst.obscuration), # meters
-        "pixel_scale": galsim.wfirst.pixel_scale,       # arcseconds / pixel
-        # Exposure time for defining the zero point reference
-        "exptime_zeropoint": galsim.wfirst.exptime, # seconds
-        "zeropoint": 'AB',
-        # Referenc filter name for defining the magnitude model parameter
-        "ref_filter_mag_param": 'r'
-    }
-}
-
-
-k_lsst_filter_names = 'ugrizy'
-### 'Central' passband wavelengths in nanometers
-k_lsst_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,
-                                'z':880., 'y':1000.}
-
-k_wfirst_filter_names = ['Z087', 'Y106', 'J129', 'H158', 'F184', 'W149']
-### 'Central' passband wavelengths in nanometers
-k_wfirst_filter_central_wavelengths = {'r':620., 'Z087':867., 'Y106':1100.,
-    'J129':1300., 'H158':994., 'F184':1880., 'W149':1410.}
-### TESTING
-# k_wfirst_filter_names = k_lsst_filter_names
-# k_wfirst_filter_central_wavelengths = k_lsst_filter_central_wavelengths
 
 
 def load_filter_file_to_bandpass(table, wavelength_scale=1.0,
@@ -100,52 +65,6 @@ def wrap_ellipticity_phase(phase):
     Map a phase in radians to [0, pi) to model ellipticity orientation.
     """
     return (phase % np.pi)
-
-
-def lsst_noise(random_seed, gain=2.1, read_noise=3.6, sky_level=720.):
-    """
-    See GalSim/examples/lsst.yaml
-
-    gain: e- / ADU
-    read_noise: rms of read noise in electrons (if gain > 0)
-    sky_level: ADU / pixel
-    """
-    rng = galsim.BaseDeviate(random_seed)
-    return galsim.CCDNoise(rng,
-                           gain=gain,
-                           read_noise=read_noise,
-                           sky_level=sky_level)
-
-
-def wfirst_noise(random_seed):
-    """
-    Deprecated in favor of GalSim WFIRST module
-
-    From http://wfirst-web.ipac.caltech.edu/wfDepc/visitor/temp1927222740/results.jsp
-    """
-    rng = galsim.BaseDeviate(random_seed)
-    exposure_time_s = 150.
-    pixel_scale_arcsec = 0.11
-    read_noise_e_rms = 0.5 #5.
-    sky_background = 3.6e-2 #3.60382E-01 # e-/pix/s
-    gain = 2.1 # e- / ADU
-    return galsim.CCDNoise(rng, gain=gain,
-        read_noise=(read_noise_e_rms / gain) ** 2,
-        sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
-
-
-def wfirst_sky_background(filter_name, bandpass):
-    """
-    Calculate the approximate sky background in e-/pixel using the GalSim
-    WFIRST module
-    """
-    sky_level = galsim.wfirst.getSkyLevel(bandpass)
-    sky_level *= (1.0 + galsim.wfirst.stray_light_fraction)
-    ### Approximate sky level in e-/pix, ignoring variable pixel scale
-    ### See GalSim demo13.py
-    sky_level *= galsim.wfirst.pixel_scale**2
-    sky_level += galsim.wfirst.thermal_backgrounds[filter_name]*galsim.wfirst.exptime
-    return sky_level
 
 
 class GalSimGalaxyModel(object):
@@ -291,7 +210,7 @@ class GalSimGalaxyModel(object):
         path, filename = os.path.split(__file__)
         datapath = os.path.abspath(os.path.join(path, "../input/"))
         self.SEDs = {}
-        for SED_name in k_SED_names:
+        for SED_name in jifparams.k_SED_names:
             SED_filename = os.path.join(datapath, '{0}.sed'.format(SED_name))
             self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang')
         return None
@@ -323,8 +242,8 @@ class GalSimGalaxyModel(object):
                     self.telescope_name, filter_name))
                 self.filters[filter_name] = load_filter_file_to_bandpass(
                     filter_filename, wavelength_scale,
-                    k_telescopes[self.telescope_name]['effective_diameter'],
-                    k_telescopes[self.telescope_name]['exptime_zeropoint']
+                    telescopes.k_telescopes[self.telescope_name]['effective_diameter'],
+                    telescopes.k_telescopes[self.telescope_name]['exptime_zeropoint']
                 )
                 # print("BP {} zeropoint: {}".format(filter_name,
                 #     self.filters[filter_name].zeropoint))
@@ -671,7 +590,7 @@ class GalSimGalaxyModel(object):
                     method='fft')
             if add_noise:
                 if self.telescope_name == "WFIRST":
-                    sky_level = wfirst_sky_background(filter_name, self.filters[filter_name])
+                    sky_level = telescopes.wfirst_sky_background(filter_name, self.filters[filter_name])
                     image += sky_level
                     galsim.wfirst.allDetectorEffects(image)
                     image -= (sky_level + galsim.wfirst.dark_current*galsim.wfirst.exptime) / galsim.wfirst.gain
@@ -817,11 +736,11 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
     print("\n----- LSST -----")
     lsst = GalSimGalaxyModel(
         telescope_name="LSST",
-        pixel_scale_arcsec=k_telescopes['LSST']['pixel_scale'],
-        noise=lsst_noise(82357),
+        pixel_scale_arcsec=telescopes.k_telescopes['LSST']['pixel_scale'],
+        noise=telescopes.lsst_noise(82357),
         galaxy_model=galaxy_model,
         primary_diam_meters=8.4,
-        filter_names=k_lsst_filter_names,
+        filter_names=telescopes.k_lsst_filter_names,
         filter_wavelength_scale=1.0,
         atmosphere=True,
         achromatic_galaxy=achromatic_galaxy)
@@ -844,11 +763,11 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
     print("\n----- WFIRST -----")
     wfirst = GalSimGalaxyModel(
         telescope_name="WFIRST",
-        pixel_scale_arcsec=k_telescopes['WFIRST']['pixel_scale'],
-        noise=wfirst_noise(82357),
+        pixel_scale_arcsec=telescopes.k_telescopes['WFIRST']['pixel_scale'],
+        noise=telescopes.wfirst_noise(82357),
         galaxy_model=galaxy_model,
         primary_diam_meters=galsim.wfirst.diameter,
-        filter_names=k_wfirst_filter_names,
+        filter_names=telescopes.k_wfirst_filter_names,
         filter_wavelength_scale=1.0, #1.0e3, # convert from micrometers to nanometers
         atmosphere=False,
         achromatic_galaxy=achromatic_galaxy)
@@ -905,7 +824,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
     seg.save_psf_images([lsst.get_psf_image(filter_name_ground).array], segment_index=seg_ndx,
         telescope='lsst',
         filter_name=filter_name_ground)
-    save_bandpasses_to_segment(seg, lsst, k_lsst_filter_names, "LSST")
+    save_bandpasses_to_segment(seg, lsst, telescopes.k_lsst_filter_names, "LSST")
 
     ### Space data
     seg.save_images([wfirst_data], [wfirst.noise.getVariance()], [dummy_mask],
@@ -919,7 +838,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
     seg.save_psf_images([wfirst.get_psf_image(filter_name_space).array], segment_index=seg_ndx,
         telescope='wfirst',
         filter_name=filter_name_space)
-    save_bandpasses_to_segment(seg, wfirst, k_wfirst_filter_names, "WFIRST", scale=1)
+    save_bandpasses_to_segment(seg, wfirst, telescopes.k_wfirst_filter_names, "WFIRST", scale=1)
 
     # -------------------------------------------------------------------------
 
@@ -930,7 +849,7 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
     hlrs = [1.8, 1.0, 2.0]
     orientations = np.array([0.1, 0.25, -0.3]) * np.pi
 
-    noise_model = lsst_noise(82357)
+    noise_model = telescopes.lsst_noise(82357)
 
     filter_name = 'y'
 
@@ -955,7 +874,7 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
         sub_image = galsim.Image(npix_gal, npix_gal, scale=lsst_pixel_scale_arcsec)
 
         src_model = GalSimGalaxyModel(pixel_scale=lsst_pixel_scale_arcsec,
-            noise=lsst_noise(82357),
+            noise=telescopes.lsst_noise(82357),
             galaxy_model="Spergel",
             primary_diam_meters=8.4, atmosphere=True)
         src_model.params[0]["e"] = ellipticities[isrcs]

@@ -17,6 +17,9 @@ import copy
 import numpy as np
 import h5py
 import emcee
+###
+import telescopes as jiftel
+import parameters as jifparams
 import galsim_galaxy
 import psf_model as pm
 import galsim
@@ -121,7 +124,7 @@ class Roaster(object):
         # else:
         if np.any(['psf' in p for p in model_paramnames]):
             self.sample_psf = True
-            self.psf_model_paramnames = galsim_galaxy.select_psf_paramnames(
+            self.psf_model_paramnames = jifparams.select_psf_paramnames(
                 model_paramnames)
 
         ### Count the number of calls to self.lnlike
@@ -233,8 +236,8 @@ class Roaster(object):
                         throughput = f[fg + '/throughput']
                         table = galsim.LookupTable(x=waves_nm, f=throughput)
                         bp = galsim_galaxy.load_filter_file_to_bandpass(table,
-                            effective_diameter_meters=galsim_galaxy.k_telescopes[tel]['effective_diameter'],
-                            exptime_sec=galsim_galaxy.k_telescopes[tel]['exptime_zeropoint'])
+                            effective_diameter_meters=jiftel.k_telescopes[tel]['effective_diameter'],
+                            exptime_sec=jiftel.k_telescopes[tel]['exptime_zeropoint'])
                         self.filters[filter_name] = bp
                         have_bandpasses = True
                     except KeyError:
