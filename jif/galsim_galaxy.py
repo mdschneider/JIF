@@ -112,6 +112,14 @@ class GalSimGalaxyModel(object):
 
         self.achromatic_galaxy = achromatic_galaxy ### TODO: Finish implementation of achromatic_galaxy feature
 
+        self.gsparams = galsim.GSParams(
+            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
+            maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
+            xvalue_accuracy=1.e-1,   # approximations in real space aim to be this accurate
+            kvalue_accuracy=1.e-1,   # approximations in fourier space aim to be this accurate
+            shoot_accuracy=1.e-1,    # approximations in photon shooting aim to be this accurate
+            minimum_fft_size=16)     # minimum size of ffts
+
         ### Set GalSim galaxy model parameters
         self.params = np.core.records.array(jifparams.k_galparams_defaults[galaxy_model],
             dtype=jifparams.k_galparams_types[galaxy_model])
@@ -120,9 +128,20 @@ class GalSimGalaxyModel(object):
         self.paramnames = self.active_parameters
         # self.n_params = len(self.paramnames)
         self.n_params = len(self.active_parameters)
-        self.n_psf_params = len(jifparams.select_psf_paramnames(self.active_parameters))
+        psf_paramnames = jifparams.select_psf_paramnames(self.active_parameters)
+        self.n_psf_params = len(psf_paramnames)
 
         ### Setup the PSF model
+        ### Require a PSFModel class if the 'galaxy_model' == 'star'. This ensures the source 
+        ### model is parametric for image fitting.
+        ### Otherwise, set the type of PSF model according to the input 'psf_model' argument.
+        if galaxy_model == 'star':
+            self.psf_model_type = 'PSFModel class'
+            if not isinstance(self.psf_model, pm.PSFModel):
+                self.psf_model = pm.PSFModel(active_parameters=psf_paramnames,
+                                             gsparams=self.gsparams,
+                                             telescope=telescope_name,
+                                             achromatic=achromatic_galaxy)
         if isinstance(self.psf_model, np.ndarray):
             self.psf_model_type = 'InterpolatedImage'
             self.psf_model = galsim.InterpolatedImage(self.psf_model)
@@ -147,15 +166,8 @@ class GalSimGalaxyModel(object):
         datapath = os.path.abspath(os.path.join(path, "../input/"))
         ref_filename = os.path.join(datapath, '{}_{}.dat'.format('LSST',
             GalSimGalaxyModel.ref_filter))
-        self.filters['ref'] = load_filter_file_to_bandpass(ref_filename)
+        self.filters['ref'] = telescopes.load_filter_file_to_bandpass(ref_filename)
 
-        self.gsparams = galsim.GSParams(
-            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
-            maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
-            xvalue_accuracy=1.e-1,   # approximations in real space aim to be this accurate
-            kvalue_accuracy=1.e-1,   # approximations in fourier space aim to be this accurate
-            shoot_accuracy=1.e-1,    # approximations in photon shooting aim to be this accurate
-            minimum_fft_size=16)     # minimum size of ffts
 
     def _load_sed_files(self):
         """
@@ -369,15 +381,18 @@ class GalSimGalaxyModel(object):
         @param gal_comp     Name of the galaxy component (bulge,disk) to select. Can be the empty
                             string to get the composite galaxy model SED.
         """
-        if appr_mag < 98.:
-            bp = self.filters[filter_name]
-            bp_ref = self.filters['ref']
-            SED = self.SEDs[k_SED_names[sed_index]]
-            SED = SED.atRedshift(redshift).withMagnitude(target_magnitude=appr_mag, bandpass=bp)
-            mag_model = SED.atRedshift(0.).calculateMagnitude(bp_ref)
-            self.params['mag_sed{:d}'.format(sed_index+1)][0] = mag_model
+        if self.galaxy_model == "star":
+            self.psf_model.set_mag_from_obs(appr_mag, filter_name=filter_name)
         else:
-            self.params['mag_sed{:d}'.format(sed_index+1)][0] = 99.
+            if appr_mag < 98.:
+                bp = self.filters[filter_name]
+                bp_ref = self.filters['ref']
+                SED = self.SEDs[k_SED_names[sed_index]]
+                SED = SED.atRedshift(redshift).withMagnitude(target_magnitude=appr_mag, bandpass=bp)
+                mag_model = SED.atRedshift(0.).calculateMagnitude(bp_ref)
+                self.params['mag_sed{:d}'.format(sed_index+1)][0] = mag_model
+            else:
+                self.params['mag_sed{:d}'.format(sed_index+1)][0] = 99.
         return None
 
     def get_SED(self, gal_comp=''):
@@ -402,7 +417,7 @@ class GalSimGalaxyModel(object):
         SEDs = [self.SEDs[SED_name].atRedshift(0.).withMagnitude(
             target_magnitude=self.params[0]['mag_sed{:d}{}'.format(i+1, gal_comp)],
             bandpass=bp).atRedshift(self.params[0].redshift)
-                for i, SED_name in enumerate(k_SED_names)]
+                for i, SED_name in enumerate(jifparams.k_SED_names)]
         return reduce(add, SEDs)
 
     def get_flux(self, filter_name='r'):
@@ -413,12 +428,15 @@ class GalSimGalaxyModel(object):
 
         @returns the flux in the requested bandpass (in photon counts)
         """
-        if self.achromatic_galaxy:
-            raise NotImplementedError()
+        if self.galaxy_model == "star":
+            return self.psf_model.get_flux(filter_name)
         else:
-            SED = self.get_SED()
-            flux = SED.calculateFlux(self.filters[filter_name])
-        return flux
+            if self.achromatic_galaxy:
+                raise NotImplementedError()
+            else:
+                SED = self.get_SED()
+                flux = SED.calculateFlux(self.filters[filter_name])
+            return flux
 
     def get_magnitude(self, filter_name='r'):
         """
@@ -428,12 +446,15 @@ class GalSimGalaxyModel(object):
 
         @returns the magnitude in the requested bandpass
         """
-        if self.achromatic_galaxy:
-            raise NotImplementedError()
+        if self.galaxy_model == "star":
+            return self.psf_model.get_magnitude(filter_name)
         else:
-            SED = self.get_SED()
-            mag = SED.calculateMagnitude(self.filters[filter_name])
-        return mag
+            if self.achromatic_galaxy:
+                raise NotImplementedError()
+            else:
+                SED = self.get_SED()
+                mag = SED.calculateMagnitude(self.filters[filter_name])
+            return mag
 
     def get_image(self, out_image=None, add_noise=False,
                   filter_name='r', gain=2.1, snr=None):

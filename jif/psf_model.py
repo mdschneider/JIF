@@ -28,21 +28,18 @@ class PSFModel(object):
     @param lam_over_diam        Wavelength over the primary diameter in arcseconds
     @param telescope            Telescope model ("LSST" or "WFIRST") [Default: "LSST"]
     @param achromatic           Simulate an achromatic PSF? [Default: True]
-    @param ref_filter_name      Name of the reference filter for which the flux is defined if 
-                                modeling chromatic PSFs (otherwise this value is ignored).
-                                Must match one of the filter names in telescopes.k_telescopes
     @param SED_name             Name of an SED template in parameters.k_star_SED_names.
                                 Not used if modeling achromatic objects.
     """
+    ref_filter = 'r'
     def __init__(self, active_parameters=['psf_fwhm'], gsparams=None,
-                 lam_over_diam=0.012, telescope="LSST", achromatic=True, ref_filter_name='r',
+                 lam_over_diam=0.012, telescope="LSST", achromatic=True,
                  SED_name='NGC_0695_spec'):
         self.active_parameters = active_parameters
         self.gsparams = gsparams
         self.lam_over_diam = lam_over_diam
         self.telescope_name = telescope
         self.achromatic = achromatic
-        self.ref_filter_name = ref_filter_name
         self.SED_name = SED_name
 
         self.params = np.core.records.array(jifparams.k_galsim_psf_defaults,
@@ -68,6 +65,12 @@ class PSFModel(object):
     def _load_filter_files(self):
         self.filters = telescopes.load_filter_files(wavelength_scale=1.0,
                                                     telescope_name=self.telescope_name)
+        ### Add the reference filter for defining the magnitude parameters
+        path, filename = os.path.split(__file__)
+        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        ref_filename = os.path.join(datapath, '{}_{}.dat'.format('LSST',
+            PSFModel.ref_filter))
+        self.filters['ref'] = telescopes.load_filter_file_to_bandpass(ref_filename)        
 
     def get_params(self):
         """
@@ -124,6 +127,24 @@ class PSFModel(object):
             valid_params *= False
         return valid_params
 
+    def set_mag_from_obs(self, appr_mag, filter_name='r'):
+        """
+        Set the magnitude model parameter given an apparent magnitude of a star in the specified
+        filter.
+
+        @param appr_mag     Apparent magnitude to use in setting the model magnitude parameter
+        @param filter_name  Name of the filter to use to calculate magnitudes. (Default: 'r')
+        """
+        if appr_mag < 98.:
+            bp = self.filters[filter_name]
+            bp_ref = self.filters['ref']
+            SED = self.SEDs[self.SED_name]
+            SED = SED.atRedshift(0.).withMagnitude(target_magnitude=appr_mag, bandpass=bp)
+            mag_model = SED.atRedshift(0.).calculateMagnitude(bp_ref)
+            self.params['psf_mag'][0] = mag_model
+        else:
+            self.params['psf_mag'][0] = 99.
+
     def get_SED(self):
         """
         Get the GalSim SED object with amplitude set to the model parameter flux.
@@ -135,10 +156,42 @@ class PSFModel(object):
             print "This is an achromatic PSF model - no SED defined"
             return None
         else:
-            bp = self.filters[self.ref_filter_name]
+            bp = self.filters['ref']
             SED = self.SEDs[self.SED_name].atRedshift(0.).withMagnitude(self.params[0].psf_mag,
                 bandpass=bp)
             return SED
+
+    def get_flux(self, filter_name='r'):
+        """
+        Get the flux of the star model in the named bandpass
+
+        @param filter_name  Name of the bandpass for the desired magnitude
+
+        @returns the flux in the requested bandpass (in photon counts)
+        """
+        if self.achromatic:
+            return jifparams.flux_from_AB_mag(self.params[0].psf_mag, 
+                exposure_time_s=telescopes.k_telescopes[self.telescope_name]["exptime_zeropoint"],
+                gain=telescopes.k_telescopes[self.telescope_name]["gain"])
+        else:
+            SED = self.get_SED()
+            flux = SED.calculateFlux(self.filters[filter_name])
+        return flux
+
+    def get_magnitude(self, filter_name='r'):
+        """
+        Get the magnitude of the star model in the named bandpass
+
+        @param filter_name  Name of the bandpass for the desired magnitude
+
+        @returns the magnitude in the requested bandpass
+        """
+        if self.achromatic:
+            return self.params[0].psf_mag
+        else:
+            SED = self.get_SED()
+            mag = SED.calculateMagnitude(self.filters[filter_name])
+        return mag
 
     def get_psf(self):
         """
