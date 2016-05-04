@@ -13,29 +13,61 @@ import numpy as np
 import warnings
 import galsim
 import parameters as jifparams
+import telescopes
 
 
 class PSFModel(object):
     """
     Parametric PSF models for marginalization in galaxy model fitting.
 
-    NOTE: Only models atmospheric + optics PSFs so far.
+    NOTE: Only models infinite exposure Kolmogorov atmosphere + unaberrated optics PSFs so far.
     An option to only model optics will be a future feature.
 
     @param active_parameters    List of model parameters for sampling
     @param gsparams             GalSim parameters object for rendering images
     @param lam_over_diam        Wavelength over the primary diameter in arcseconds
-    @param obscuration          Fractional obscuration of the telescope entrance pupil
+    @param telescope            Telescope model ("LSST" or "WFIRST") [Default: "LSST"]
+    @param achromatic           Simulate an achromatic PSF? [Default: True]
+    @param ref_filter_name      Name of the reference filter for which the flux is defined if 
+                                modeling chromatic PSFs (otherwise this value is ignored).
+                                Must match one of the filter names in telescopes.k_telescopes
+    @param SED_name             Name of an SED template in parameters.k_star_SED_names.
+                                Not used if modeling achromatic objects.
     """
     def __init__(self, active_parameters=['psf_fwhm'], gsparams=None,
-                 lam_over_diam=0.012, obscuration=0.548):
+                 lam_over_diam=0.012, telescope="LSST", achromatic=True, ref_filter_name='r',
+                 SED_name='NGC_0695_spec'):
         self.active_parameters = active_parameters
         self.gsparams = gsparams
         self.lam_over_diam = lam_over_diam
-        self.obscuration = obscuration
+        self.telescope_name = telescope
+        self.achromatic = achromatic
+        self.ref_filter_name = ref_filter_name
+        self.SED_name = SED_name
 
         self.params = np.core.records.array(jifparams.k_galsim_psf_defaults,
             dtype=jifparams.k_galsim_psf_types)
+
+        if not self.achromatic:
+            self._load_sed_files()
+            self._load_filter_files()
+
+    def _load_sed_files(self):
+        """
+        Load star SED templates from files.
+
+        Copied from GalSim demo12.py
+        """
+        path, filename = os.path.split(__file__)
+        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        self.SEDs = {}
+        for SED_name in jifparams.k_star_SED_names:
+            SED_filename = os.path.join(datapath, '{0}.sed'.format(SED_name))
+            self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang')
+
+    def _load_filter_files(self):
+        self.filters = telescopes.load_filter_files(wavelength_scale=1.0,
+                                                    telescope_name=self.telescope_name)
 
     def get_params(self):
         """
@@ -90,30 +122,89 @@ class PSFModel(object):
         ### Position angle (in radians) must be on [0, pi]
         if self.params[0].psf_beta < 0.0 or self.params[0].psf_beta > np.pi:
             valid_params *= False
-        if self.params[0].psf_lnflux < -18.:
-            valid_params *= False
         return valid_params
 
+    def get_SED(self):
+        """
+        Get the GalSim SED object with amplitude set to the model parameter flux.
+
+        The SED is selected from a library of templates according to the class member variable
+        'SED_name'. See the 'parameters' module for the ordered list of SED templates.
+        """
+        if self.achromatic:
+            print "This is an achromatic PSF model - no SED defined"
+            return None
+        else:
+            bp = self.filters[self.ref_filter_name]
+            SED = self.SEDs[self.SED_name].atRedshift(0.).withMagnitude(self.params[0].psf_mag,
+                bandpass=bp)
+            return SED
+
     def get_psf(self):
-        optics = galsim.Airy(self.lam_over_diam, obscuration=self.obscuration,
-            flux=1., gsparams=self.gsparams)
-        atmos = galsim.Kolmogorov(fwhm=self.params[0]['psf_fwhm'],
-            gsparams=self.gsparams)
-        psf = galsim.Convolve([atmos, optics])
+        """
+        Get the GalSim PSF model instance
+
+        Includes unaberrated optics and infinite exposure atmosphere components.
+
+        See GalSim demo12 for the chromatic PSF modeling upon which this routine is based.
+        """
+        atmos_mono = galsim.Kolmogorov(fwhm=self.params[0]['psf_fwhm'],
+                                       gsparams=self.gsparams)
+        if self.achromatic:
+            atmos = atmos_mono
+            optics = galsim.Airy(self.lam_over_diam,
+                                 obscuration=telescopes.k_telescopes[self.telescope_name]["obscuration"],
+                                 flux=1., gsparams=self.gsparams)
+        else:
+            ### Point at the zenith to minimize DCR effects in this simplified model. 
+            ### But, the ChromaticAtmosphere class should still give us the wavelength dependent 
+            ### seeing. 
+            atmos = galsim.ChromaticAtmosphere(atmos_mono, 500.,
+                                               zenith_angle=0.6 * galsim.radians,
+                                               parallactic_angle=2.7 * galsim.radians)
+            d = telescopes.k_telescopes[self.telescope_name]["primary_diam_meters"]
+            optics = galsim.ChromaticAiry(lam=self.lam_over_diam * d, diam=d)
+
+
+        if telescopes.k_telescopes[self.telescope_name]["atmosphere"]:
+            psf = galsim.Convolve([atmos, optics])
+        else:
+            psf = optics
+
+        if self.achromatic:
+            psf = psf.withFlux(jifparams.flux_from_AB_mag(self.params[0].psf_mag))
+        else:
+            psf = galsim.Convolve([atmos, optics])
+
         psf_shape = galsim.Shear(g=self.params[0].psf_e,
             beta=self.params[0].psf_beta*galsim.radians)
         psf = psf.shear(psf_shape)
-        psf = psf.withFlux(np.exp(self.params[0].psf_lnflux))
+
         return psf
 
-    def get_psf_image(self, ngrid=None, pixel_scale_arcsec=0.2, out_image=None, gain=1.0):
+    def get_psf_image(self, filter_name='r', ngrid=None, pixel_scale_arcsec=0.2, out_image=None,
+                      gain=1.0):
+        if ngrid is None and out_image is None:
+            raise ValueError("Must specify either ngrid or out_image")
         psf = self.get_psf()
-        image_epsf = psf.drawImage(image=out_image, scale=pixel_scale_arcsec, nx=ngrid, ny=ngrid,
-                                   gain=gain)
+        if self.achromatic:
+            image_epsf = psf.drawImage(image=out_image, scale=pixel_scale_arcsec,
+                                       nx=ngrid, ny=ngrid, gain=gain)
+        else:
+            ### For chromatic modeling, the PSF 'mag' parameter only has meaning when the PSF model
+            ### is convolved with a source model. So we convolve with a star model to render a 
+            ### PSF image with a given magnitude.
+            SED = self.get_SED()
+            mono_star = galsim.Gaussian(fwhm=0.001)
+            star = galsim.Chromatic(mono_star, SED)
+            final = galsim.Convolve([star, psf])
+
+            image_epsf = final.drawImage(bandpass=self.filters[filter_name], image=out_image,
+                                         scale=pixel_scale_arcsec, gain=gain, nx=ngrid, ny=ngrid)
         return image_epsf
 
     def save_image(self, file_name, ngrid=None, pixel_scale_arcsec=0.2):
-        image_epsf = self.get_psf_image(ngrid, pixel_scale_arcsec)
+        image_epsf = self.get_psf_image(ngrid=ngrid, pixel_scale_arcsec=pixel_scale_arcsec)
         image_epsf.write(file_name)
         return None
 
@@ -142,10 +233,10 @@ class DefaultPriorPSF(object):
 
 
 def make_test_image():
-    psfm = PSFModel()
-    filename = "../TestData/test_psf_image.fits"
+    psfm = PSFModel(achromatic=True)
+    filename = "../data/TestData/test_psf_image.fits"
     print "Saving PSF test image to {}".format(filename)
-    psfm.save_image(filename)
+    psfm.save_image(filename, ngrid=32)
 
 
 if __name__ == "__main__":
