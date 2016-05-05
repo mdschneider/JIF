@@ -44,14 +44,13 @@ to install while working on the package.
 
 ## Test Analysis
 
-The following procedure outlines the steps that can be take to create some test data with `galasim_galaxy`, analyze it with `Roaster`, and inspect the results with `RoasterInspector`.
+The following procedure outlines the steps that can be take to create some test data with `galasim_galaxy`, analyze it with `Roaster`, and inspect the results with `RoasterInspector`. This example does not require installation via `setup.py`.
 
 1. Create the directory structure (if not already in place). cd to the parent repository directory (i.e. the one containing jif).
 
   ```
-  mkdir TestData
-  mkdir output
-  mkdir output/roasting
+  mkdir -p data/TestData
+  mkdir -p output/roasting
   ```
 2. Generate the test data with GalSim:
 
@@ -59,15 +58,16 @@ The following procedure outlines the steps that can be take to create some test 
   cd jif
   python galsim_galaxy.py
   ```
-  This will make the file `test_image_data.h5` in TestData
+  This will make the file `test_image_data.h5` in data/TestData
 3. Run the roaster on this data:
 
   ```
-  python Roaster.py ../TestData/test_image_data.h5
+  python Roaster.py ../data/TestData/test_image_data.h5
   ```
   This will create an hdf5 results file `../output/roasting/roaster_out.h5`.
-4. Inspect the data with `RoasterInspector`
+4. Inspect the data with `RoasterInspector`. 
 
   ```
   python RoasterInspector.py ../output/roasting/roaster_out.h5
   ```
+  This will print summary statistics and make some plots.
