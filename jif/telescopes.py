@@ -5,28 +5,43 @@ telescopes.py
 
 Settings for telescope-specific modeling
 """
+import os
+import numpy as np
 import galsim
 import galsim.wfirst
 
 ### Some parameters for telescopes that JIF knows about
 k_telescopes = {
     "LSST": {
+        "primary_diam_meters": 8.4,
         "effective_diameter": 6.4, # meters
+        "obscuration": 0.548,
         "pixel_scale": 0.2,        # arcseconds / pixel
-        # Exposure time for defining the zero point reference
+        ### Exposure time for defining the zero point reference
         "exptime_zeropoint": 30.,  # seconds
         "zeropoint": 'AB',
-        # Referenc filter name for defining the magnitude model parameter
-        "ref_filter_mag_param": 'r'
+        "gain": 2.1,
+        "filter_names": 'ugrizy',
+        ### Reference filter name for defining the magnitude model parameter
+        "ref_filter_mag_param": 'r',
+        "atmosphere": True
     },
     "WFIRST": {
+        "primary_diam_meters": galsim.wfirst.diameter,
         "effective_diameter": galsim.wfirst.diameter * (1. - galsim.wfirst.obscuration), # meters
+        "obscuration": galsim.wfirst.obscuration,
         "pixel_scale": galsim.wfirst.pixel_scale,       # arcseconds / pixel
-        # Exposure time for defining the zero point reference
+        ### Exposure time for defining the zero point reference
         "exptime_zeropoint": galsim.wfirst.exptime, # seconds
         "zeropoint": 'AB',
-        # Referenc filter name for defining the magnitude model parameter
-        "ref_filter_mag_param": 'r'
+        "gain": galsim.wfirst.gain,
+        ### Only these 4 filters will be used for the high-latitude WL survey
+        "filter_names": ['Y106', 'J129', 'H158', 'F184'],
+        ### Reference filter name for defining the magnitude model parameter.
+        ### GalSimGalaxyModel defines an 'r' filter for all telescopes so we can do consistent
+        ### parameter definitions, even if 'r' is not actually availabele for this survey.
+        "ref_filter_mag_param": 'r',
+        "atmosphere": False
     }
 }
 
@@ -88,3 +103,65 @@ def wfirst_sky_background(filter_name, bandpass):
     sky_level *= galsim.wfirst.pixel_scale**2
     sky_level += galsim.wfirst.thermal_backgrounds[filter_name]*galsim.wfirst.exptime
     return sky_level
+
+def load_filter_file_to_bandpass(table, wavelength_scale=1.0,
+                                 effective_diameter_meters=6.4,
+                                 exptime_sec=30.):
+    """
+    Create a Galsim.Bandpass object from a lookup table
+
+    @param table Either (1) the name of a file for reading the lookup table
+                 values for a bandpass, or (2) an instance of a
+                 galsim.LookupTable
+    @param wavelength_scale The multiplicative scaling of the wavelengths in the
+                            input bandpass file to get units of nm (not used if
+                            table argument is a LookupTable instance)
+    @param effective_diameter_meters The effective diameter of the telescope
+                                     (including obscuration) for the zeropoint
+                                     calculation
+    @param exptime_sec The exposure time for the zeropoint calculation
+    """
+    if isinstance(table, str):
+        dat = np.loadtxt(table)
+        table = galsim.LookupTable(x=dat[:,0]*wavelength_scale, f=dat[:,1])
+    elif not isinstance(table, galsim.LookupTable):
+        raise ValueError("table must be a file name or galsim.LookupTable")
+    bp = galsim.Bandpass(table)
+    bp = bp.thin(rel_err=1e-4)
+    return bp.withZeropoint(zeropoint='AB',
+        effective_diameter=100. * effective_diameter_meters,
+        exptime=exptime_sec)
+
+def load_filter_files(wavelength_scale=1.0, telescope_name="LSST"):
+    """
+    Load filters for drawing chromatic objects.
+
+    Makes use of the module-level dictionary `k_telescopes` with values for
+    setting the zeropoints. Specifically, the type of zeropoint ('AB'),
+    the effective diameter of the telescope, and the exposure time.
+
+    Adapted from GalSim demo12.py
+
+    @param wavelength_scale     Multiplicative scaling of the wavelengths
+                                input from the filter files to get
+                                nanometers from whatever the input units are
+    @param telescope_name       Name of the telescope model ("LSST" or "WFIRST")
+    """
+    if telescope_name == "WFIRST":
+        ### Use the Galsim WFIRST module
+        filters = galsim.wfirst.getBandpasses(AB_zeropoint=True)
+    else:
+        ### Use filter information in this module
+        path, filename = os.path.split(__file__)
+        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        filters = {}
+        for filter_name in k_telescopes[telescope_name]['filter_names']:
+            filter_filename = os.path.join(datapath, '{}_{}.dat'.format(
+                telescope_name, filter_name))
+            filters[filter_name] = load_filter_file_to_bandpass(
+                filter_filename, wavelength_scale,
+                k_telescopes[telescope_name]['effective_diameter'],
+                k_telescopes[telescope_name]['exptime_zeropoint']
+            )
+    return filters
+

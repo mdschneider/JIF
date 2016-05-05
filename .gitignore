@@ -75,3 +75,4 @@ devel/sed_atlas/123
 .RData
 .Rhistory
 output/psf_bias
+*-checkpoint.ipynb

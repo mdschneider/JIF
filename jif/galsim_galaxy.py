@@ -21,52 +21,6 @@ import telescopes
 import psf_model as pm
 
 
-def load_filter_file_to_bandpass(table, wavelength_scale=1.0,
-                                 effective_diameter_meters=6.4,
-                                 exptime_sec=30.):
-    """
-    Create a Galsim.Bandpass object from a lookup table
-
-    @param table Either (1) the name of a file for reading the lookup table
-                 values for a bandpass, or (2) an instance of a
-                 galsim.LookupTable
-    @param wavelength_scale The multiplicative scaling of the wavelengths in the
-                            input bandpass file to get units of nm (not used if
-                            table argument is a LookupTable instance)
-    @param effective_diameter_meters The effective diameter of the telescope
-                                     (including obscuration) for the zeropoint
-                                     calculation
-    @param exptime_sec The exposure time for the zeropoint calculation
-    """
-    if isinstance(table, str):
-        dat = np.loadtxt(table)
-        table = galsim.LookupTable(x=dat[:,0]*wavelength_scale, f=dat[:,1])
-    elif not isinstance(table, galsim.LookupTable):
-        raise ValueError("table must be a file name or galsim.LookupTable")
-    bp = galsim.Bandpass(table)
-    bp = bp.thin(rel_err=1e-4)
-    return bp.withZeropoint(zeropoint='AB',
-        effective_diameter=100. * effective_diameter_meters,
-        exptime=exptime_sec)
-
-
-def flux_from_AB_mag(mag, exposure_time_s=30, gain=1.0):
-    """
-    Convert an AB apparent magnitude to a flux
-    """
-    # flux_AB = 3.63e-20 # ergs / s / Hz / cm^2
-    mag_AB = 48.6 - 84. ### kludgey offset here to make fluxes look okay in GalSim units
-    flux = 10. ** (-(mag + mag_AB) / 2.5)
-    return flux
-
-
-def wrap_ellipticity_phase(phase):
-    """
-    Map a phase in radians to [0, pi) to model ellipticity orientation.
-    """
-    return (phase % np.pi)
-
-
 class GalSimGalaxyModel(object):
     """
     Parametric galaxy model from GalSim for MCMC.
@@ -99,6 +53,7 @@ class GalSimGalaxyModel(object):
     @param pixel_scale_arcsec   Pixel scale for image models [Default: 0.11]
     @param noise                GalSim noise model. [Default: None]
     @param galaxy_model         Name of the parametric galaxy model
+                                Valid values are 'Sersic', 'Spergel', 'BulgeDisk', or 'star'
                                 [Default: "Spergel"]
     @param active_parameters    List of the parameter names for sampling
     @param wavelength_meters    Wavelength in meters to set the scale for the
@@ -118,6 +73,7 @@ class GalSimGalaxyModel(object):
                                     1. a GalSim InterpolatedImage instance
                                     2. a PSFModel instance
                                     3. a name of a parametric model
+                                [Default: parametric model]
     @param achromatic_galaxy    If True, don't use the GalSim Chromatic features. Instead, model
                                 galaxies with a flux set by the 'mag_sed1' model parameter (with
                                 appropriate transformation to flux for AB mags). For multiple
@@ -156,6 +112,14 @@ class GalSimGalaxyModel(object):
 
         self.achromatic_galaxy = achromatic_galaxy ### TODO: Finish implementation of achromatic_galaxy feature
 
+        self.gsparams = galsim.GSParams(
+            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
+            maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
+            xvalue_accuracy=1.e-1,   # approximations in real space aim to be this accurate
+            kvalue_accuracy=1.e-1,   # approximations in fourier space aim to be this accurate
+            shoot_accuracy=1.e-1,    # approximations in photon shooting aim to be this accurate
+            minimum_fft_size=16)     # minimum size of ffts
+
         ### Set GalSim galaxy model parameters
         self.params = np.core.records.array(jifparams.k_galparams_defaults[galaxy_model],
             dtype=jifparams.k_galparams_types[galaxy_model])
@@ -164,9 +128,20 @@ class GalSimGalaxyModel(object):
         self.paramnames = self.active_parameters
         # self.n_params = len(self.paramnames)
         self.n_params = len(self.active_parameters)
-        self.n_psf_params = len(jifparams.select_psf_paramnames(self.active_parameters))
+        psf_paramnames = jifparams.select_psf_paramnames(self.active_parameters)
+        self.n_psf_params = len(psf_paramnames)
 
         ### Setup the PSF model
+        ### Require a PSFModel class if the 'galaxy_model' == 'star'. This ensures the source 
+        ### model is parametric for image fitting.
+        ### Otherwise, set the type of PSF model according to the input 'psf_model' argument.
+        if galaxy_model == 'star':
+            self.psf_model_type = 'PSFModel class'
+            if not isinstance(self.psf_model, pm.PSFModel):
+                self.psf_model = pm.PSFModel(active_parameters=psf_paramnames,
+                                             gsparams=self.gsparams,
+                                             telescope=telescope_name,
+                                             achromatic=achromatic_galaxy)
         if isinstance(self.psf_model, np.ndarray):
             self.psf_model_type = 'InterpolatedImage'
             self.psf_model = galsim.InterpolatedImage(self.psf_model)
@@ -191,15 +166,8 @@ class GalSimGalaxyModel(object):
         datapath = os.path.abspath(os.path.join(path, "../input/"))
         ref_filename = os.path.join(datapath, '{}_{}.dat'.format('LSST',
             GalSimGalaxyModel.ref_filter))
-        self.filters['ref'] = load_filter_file_to_bandpass(ref_filename)
+        self.filters['ref'] = telescopes.load_filter_file_to_bandpass(ref_filename)
 
-        self.gsparams = galsim.GSParams(
-            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
-            maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
-            xvalue_accuracy=1.e-1,   # approximations in real space aim to be this accurate
-            kvalue_accuracy=1.e-1,   # approximations in fourier space aim to be this accurate
-            shoot_accuracy=1.e-1,    # approximations in photon shooting aim to be this accurate
-            minimum_fft_size=16)     # minimum size of ffts
 
     def _load_sed_files(self):
         """
@@ -219,35 +187,11 @@ class GalSimGalaxyModel(object):
         """
         Load filters for drawing chromatic objects.
 
-        Makes use of the module-level dictionary `k_telescopes` with values for
-        setting the zeropoints. Specifically, the type of zeropoint ('AB'),
-        the effective diameter of the telescope, and the exposure time.
-
-        Adapted from GalSim demo12.py
-
         @param wavelength_scale     Multiplicative scaling of the wavelengths
                                     input from the filter files to get
                                     nanometers from whatever the input units are
         """
-        if self.telescope_name == "WFIRST":
-            ### Use the Galsim WFIRST module
-            self.filters = galsim.wfirst.getBandpasses(AB_zeropoint=True)
-        else:
-            ### Use filter information in this module
-            path, filename = os.path.split(__file__)
-            datapath = os.path.abspath(os.path.join(path, "../input/"))
-            self.filters = {}
-            for filter_name in self.filter_names:
-                filter_filename = os.path.join(datapath, '{}_{}.dat'.format(
-                    self.telescope_name, filter_name))
-                self.filters[filter_name] = load_filter_file_to_bandpass(
-                    filter_filename, wavelength_scale,
-                    telescopes.k_telescopes[self.telescope_name]['effective_diameter'],
-                    telescopes.k_telescopes[self.telescope_name]['exptime_zeropoint']
-                )
-                # print("BP {} zeropoint: {}".format(filter_name,
-                #     self.filters[filter_name].zeropoint))
-        return None
+        self.filters = telescopes.load_filter_files(wavelength_scale, self.telescope_name)
 
     def set_param_by_name(self, paramname, value):
         """
@@ -322,7 +266,7 @@ class GalSimGalaxyModel(object):
         ### Transform fluxes to ln(Flux) for MCMC sampling
         for ip, pname in enumerate(self.active_parameters):
             if 'beta' in pname:
-                p[ip] = wrap_ellipticity_phase(p[ip])
+                p[ip] = jifparams.wrap_ellipticity_phase(p[ip])
             # if 'flux_sed' in pname:
             #     p[ip] = np.log(p[ip])
         return p
@@ -414,8 +358,10 @@ class GalSimGalaxyModel(object):
         else:
             lam_over_diam = self.filters[filter_name].effective_wavelength*1.e-9 / self.primary_diam_meters
             lam_over_diam *= 206264.8 # arcsec
-            optics = galsim.Airy(lam_over_diam, obscuration=0.548, flux=1.,
-                gsparams=self.gsparams)
+            optics = galsim.Airy(lam_over_diam, 
+                                 obscuration=telescopes[self.telescope_name]['obscuration'], 
+                                 flux=1.,
+                                 gsparams=self.gsparams)
             if self.atmosphere:
                 atmos = galsim.Kolmogorov(fwhm=0.6, gsparams=self.gsparams)
                 psf = galsim.Convolve([atmos, optics])
@@ -435,15 +381,18 @@ class GalSimGalaxyModel(object):
         @param gal_comp     Name of the galaxy component (bulge,disk) to select. Can be the empty
                             string to get the composite galaxy model SED.
         """
-        if appr_mag < 98.:
-            bp = self.filters[filter_name]
-            bp_ref = self.filters['ref']
-            SED = self.SEDs[k_SED_names[sed_index]]
-            SED = SED.atRedshift(redshift).withMagnitude(target_magnitude=appr_mag, bandpass=bp)
-            mag_model = SED.atRedshift(0.).calculateMagnitude(bp_ref)
-            self.params['mag_sed{:d}'.format(sed_index+1)][0] = mag_model
+        if self.galaxy_model == "star":
+            self.psf_model.set_mag_from_obs(appr_mag, filter_name=filter_name)
         else:
-            self.params['mag_sed{:d}'.format(sed_index+1)][0] = 99.
+            if appr_mag < 98.:
+                bp = self.filters[filter_name]
+                bp_ref = self.filters['ref']
+                SED = self.SEDs[k_SED_names[sed_index]]
+                SED = SED.atRedshift(redshift).withMagnitude(target_magnitude=appr_mag, bandpass=bp)
+                mag_model = SED.atRedshift(0.).calculateMagnitude(bp_ref)
+                self.params['mag_sed{:d}'.format(sed_index+1)][0] = mag_model
+            else:
+                self.params['mag_sed{:d}'.format(sed_index+1)][0] = 99.
         return None
 
     def get_SED(self, gal_comp=''):
@@ -468,7 +417,7 @@ class GalSimGalaxyModel(object):
         SEDs = [self.SEDs[SED_name].atRedshift(0.).withMagnitude(
             target_magnitude=self.params[0]['mag_sed{:d}{}'.format(i+1, gal_comp)],
             bandpass=bp).atRedshift(self.params[0].redshift)
-                for i, SED_name in enumerate(k_SED_names)]
+                for i, SED_name in enumerate(jifparams.k_SED_names)]
         return reduce(add, SEDs)
 
     def get_flux(self, filter_name='r'):
@@ -479,12 +428,15 @@ class GalSimGalaxyModel(object):
 
         @returns the flux in the requested bandpass (in photon counts)
         """
-        if self.achromatic_galaxy:
-            raise NotImplementedError()
+        if self.galaxy_model == "star":
+            return self.psf_model.get_flux(filter_name)
         else:
-            SED = self.get_SED()
-            flux = SED.calculateFlux(self.filters[filter_name])
-        return flux
+            if self.achromatic_galaxy:
+                raise NotImplementedError()
+            else:
+                SED = self.get_SED()
+                flux = SED.calculateFlux(self.filters[filter_name])
+            return flux
 
     def get_magnitude(self, filter_name='r'):
         """
@@ -494,12 +446,15 @@ class GalSimGalaxyModel(object):
 
         @returns the magnitude in the requested bandpass
         """
-        if self.achromatic_galaxy:
-            raise NotImplementedError()
+        if self.galaxy_model == "star":
+            return self.psf_model.get_magnitude(filter_name)
         else:
-            SED = self.get_SED()
-            mag = SED.calculateMagnitude(self.filters[filter_name])
-        return mag
+            if self.achromatic_galaxy:
+                raise NotImplementedError()
+            else:
+                SED = self.get_SED()
+                mag = SED.calculateMagnitude(self.filters[filter_name])
+            return mag
 
     def get_image(self, out_image=None, add_noise=False,
                   filter_name='r', gain=2.1, snr=None):
@@ -615,8 +570,9 @@ class GalSimGalaxyModel(object):
         if self.psf_model_type == 'InterpolatedImage':
             image = psf
         elif self.psf_model_type == 'PSFModel class':
-            image = self.psf_model.get_psf_image(out_image=out_image, ngrid=ngrid,
-                                                 pixel_scale_arcsec=self.pixel_scale, gain=gain)
+            image = self.psf_model.get_psf_image(filter_name=filter_name, out_image=out_image,
+                                                 ngrid=ngrid, pixel_scale_arcsec=self.pixel_scale,
+                                                 gain=gain)
             if add_noise:
                 image.addNoise(self.noise)
         else:
@@ -747,16 +703,16 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
         achromatic_galaxy=achromatic_galaxy)
 
     # Save the image
-    lsst.save_image("../TestData/test_lsst_image" + file_lab + ".fits",
+    lsst.save_image("../data/TestData/test_lsst_image" + file_lab + ".fits",
         filter_name=filter_name_ground,
         out_image=galsim.Image(ngrid_lsst, ngrid_lsst))
-    lsst.plot_image("../TestData/test_lsst_image" + file_lab + ".png",
+    lsst.plot_image("../data/TestData/test_lsst_image" + file_lab + ".png",
         ngrid=ngrid_lsst,
         filter_name=filter_name_ground, title="LSST " + filter_name_ground)
     # Save the corresponding PSF
-    lsst.save_psf("../TestData/test_lsst_psf" + file_lab + ".fits",
+    lsst.save_psf("../data/TestData/test_lsst_psf" + file_lab + ".fits",
         ngrid=ngrid_lsst/4, filter_name=filter_name_ground)
-    lsst.plot_psf("../TestData/test_lsst_psf" + file_lab + ".png",
+    lsst.plot_psf("../data/TestData/test_lsst_psf" + file_lab + ".png",
         ngrid=ngrid_lsst/4, title="LSST " + filter_name_ground,
         filter_name=filter_name_ground)
 
@@ -783,14 +739,14 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
     ngrid_wfirst = np.ceil(ngrid_lsst * lsst.pixel_scale / wfirst.pixel_scale) #128
 
     # Save the image
-    wfirst.save_image("../TestData/test_wfirst_image" + file_lab + ".fits",
+    wfirst.save_image("../data/TestData/test_wfirst_image" + file_lab + ".fits",
         filter_name=filter_name_space, out_image=galsim.Image(ngrid_wfirst, ngrid_wfirst))
-    wfirst.plot_image("../TestData/test_wfirst_image" + file_lab + ".png", ngrid=ngrid_wfirst,
+    wfirst.plot_image("../data/TestData/test_wfirst_image" + file_lab + ".png", ngrid=ngrid_wfirst,
         filter_name=filter_name_space, title="WFIRST " + filter_name_space)
     # Save the corresponding PSF
-    wfirst.save_psf("../TestData/test_wfirst_psf" + file_lab + ".fits",
+    wfirst.save_psf("../data/TestData/test_wfirst_psf" + file_lab + ".fits",
         ngrid=ngrid_wfirst/4, filter_name=filter_name_space)
-    wfirst.plot_psf("../TestData/test_wfirst_psf" + file_lab + ".png",
+    wfirst.plot_psf("../data/TestData/test_wfirst_psf" + file_lab + ".png",
         ngrid=ngrid_wfirst/4, title="WFIRST " + filter_name_space,
         filter_name=filter_name_space)
 
@@ -904,7 +860,7 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
     segment_image.addNoise(noise_model)
 
-    outfile = "../TestData/test_lsst_blended_image.fits"
+    outfile = "../data/TestData/test_lsst_blended_image.fits"
     print("Saving to {}".format(outfile))
     segment_image.write(outfile)
 

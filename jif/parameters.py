@@ -12,6 +12,10 @@ import numpy as np
 ### From the Brown et al. (2014) atlas:
 k_SED_names = ['NGC_0695_spec', 'NGC_4125_spec', 'NGC_4552_spec', 'CGCG_049-057_spec']
 
+### Star SEDs for chromatic PSF simulations (see psf_model.py).
+### Testing kludge: use the galaxy SEDs
+k_star_SED_names = ['NGC_0695_spec', 'NGC_4125_spec', 'NGC_4552_spec', 'CGCG_049-057_spec']
+
 ### Minimum brightness a magnitude parameter can take
 k_mag_param_minval = 99.
 
@@ -48,8 +52,8 @@ k_galparams_type_bulgedisk += [('dx_disk', '<f8'), ('dy_disk', '<f8')]
 
 
 k_galsim_psf_types = [('psf_fwhm', '<f8'), ('psf_e', '<f8'), ('psf_beta', '<f8'),
-                      ('psf_lnflux', '<f8')]
-k_galsim_psf_defaults = [(0.6, 0.01, 0.4, 0.0)]
+                      ('psf_mag', '<f8')]
+k_galsim_psf_defaults = [(0.6, 0.01, 0.4, 17.0)]
 
 
 
@@ -121,3 +125,19 @@ def replace_psf_parameters(model_params, model_params_new_psf, active_parameters
     p_out[psf_param_ndx] = model_params_new_psf[psf_param_ndx]
     return p_out
 
+
+def flux_from_AB_mag(mag, exposure_time_s=30, gain=1.0):
+    """
+    Convert an AB apparent magnitude to a flux
+    """
+    # flux_AB = 3.63e-20 # ergs / s / Hz / cm^2
+    mag_AB = 48.6 - 84. ### kludgey offset here to make fluxes look okay in GalSim units
+    flux = 10. ** (-(mag + mag_AB) / 2.5)
+    return flux
+
+
+def wrap_ellipticity_phase(phase):
+    """
+    Map a phase in radians to [0, pi) to model ellipticity orientation.
+    """
+    return (phase % np.pi)
