@@ -8,4 +8,5 @@ setup(name='jif',
       author_email='mdschneider@me.com',
       license='MIT',
       packages=['jif'],
+      package_data={'jif': ['input/*.dat', 'input/*.sed']},
       zip_safe=False)

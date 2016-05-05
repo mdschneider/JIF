@@ -64,7 +64,7 @@ class GalSimGalaxyModel(object):
                                 be used with this galaxy model instance.
     @param filter_names         List of filter names to be used if the 'filters' parameter is not
                                 specified. If supplied, the names in this list must match those
-                                in the ../input directory with tables of bandpasses.
+                                in the 'input/' directory with tables of bandpasses.
                                 If neither 'filters' or 'filter_names' ares supplied, a Warning
                                 is raised and subsequent execution may produce unexpected results.
     @param filter_wavelength_scale Multiplicative scaling to apply to input filter wavelenghts
@@ -163,7 +163,7 @@ class GalSimGalaxyModel(object):
             self.filter_names = self.filters.keys()
         ### Add the reference filter for defining the magnitude parameters
         path, filename = os.path.split(__file__)
-        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        datapath = os.path.abspath(os.path.join(path, "input/"))
         ref_filename = os.path.join(datapath, '{}_{}.dat'.format('LSST',
             GalSimGalaxyModel.ref_filter))
         self.filters['ref'] = telescopes.load_filter_file_to_bandpass(ref_filename)
@@ -176,7 +176,7 @@ class GalSimGalaxyModel(object):
         Copied from GalSim demo12.py
         """
         path, filename = os.path.split(__file__)
-        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        datapath = os.path.abspath(os.path.join(path, "input/"))
         self.SEDs = {}
         for SED_name in jifparams.k_SED_names:
             SED_filename = os.path.join(datapath, '{0}.sed'.format(SED_name))
@@ -475,7 +475,7 @@ class GalSimGalaxyModel(object):
             if self.achromatic_galaxy:
                 gal = mono_gal
                 ### Add offset to 'mag' here to make defaults look better for achromatic models
-                gal = gal.withFlux(flux_from_AB_mag(self.params[0].mag_sed1 + 14))
+                gal = gal.withFlux(jifparams.flux_from_AB_mag(self.params[0].mag_sed1 + 14))
                 # gal = gal.withFlux(1.e6)
             else:
                 SED = self.get_SED()
@@ -494,7 +494,7 @@ class GalSimGalaxyModel(object):
             if self.achromatic_galaxy:
                 gal = mono_gal
                 ### Add offset to 'mag' here to make defaults look better for achromatic models
-                gal = gal.withFlux(flux_from_AB_mag(self.params[0].mag_sed1 + 14))
+                gal = gal.withFlux(jifparams.flux_from_AB_mag(self.params[0].mag_sed1 + 14))
             else:
                 SED = self.get_SED()
                 gal = galsim.Chromatic(mono_gal, SED)
@@ -625,7 +625,7 @@ class GalSimGalaxyModel(object):
         import matplotlib.pyplot as plt
         psf = self.get_psf(filter_name)
         if ngrid is None:
-            ngrid = 16
+            ngrid = 32
         # image_epsf = psf.drawImage(image=None,
         #     scale=self.pixel_scale, nx=ngrid, ny=ngrid)
         image_epsf = self.get_psf_image(ngrid=ngrid, add_noise=add_noise)
@@ -663,7 +663,7 @@ def save_bandpasses_to_segment(seg, gg, filter_names, telescope_name="LSST", sca
     throughputs_list = []
     effective_wavelengths = []
     for i, f in enumerate(filter_names):
-        bp = np.loadtxt(os.path.join(path, "../input/{}_{}.dat".format(
+        bp = np.loadtxt(os.path.join(path, "input/{}_{}.dat".format(
             telescope_name, f)))
         waves_nm_list.append(bp[:,0]*scale)
         throughputs_list.append(bp[:,1])

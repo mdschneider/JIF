@@ -235,7 +235,7 @@ class Roaster(object):
                         waves_nm = f[fg + '/waves_nm']
                         throughput = f[fg + '/throughput']
                         table = galsim.LookupTable(x=waves_nm, f=throughput)
-                        bp = galsim_galaxy.load_filter_file_to_bandpass(table,
+                        bp = jiftel.load_filter_file_to_bandpass(table,
                             effective_diameter_meters=jiftel.k_telescopes[tel]['effective_diameter'],
                             exptime_sec=jiftel.k_telescopes[tel]['exptime_zeropoint'])
                         self.filters[filter_name] = bp

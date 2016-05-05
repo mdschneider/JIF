@@ -153,7 +153,7 @@ def load_filter_files(wavelength_scale=1.0, telescope_name="LSST"):
     else:
         ### Use filter information in this module
         path, filename = os.path.split(__file__)
-        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        datapath = os.path.abspath(os.path.join(path, "input/"))
         filters = {}
         for filter_name in k_telescopes[telescope_name]['filter_names']:
             filter_filename = os.path.join(datapath, '{}_{}.dat'.format(
