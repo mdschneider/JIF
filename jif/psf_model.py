@@ -220,27 +220,30 @@ class PSFModel(object):
 
 
         if telescopes.k_telescopes[self.telescope_name]["atmosphere"]:
+            psf_shape = galsim.Shear(g=self.params[0].psf_e,
+                                     beta=self.params[0].psf_beta*galsim.radians)
+            atmos = atmos.shear(psf_shape)
             psf = galsim.Convolve([atmos, optics])
         else:
             psf = optics
-
-        if self.achromatic:
-            psf = psf.withFlux(jifparams.flux_from_AB_mag(self.params[0].psf_mag))
-        else:
-            psf = galsim.Convolve([atmos, optics])
-
-        psf_shape = galsim.Shear(g=self.params[0].psf_e,
-            beta=self.params[0].psf_beta*galsim.radians)
-        psf = psf.shear(psf_shape)
 
         return psf
 
     def get_psf_image(self, filter_name='r', ngrid=None, pixel_scale_arcsec=0.2, out_image=None,
                       gain=1.0):
+        """
+        Get a GalSim Image instance of the PSF
+
+        This renders images with fluxes set according to the 'psf_mag' model parameter to enable
+        simulation of star images. 
+
+        (So this method could be better described as 'get_star_image' perhaps.)
+        """
         if ngrid is None and out_image is None:
             raise ValueError("Must specify either ngrid or out_image")
         psf = self.get_psf()
         if self.achromatic:
+            psf = psf.withFlux(jifparams.flux_from_AB_mag(self.params[0].psf_mag))
             image_epsf = psf.drawImage(image=out_image, scale=pixel_scale_arcsec,
                                        nx=ngrid, ny=ngrid, gain=gain)
         else:
@@ -257,6 +260,9 @@ class PSFModel(object):
         return image_epsf
 
     def save_image(self, file_name, ngrid=None, pixel_scale_arcsec=0.2):
+        """
+        Save the PSF/star image to FITS file using the GalSim 'write' method
+        """
         image_epsf = self.get_psf_image(ngrid=ngrid, pixel_scale_arcsec=pixel_scale_arcsec)
         image_epsf.write(file_name)
         return None
