@@ -129,7 +129,7 @@ def load_filter_file_to_bandpass(table, wavelength_scale=1.0,
     bp = galsim.Bandpass(table)
     bp = bp.thin(rel_err=1e-4)
     return bp.withZeropoint(zeropoint='AB',
-        effective_diameter=100. * effective_diameter_meters,
+        effective_diameter=effective_diameter_meters,
         exptime=exptime_sec)
 
 def load_filter_files(wavelength_scale=1.0, telescope_name="LSST"):

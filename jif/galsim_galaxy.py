@@ -475,7 +475,7 @@ class GalSimGalaxyModel(object):
             if self.achromatic_galaxy:
                 gal = mono_gal
                 ### Add offset to 'mag' here to make defaults look better for achromatic models
-                gal = gal.withFlux(jifparams.flux_from_AB_mag(self.params[0].mag_sed1 + 14))
+                gal = gal.withFlux(jifparams.flux_from_AB_mag(self.params[0].mag_sed1))
                 # gal = gal.withFlux(1.e6)
             else:
                 SED = self.get_SED()
@@ -494,7 +494,7 @@ class GalSimGalaxyModel(object):
             if self.achromatic_galaxy:
                 gal = mono_gal
                 ### Add offset to 'mag' here to make defaults look better for achromatic models
-                gal = gal.withFlux(jifparams.flux_from_AB_mag(self.params[0].mag_sed1 + 14))
+                gal = gal.withFlux(jifparams.flux_from_AB_mag(self.params[0].mag_sed1))
             else:
                 SED = self.get_SED()
                 gal = galsim.Chromatic(mono_gal, SED)

@@ -24,20 +24,21 @@ k_spergel_paramnames = ['nu', 'hlr', 'e', 'beta']
 
 ### Numpy composite object types for the model parameters for galaxy images under different
 ### modeling assumptions.
-k_galparams_type_sersic = [('redshift', '<f8'), ('n', '<f8'), ('hlr', '<f8'),
-                           ('e', '<f8'), ('beta', '<f8')]
+k_galparams_type_sersic = [('redshift', '<f8'),
+                           ('n', '<f8'),
+                           ('hlr', '<f8'),
+                           ('e', '<f8'),
+                           ('beta', '<f8')]
 k_galparams_type_sersic += [('mag_sed{:d}'.format(i+1), '<f8')
                             for i in xrange(len(k_SED_names))]
 k_galparams_type_sersic += [('dx', '<f8'), ('dy', '<f8')]
-
-
+# ---------------------------------------------------------------
 k_galparams_type_spergel = [('redshift', '<f8')] + [(p, '<f8')
                             for p in k_spergel_paramnames]
 k_galparams_type_spergel += [('mag_sed{:d}'.format(i+1), '<f8')
                              for i in xrange(len(k_SED_names))]
 k_galparams_type_spergel += [('dx', '<f8'), ('dy', '<f8')]
-
-
+# ---------------------------------------------------------------
 k_galparams_type_bulgedisk = [('redshift', '<f8')]
 k_galparams_type_bulgedisk += [('{}_bulge'.format(p), '<f8')
                                for p in k_spergel_paramnames]
@@ -49,12 +50,15 @@ k_galparams_type_bulgedisk += [('mag_sed{:d}_disk'.format(i+1), '<f8')
     for i in xrange(len(k_SED_names))]
 k_galparams_type_bulgedisk += [('dx_bulge', '<f8'), ('dy_bulge', '<f8')]
 k_galparams_type_bulgedisk += [('dx_disk', '<f8'), ('dy_disk', '<f8')]
-
-
-k_galsim_psf_types = [('psf_fwhm', '<f8'), ('psf_e', '<f8'), ('psf_beta', '<f8'),
+# ---------------------------------------------------------------
+k_galsim_psf_types = [('psf_fwhm', '<f8'),
+                      ('psf_e', '<f8'),
+                      ('psf_beta', '<f8'),
                       ('psf_mag', '<f8')]
-k_galsim_psf_defaults = [(0.6, 0.01, 0.4, 17.0)]
-
+k_galsim_psf_defaults = [(0.6,    # fwhm
+                          0.01,   # e
+                          0.4,    # beta
+                          17.0)]  # mag
 
 
 k_galparams_types = {
@@ -68,23 +72,41 @@ k_galparams_types = {
 k_galparams_defaults = {
     "Sersic": [(1., 3.4, 1.0, 0.1, np.pi/4, 22., k_mag_param_minval,
         k_mag_param_minval, k_mag_param_minval, 0., 0.)],
-    "Spergel": [(1.,        # redshift
-                 0.3,       # nu
-                 1.0,       # hlr
-                 0.1,       # e
-                 np.pi/6,   # beta
-                 20.,      # mag_sed1
-                 k_mag_param_minval,   # mag_sed2
-                 k_mag_param_minval,   # mag_sed3
-                 k_mag_param_minval,   # mag_sed4
-                 0.,        # dx
-                 0.)],      # dy
-    "BulgeDisk": [(1.,
-        0.5, 0.6, 0.05, 0.0,
-        -0.6, 1.8, 0.3, np.pi/4,
-        22., k_mag_param_minval, k_mag_param_minval, k_mag_param_minval,
-        k_mag_param_minval, 22., k_mag_param_minval, k_mag_param_minval,
-        0., 0., 0., 0.)],
+    # -----------------------------------------------------
+    "Spergel": [(1.,                    # redshift
+                 0.3,                   # nu
+                 1.0,                   # hlr
+                 0.1,                   # e
+                 np.pi/6,               # beta
+                 20.,                   # mag_sed1
+                 k_mag_param_minval,    # mag_sed2
+                 k_mag_param_minval,    # mag_sed3
+                 k_mag_param_minval,    # mag_sed4
+                 0.,                    # dx
+                 0.)],                  # dy
+    # -----------------------------------------------------
+    "BulgeDisk": [(1.,                  # redshift
+                   0.5,                 # nu_bulge
+                   0.6,                 # hlr_bulge
+                   0.05,                # e_bulge
+                   0.0,                 # beta_bulge
+                   -0.6,                # nu_disk
+                   1.8,                 # hlr_disk
+                   0.3,                 # e_disk
+                   np.pi/4,             # beta_disk
+                   22.,                 # mag_sed1_bulge
+                   k_mag_param_minval,  # mag_sed2_bulge
+                   k_mag_param_minval,  # mag_sed3_bulge
+                   k_mag_param_minval,  # mag_sed4_bulge
+                   k_mag_param_minval,  # mag_sed1_disk
+                   22.,                 # mag_sed2_disk
+                   k_mag_param_minval,  # mag_sed3_disk
+                   k_mag_param_minval,  # mag_sed4_disk
+                   0.,                  # dx_bulge
+                   0.,                  # dy_bulge
+                   0.,                  # dx_disk
+                   0.)],                # dy_disk
+    # -----------------------------------------------------
     "star": k_galsim_psf_defaults
 }
 
