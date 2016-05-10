@@ -275,7 +275,7 @@ class FlatPriorPSF(object):
     def __init__(self):
         pass
 
-    def __call__(self, Pi):
+    def __call__(self, Pi, *args, **kwargs):
         return 0.0
 
 
@@ -287,7 +287,7 @@ class DefaultPriorPSF(object):
     def _lnprior_fwhm(self, fwhm):
         return -0.5 * (fwhm - self.fwhm_mean) ** 2 / self.fwhm_var
 
-    def __call__(self, Pi):
+    def __call__(self, Pi, *args, **kwargs):
         return self._lnprior_fwhm(Pi[0].psf_fwhm)
 
 

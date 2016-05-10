@@ -126,6 +126,10 @@ class Roaster(object):
             self.sample_psf = True
             self.psf_model_paramnames = jifparams.select_psf_paramnames(
                 model_paramnames)
+        ### The complimentary set of parameters are those for the galaxy model(s)
+        self.galaxy_model_paramnames = jifparams.select_galaxy_paramnames(
+            model_paramnames)
+
 
         ### Count the number of calls to self.lnlike
         self.istep = 0
@@ -351,8 +355,8 @@ class Roaster(object):
         p = np.array([m[0].get_params() for m in self.src_models]).ravel()
         ### If PSF sampling, append the PSF model parameters for the remaining epochs
         if self.sample_psf and self.num_epochs > 1:
-            p_psf = np.array([[m[i].get_psf_params() for i in xrange(1, self.num_epochs)]
-                for m in self.src_models]).ravel()
+            p_psf = np.array([m[i].get_psf_params() for m in self.src_models
+                              for i in xrange(1, self.num_epochs)]).ravel()
             p = np.concatenate((p, p_psf))
         return p
 
@@ -368,27 +372,21 @@ class Roaster(object):
         For use in MCMC sampling.
         """
         valid_params = True
-        n = self.n_gal_params + self.n_psf_params
         for isrcs in xrange(self.num_sources):
             imin = isrcs * self.n_params
             imax = (isrcs + 1) * self.n_params
-
-            # if self.debug:
-            #     p_set = self.src_models[isrcs][0].get_params()
-            #     if self.sample_psf and self.num_epochs > 1:
-            #         p_set.append([m.get_psf_params() for m in self.src_models[isrcs]]).ravel()
-            #     print "input p:", p
-            #     print "p_set before indexing:", p_set
-
             p_set = p[imin:imax]
-            # if self.debug:
-            #     print "p_set after indexing:", p_set
-
-            p_set_iepoch = p_set[0:n]
+            ### Assign the parameters for source model isrcs in epoch iepochs.
+            ### The galaxy parameters are the same across epochs, but PSF parameters are 
+            ### different.
+            p_gal_set = p_set[0:self.n_gal_params]
             for iepochs in xrange(self.num_epochs):
                 jmin = self.n_gal_params + iepochs * self.n_psf_params
                 jmax = jmin + self.n_psf_params
-                p_set_iepoch[self.n_gal_params:n] = p_set[jmin:jmax]
+
+                p_psf_set = p_set[jmin:jmax]
+                p_set_iepoch = np.concatenate((p_gal_set, p_psf_set))
+
                 self.src_models[isrcs][iepochs].set_params(p_set_iepoch)
                 valid_params *= self.src_models[isrcs][iepochs].validate_params()
         return valid_params
@@ -448,7 +446,7 @@ class Roaster(object):
                     ### Each epoch has a different PSF, so the PSF model parameters are distinct.
                     for iepoch in xrange(self.num_epochs):
                         ppsf = copy.deepcopy(self.src_models[isrcs][iepoch].psf_model.params)
-                        lnp += self.lnprior_Pi(ppsf)
+                        lnp += self.lnprior_Pi(ppsf, epoch_num=iepoch)
         else:
             lnp = -np.inf
         return lnp
@@ -603,11 +601,19 @@ def write_results(args, pps, lnps, roaster):
     f.attrs['model_paramnames'] = roaster.model_paramnames
     f.attrs['achromatic_galaxy'] = roaster.achromatic_galaxy
 
+    ### Collect the galaxy model parameter names, appending source indices if needed.
+    ### If sampling in PSF parameters, handle these separately from the galaxy parameters.
     if roaster.num_sources == 1:
-        paramnames = roaster.model_paramnames
+        paramnames = roaster.galaxy_model_paramnames
     elif roaster.num_sources > 1:
-        paramnames = [[p + '_src{:d}'.format(isrc) for p in roaster.model_paramnames]
-                      for isrc in xrange(roaster.num_sources)]
+        paramnames = [p + '_src{:d}'.format(isrc) for isrc in xrange(roaster.num_sources)
+                      for p in roaster.galaxy_model_paramnames]
+    if roaster.sample_psf:
+        if roaster.num_epochs == 1:
+            paramnames += roaster.psf_model_paramnames
+        elif roaster.num_epochs > 1:
+            paramnames += [p + '_{:d}'.format(iepoch) for iepoch in xrange(roaster.num_epochs)
+                           for p in roaster.psf_model_paramnames]
 
     ### Write the MCMC samples and log probabilities
     if "post" in f:
