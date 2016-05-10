@@ -353,6 +353,7 @@ class Roaster(object):
         if self.sample_psf and self.num_epochs > 1:
             p_psf = np.array([[m[i].get_psf_params() for i in xrange(1, self.num_epochs)]
                 for m in self.src_models]).ravel()
+            p = np.concatenate((p, p_psf))
         return p
 
     def set_params(self, p):
