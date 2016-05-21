@@ -150,23 +150,25 @@ class GalSimGalaxyModel(object):
         else:
             self.psf_model_type = 'Parametric'
 
-        ### Set GalSim SED model parameters
-        self._load_sed_files()
-        ### Load the filters that can be used to draw galaxy images
-        if self.filters is None:
-            if self.filter_names is not None:
-                self._load_filter_files(filter_wavelength_scale)
+        if not self.achromatic_galaxy:
+            ### Set GalSim SED model parameters
+            self._load_sed_files()
+            ### Load the filters that can be used to draw galaxy images
+            if self.filters is None:
+                if self.filter_names is not None:
+                    self._load_filter_files(filter_wavelength_scale)
+                else:
+                    warnings.warn("No filters available in GalSimGalaxyModel: supply"
+                                  + "'filters' or 'filter_names' argument")
             else:
-                warnings.warn("No filters available in GalSimGalaxyModel: supply \
-                              'filters' or 'filter_names' argument")
-        else:
-            self.filter_names = self.filters.keys()
-        ### Add the reference filter for defining the magnitude parameters
-        path, filename = os.path.split(__file__)
-        datapath = os.path.abspath(os.path.join(path, "input/"))
-        ref_filename = os.path.join(datapath, '{}_{}.dat'.format('LSST',
-            GalSimGalaxyModel.ref_filter))
-        self.filters['ref'] = telescopes.load_filter_file_to_bandpass(ref_filename)
+                self.filter_names = self.filters.keys()
+            ### Add the reference filter for defining the magnitude parameters
+            path, filename = os.path.split(__file__)
+            datapath = os.path.abspath(os.path.join(path, "input/"))
+            ref_filename = os.path.join(datapath, '{}_{}.dat'.format('LSST',
+                GalSimGalaxyModel.ref_filter))
+            self.filters['ref'] = telescopes.load_filter_file_to_bandpass(ref_filename)
+        return None
 
 
     def _load_sed_files(self):
@@ -457,7 +459,7 @@ class GalSimGalaxyModel(object):
             return mag
 
     def get_image(self, out_image=None, add_noise=False,
-                  filter_name='r', gain=2.1, snr=None):
+                  filter_name='r', gain=1.0, snr=None):
         if self.galaxy_model == "star":
             return self.get_psf_image(filter_name=filter_name, out_image=out_image, gain=gain)
         elif self.galaxy_model == "Gaussian":

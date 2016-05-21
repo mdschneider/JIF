@@ -183,9 +183,12 @@ class Roaster(object):
         self.src_models = []
 
         if epoch_num is not None:
-            if self.telescope is None or self.filters_to_load is None:
-                raise ValueError("Must set telescope and filters_to_load before requesting 1 epoch \
-                                  to Load")
+            if self.telescope is None:
+                raise ValueError(
+                    "Must set telescope before requesting 1 epoch to Load")
+            elif not self.achromatic_galaxy and self.filters_to_load is None:
+                raise ValueError(
+                    "Must set filters_to_load before requesting 1 epoch to Load")
             else:
                 epochs = [epoch_num]
 
@@ -203,7 +206,7 @@ class Roaster(object):
                 print("Telescope names: {}".format(telescopes))
             if segment == None:
                 segment = 0
-            self.num_sources = f['segments/seg{:d}'.format(segment)].attrs['num_sources']
+            self.num_sources = f['Footprints/seg{:d}'.format(segment)].attrs['num_sources']
 
             instruments = telescopes
 
@@ -218,7 +221,7 @@ class Roaster(object):
             self.filters = {}
             self.filter_names = []
             for itel, tel in enumerate(telescopes):
-                g = 'segments/seg{:d}/{}'.format(segment, tel.lower())
+                g = 'Footprints/seg{:d}/{}'.format(segment, tel.lower())
                 filter_names = f[g].keys()
                 if self.filters_to_load is not None:
                     filter_names = [filt for filt in filter_names
@@ -246,8 +249,9 @@ class Roaster(object):
                         have_bandpasses = True
                     except KeyError:
                         have_bandpasses = False
+                        self.filters = None
 
-                    h = 'segments/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
+                    h = 'Footprints/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
                     if epoch_num is None:
                         nepochs = len(f[h])
                         epochs = range(nepochs)
@@ -729,8 +733,7 @@ def main():
                         help="Type of parametric galaxy model (Default: 'Spergel')")
 
     parser.add_argument("--data_format", type=str, default="jif_segment",
-                        help="Format of the input image data file (Default: \
-                             'jif_segment')")
+                        help="Format of the input image data file (Default: 'jif_segment')")
 
     parser.add_argument("--model_params", type=str, nargs='+',
                         default=['nu', 'hlr', 'e', 'beta', 'mag_sed1', 'dx', 'dy', 'psf_fwhm'],
@@ -744,14 +747,19 @@ def main():
                         help="Names of a subset of filters to load from the input data file \
                         (Default: None - use data in all available filters)")
 
+    parser.add_argument("--achromatic", action="store_true",
+                        help="Use an achromatic galaxy or star model")
+
+    parser.add_argument("--epoch_num", type=int, default=-1,
+                        help="Index of single epoch to fit. If not supplied, then fit all epochs.")
+
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
 
     parser.add_argument("--nsamples", default=100, type=int,
-                        help="Number of samples for each emcee walker \
-                              (Default: 100)")
+                        help="Number of samples for each emcee walker (Default: 100)")
 
-    parser.add_argument("--nwalkers", default=16, type=int,
+    parser.add_argument("--nwalkers", default=32, type=int,
                         help="Number of emcee walkers (Default: 16)")
 
     parser.add_argument("--nburn", default=50, type=int,
@@ -772,6 +780,11 @@ def main():
     if args.segment_numbers is None:
         args.segment_numbers = [0 for f in args.infiles]
 
+    if args.epoch_num >= 0:
+        epoch_num = args.epoch_num
+    else:
+        epoch_num = None
+
     ### Set galaxy priors
     if args.galaxy_model_type == "Spergel":
         lnprior_omega = DefaultPriorSpergel()
@@ -789,8 +802,9 @@ def main():
                       galaxy_model_type=args.galaxy_model_type,
                       model_paramnames=args.model_params,
                       telescope=args.telescope,
-                      filters_to_load=args.filters)
-    roaster.Load(args.infiles[0], segment=args.segment_numbers[0])
+                      filters_to_load=args.filters,
+                      achromatic_galaxy=args.achromatic)
+    roaster.Load(args.infiles[0], segment=args.segment_numbers[0], epoch_num=epoch_num)
 
     import pprint
     pp = pprint.PrettyPrinter(indent=4)
