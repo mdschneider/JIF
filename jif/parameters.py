@@ -54,11 +54,16 @@ k_galparams_type_bulgedisk += [('dx_disk', '<f8'), ('dy_disk', '<f8')]
 k_galsim_psf_types = [('psf_fwhm', '<f8'),
                       ('psf_e', '<f8'),
                       ('psf_beta', '<f8'),
-                      ('psf_mag', '<f8')]
-k_galsim_psf_defaults = [(0.6,    # fwhm
+                      ('psf_mag', '<f8'),
+                      ('psf_dx', '<f8'),
+                      ('psf_dy', '<f8')]
+k_galsim_psf_defaults = [(0.8,    # fwhm
                           0.01,   # e
                           0.4,    # beta
-                          17.0)]  # mag
+                          20.0,   # mag
+                          0.0,    # dx (pixels)
+                          0.0     # dy (pixels)
+                          )]  
 
 
 k_galparams_types = {

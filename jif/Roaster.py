@@ -251,6 +251,11 @@ class Roaster(object):
                         have_bandpasses = False
                         self.filters = None
 
+                    tel_model = jiftel.k_telescopes[tel]
+                    lam_over_diam = (tel_model["filter_central_wavelengths"][filter_name] * 1e-9 /
+                                     tel_model["primary_diam_meters"]) * 180*3600/np.pi
+                    print "lam_over_diam: {:5.4g} (arcseconds)".format(lam_over_diam)
+
                     h = 'Footprints/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
                     if epoch_num is None:
                         nepochs = len(f[h])
@@ -271,11 +276,17 @@ class Roaster(object):
                             psf_types.append('PSFModel class')
                             psfs.append(pm.PSFModel(
                                 active_parameters=self.psf_model_paramnames,
+                                telescope=self.telescope,
+                                achromatic=self.achromatic_galaxy,
+                                lam_over_diam=lam_over_diam,
                                 gsparams=None))
                         elif use_PSFModel:
                             psf_types.append('PSFModel class')
                             psfs.append(pm.PSFModel(
                                 active_parameters=[],
+                                telescope=self.telescope,
+                                achromatic=self.achromatic_galaxy,
+                                lam_over_diam=lam_over_diam,
                                 gsparams=None))
                         else:
                             psf_types.append(seg.attrs['psf_type'])
@@ -593,6 +604,7 @@ def write_results(args, pps, lnps, roaster):
         f.attrs['segment_number'] = args.segment_numbers[0]
     else:
         f.attrs['segment_number'] = 'all'
+    f.attrs['epoch_num'] = args.epoch_num
     f.attrs['galaxy_model_type'] = roaster.galaxy_model_type
     if roaster.filters_to_load is not None:
         f.attrs['filters_to_load'] = roaster.filters_to_load
@@ -740,12 +752,12 @@ def main():
                         help="Names of the galaxy model parameters for sampling.")
 
     parser.add_argument("--telescope", type=str, default=None,
-                        help="Select only a single telescope from the input data file \
-                        (Default: None - get all telescopes data)")
+                        help="Select only a single telescope from the input data file " + 
+                             "(Default: None - get all telescopes data)")
 
     parser.add_argument("--filters", type=str, nargs='+',
-                        help="Names of a subset of filters to load from the input data file \
-                        (Default: None - use data in all available filters)")
+                        help="Names of a subset of filters to load from the input data file " + 
+                             "(Default: None - use data in all available filters)")
 
     parser.add_argument("--achromatic", action="store_true",
                         help="Use an achromatic galaxy or star model")

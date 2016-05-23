@@ -23,6 +23,11 @@ class RoasterInspector(object):
         self.infile = args.infile
         self.roaster_infile = f.attrs['infile']
         self.segment_number = f.attrs['segment_number']
+        epoch_num = f.attrs['epoch_num']
+        if epoch_num >= 0:
+            self.epoch_num = epoch_num
+        else:
+            self.epoch_num = None
         self.galaxy_model_type = f.attrs['galaxy_model_type']
         self.filters_to_load = f.attrs['filters_to_load']
         if isinstance(self.filters_to_load, str):
@@ -39,6 +44,7 @@ class RoasterInspector(object):
         if len(self.paramnames.shape) > 1:
             self.paramnames = np.array(self.paramnames).ravel()
         #     self.paramnames = self.paramnames[0]
+        self.nparams = len(self.paramnames)
         self.data = f['post'][...]
         self.logprob = f['logprobs'][...]
         self.nburn = f.attrs['nburn']
@@ -81,7 +87,9 @@ class RoasterInspector(object):
     def _get_opt_params(self):
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
         opt_params = np.vstack(self.data[-self.args.keeplast:,...])[ndx,...]
+        opt_params = opt_params[0:self.nparams]
         # opt_params = np.median(np.vstack(self.data[-self.args.keeplast:,...]), axis=0)
+        print "optimal parameters:", opt_params
         return opt_params
 
     def _load_roaster_input_data(self):
@@ -92,7 +100,7 @@ class RoasterInspector(object):
             debug=False,
             achromatic_galaxy=self.achromatic_galaxy)
         ### The following puts data in self.roaster.pixel_data
-        self.roaster.Load(self.roaster_infile, segment=self.segment_number)
+        self.roaster.Load(self.roaster_infile, segment=self.segment_number, epoch_num=self.epoch_num)
         print "Length of Roaster pixel data list: {:d}".format(len(self.roaster.pixel_data))
         return None
 
@@ -198,8 +206,7 @@ if __name__ == '__main__':
                         help="input HDF5 file with samples from Roaster")
 
     parser.add_argument("--truths", type=float,
-                        help="true values of hyperparameters: \
-                              {Omega_m, sigma_8, ...}",
+                        help="true values of hyperparameters: {Omega_m, sigma_8, ...}",
                         nargs='+')
 
     parser.add_argument("--keeplast", type=int, default=0,

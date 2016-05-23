@@ -106,6 +106,7 @@ class PSFModel(object):
         Take a list of (active) parameters and set local variables.
         """
         for ip, pname in enumerate(self.active_parameters):
+            # print ip, pname, self.params[pname][0], p
             self.params[pname][0] = p[ip]
         return None
 
@@ -227,6 +228,8 @@ class PSFModel(object):
         else:
             psf = optics
 
+        psf = psf.shift(self.params[0].psf_dx, self.params[0].psf_dy)
+
         return psf
 
     def get_psf_image(self, filter_name='r', ngrid=None, pixel_scale_arcsec=0.2, out_image=None,
@@ -283,12 +286,19 @@ class DefaultPriorPSF(object):
     def __init__(self):
         self.fwhm_mean = 0.6
         self.fwhm_var = 0.25
+        ### Gaussian priors in centroid parameters
+        self.pos_var = 0.25
 
     def _lnprior_fwhm(self, fwhm):
         return -0.5 * (fwhm - self.fwhm_mean) ** 2 / self.fwhm_var
 
     def __call__(self, Pi, *args, **kwargs):
-        return self._lnprior_fwhm(Pi[0].psf_fwhm)
+        lnp = self._lnprior_fwhm(Pi[0].psf_fwhm)
+        ### Centroid (x,y) perturbations
+        dx = Pi[0].psf_dx
+        dy = Pi[0].psf_dy
+        lnp += -0.5 * (dx*dx + dy*dy) / self.pos_var
+        return lnp
 
 
 def make_test_image():

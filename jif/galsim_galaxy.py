@@ -103,14 +103,14 @@ class GalSimGalaxyModel(object):
         self.galaxy_model = galaxy_model
         self.active_parameters = active_parameters
         self.active_parameters_galaxy = jifparams.select_galaxy_paramnames(active_parameters)
-        self.active_parameters_psf = jifparams.select_psf_paramnames(active_parameters)
+        # self.active_parameters_psf = jifparams.select_psf_paramnames(active_parameters)
         self.primary_diam_meters = primary_diam_meters
         self.filters = copy.deepcopy(filters)
         self.filter_names = filter_names
         self.atmosphere = atmosphere
         self.psf_model = psf_model
 
-        self.achromatic_galaxy = achromatic_galaxy ### TODO: Finish implementation of achromatic_galaxy feature
+        self.achromatic_galaxy = achromatic_galaxy
 
         self.gsparams = galsim.GSParams(
             folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
@@ -132,10 +132,11 @@ class GalSimGalaxyModel(object):
         self.n_psf_params = len(psf_paramnames)
 
         ### Setup the PSF model
-        ### Require a PSFModel class if the 'galaxy_model' == 'star'. This ensures the source 
-        ### model is parametric for image fitting.
+        ### Require a PSFModel class if the 'galaxy_model' == 'star' or if PSF model parameters
+        ### are specified for sampling.
+        ### This ensures the source model is parametric for image fitting.
         ### Otherwise, set the type of PSF model according to the input 'psf_model' argument.
-        if galaxy_model == 'star':
+        if galaxy_model == 'star' or (self.n_psf_params > 0 and not isinstance(self.psf_model, pm.PSFModel)):
             self.psf_model_type = 'PSFModel class'
             if not isinstance(self.psf_model, pm.PSFModel):
                 self.psf_model = pm.PSFModel(active_parameters=psf_paramnames,
@@ -559,8 +560,7 @@ class GalSimGalaxyModel(object):
                         else:
                             image.addNoiseSNR(self.noise, snr=snr)
                     else:
-                        raise AttributeError("A GalSim noise model must be \
-                                              specified to add noise to an image.")
+                        raise AttributeError("A GalSim noise model must be specified to add noise to an image.")
         except RuntimeError:
             print "Trying to make an image that's too big."
             print self.get_params()

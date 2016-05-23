@@ -22,6 +22,8 @@ k_telescopes = {
         "zeropoint": 'AB',
         "gain": 2.1,
         "filter_names": 'ugrizy',
+        "filter_central_wavelengths": {'u':360., 'g':500., 'r':620., 'i':750.,
+                                       'z':880., 'y':1000.},
         ### Reference filter name for defining the magnitude model parameter
         "ref_filter_mag_param": 'r',
         "atmosphere": True
@@ -37,11 +39,29 @@ k_telescopes = {
         "gain": galsim.wfirst.gain,
         ### Only these 4 filters will be used for the high-latitude WL survey
         "filter_names": ['Y106', 'J129', 'H158', 'F184'],
+        "filter_central_wavelengths": {'r':620., 'Z087':867., 'Y106':1100.,
+                                       'J129':1300., 'H158':994., 'F184':1880., 
+                                       'W149':1410.},
         ### Reference filter name for defining the magnitude model parameter.
         ### GalSimGalaxyModel defines an 'r' filter for all telescopes so we can do consistent
         ### parameter definitions, even if 'r' is not actually availabele for this survey.
         "ref_filter_mag_param": 'r',
         "atmosphere": False
+    },
+    "SDSS": {
+        "primary_diam_meters": 2.5,
+        "effective_diameter": 1.2,
+        "obscuration": 0.52,
+        "pixel_scale": 0.396,
+        ### Exposure time for defining the zero point reference
+        "exptime_zeropoint": 54.,
+        "zeropoint": 'AB',
+        "gain": 9.36, # http://classic.sdss.org/dr7/dm/flatFiles/opECalib.html
+        "filter_names": 'ugriz',
+        "filter_central_wavelengths": {'u':360., 'g':500., 'r':620., 'i':750.,
+                                       'z':880.},
+        "ref_filter_mag_param": 'r',
+        "atmosphere": True
     }
 }
 
@@ -55,6 +75,12 @@ k_wfirst_filter_names = ['Z087', 'Y106', 'J129', 'H158', 'F184', 'W149']
 ### 'Central' passband wavelengths in nanometers
 k_wfirst_filter_central_wavelengths = {'r':620., 'Z087':867., 'Y106':1100.,
     'J129':1300., 'H158':994., 'F184':1880., 'W149':1410.}
+
+k_sdss_filter_names = 'ugriz'
+### 'Central' passband wavelengths in nanometers
+k_sdss_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,
+                                     'z':880.}
+
 ### TESTING
 # k_wfirst_filter_names = k_lsst_filter_names
 # k_wfirst_filter_central_wavelengths = k_lsst_filter_central_wavelengths
