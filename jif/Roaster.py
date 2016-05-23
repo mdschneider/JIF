@@ -351,6 +351,19 @@ class Roaster(object):
             print "\npixel data shapes:", [dat.shape for dat in self.pixel_data]
         return None
 
+    def initialize_param_values(self, param_file_name):
+        """
+        Initialize model parameter values from a config file
+        """
+        import ConfigParser
+        config = ConfigParser.RawConfigParser()
+        config.read(param_file_name)
+
+        params = config.items("parameters")
+        for paramname, val in params:
+            self.set_param_by_name(paramname, float(val))
+        return None
+
     def _get_noise_var(self, i=0):
         return self.pix_noise_var[i]
 
@@ -765,6 +778,9 @@ def main():
     parser.add_argument("--epoch_num", type=int, default=-1,
                         help="Index of single epoch to fit. If not supplied, then fit all epochs.")
 
+    parser.add_argument("--init_param_file", type=str, default=None,
+                        help="Name of a config file with parameter values to initialize the chain")
+
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
 
@@ -817,6 +833,8 @@ def main():
                       filters_to_load=args.filters,
                       achromatic_galaxy=args.achromatic)
     roaster.Load(args.infiles[0], segment=args.segment_numbers[0], epoch_num=epoch_num)
+    if args.init_param_file is not None:
+        roaster.initialize_param_values(args.init_param_file)
 
     import pprint
     pp = pprint.PrettyPrinter(indent=4)

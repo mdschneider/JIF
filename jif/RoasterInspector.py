@@ -80,7 +80,7 @@ class RoasterInspector(object):
     def report(self):
         print "\n"
         for i, p in enumerate(self.paramnames):
-            print("%s = %4.3g +/- %4.3g" % (p, np.mean(self.data[:, :, i]),
+            print("%s = %4.3g +/- %4.3g" % (p, np.mean(self.data[-self.args.keeplast:, :, i]),
                 np.std(self.data[:, :, i])))
         print "\n"
 
