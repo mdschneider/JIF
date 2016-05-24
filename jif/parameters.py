@@ -56,13 +56,29 @@ k_galsim_psf_types = [('psf_fwhm', '<f8'),
                       ('psf_beta', '<f8'),
                       ('psf_mag', '<f8'),
                       ('psf_dx', '<f8'),
-                      ('psf_dy', '<f8')]
+                      ('psf_dy', '<f8'),
+                      ('psf_aber_defocus', '<f8'),
+                      ('psf_aber_astig1', '<f8'),
+                      ('psf_aber_astig2', '<f8'),
+                      ('psf_aber_coma1', '<f8'),
+                      ('psf_aber_coma2', '<f8'),
+                      ('psf_aber_trefoil1', '<f8'),
+                      ('psf_aber_trefoil2', '<f8'),
+                      ('psf_aber_spher', '<f8')]
 k_galsim_psf_defaults = [(0.8,    # fwhm
                           0.01,   # e
                           0.4,    # beta
                           20.0,   # mag
                           0.0,    # dx (pixels)
-                          0.0     # dy (pixels)
+                          0.0,    # dy (pixels)
+                          0.,     # defocus
+                          0.,     # astig1
+                          0.,     # astig2
+                          0.,     # coma1
+                          0.,     # coma2
+                          0.,     # trefoil1
+                          0.,     # trefoil2
+                          0.      # spher
                           )]  
 
 

@@ -45,6 +45,11 @@ class PSFModel(object):
         self.params = np.core.records.array(jifparams.k_galsim_psf_defaults,
             dtype=jifparams.k_galsim_psf_types)
 
+        ### Check if aberrated optics parameters are in the active parameters list.
+        ### Any such parameters must be labeled as 'psf_aber_XXX' where 'XXX' is the 
+        ### name of the aberration such as 'defocus' or 'astig1'.
+        self.aberrated_optics = np.any(['psf_aber' in p for p in active_parameters])
+
         if not self.achromatic:
             self._load_sed_files()
             self._load_filter_files()
@@ -194,6 +199,19 @@ class PSFModel(object):
             mag = SED.calculateMagnitude(self.filters[filter_name])
         return mag
 
+    def _get_aberrated_optics_PSF(self):
+        psf = galsim.OpticalPSF(self.lam_over_diam,
+                                defocus=self.params['psf_aber_defocus'][0],
+                                astig1=self.params['psf_aber_astig1'][0],
+                                astig2=self.params['psf_aber_astig2'][0],
+                                coma1=self.params['psf_aber_coma1'][0],
+                                coma2=self.params['psf_aber_coma2'][0],
+                                trefoil1=self.params['psf_aber_trefoil1'][0],
+                                trefoil2=self.params['psf_aber_trefoil2'][0],
+                                spher=self.params['psf_aber_spher'][0],
+                                obscuration=telescopes.k_telescopes[self.telescope_name]["obscuration"])
+        return psf
+
     def get_psf(self):
         """
         Get the GalSim PSF model instance
@@ -206,10 +224,15 @@ class PSFModel(object):
                                        gsparams=self.gsparams)
         if self.achromatic:
             atmos = atmos_mono
-            optics = galsim.Airy(self.lam_over_diam,
-                                 obscuration=telescopes.k_telescopes[self.telescope_name]["obscuration"],
-                                 flux=1., gsparams=self.gsparams)
+            if self.aberrated_optics:
+                optics = self._get_aberrated_optics_PSF()
+            else:
+                optics = galsim.Airy(self.lam_over_diam,
+                                     obscuration=telescopes.k_telescopes[self.telescope_name]["obscuration"],
+                                     flux=1., gsparams=self.gsparams)
         else:
+            if self.aberrated_optics:
+                raise ValueError("Aberrated optics are not supported for Chromatic PSFs")
             ### Point at the zenith to minimize DCR effects in this simplified model. 
             ### But, the ChromaticAtmosphere class should still give us the wavelength dependent 
             ### seeing. 
