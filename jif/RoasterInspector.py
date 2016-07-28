@@ -199,7 +199,7 @@ class RoasterInspector(object):
         return None
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("infile",
@@ -222,3 +222,8 @@ if __name__ == '__main__':
     inspector.report()
     inspector.plot()
     inspector.plot_data_and_model()
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

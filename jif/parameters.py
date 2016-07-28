@@ -31,13 +31,13 @@ k_galparams_type_sersic = [('redshift', '<f8'),
                            ('beta', '<f8')]
 k_galparams_type_sersic += [('mag_sed{:d}'.format(i+1), '<f8')
                             for i in xrange(len(k_SED_names))]
-k_galparams_type_sersic += [('dx', '<f8'), ('dy', '<f8')]
+k_galparams_type_sersic += [('dx', '<f8'), ('dy', '<f8')] ### In sky coordinates
 # ---------------------------------------------------------------
 k_galparams_type_spergel = [('redshift', '<f8')] + [(p, '<f8')
                             for p in k_spergel_paramnames]
 k_galparams_type_spergel += [('mag_sed{:d}'.format(i+1), '<f8')
                              for i in xrange(len(k_SED_names))]
-k_galparams_type_spergel += [('dx', '<f8'), ('dy', '<f8')]
+k_galparams_type_spergel += [('dx', '<f8'), ('dy', '<f8')] ### In sky coordinates
 # ---------------------------------------------------------------
 k_galparams_type_bulgedisk = [('redshift', '<f8')]
 k_galparams_type_bulgedisk += [('{}_bulge'.format(p), '<f8')

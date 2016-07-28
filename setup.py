@@ -9,4 +9,10 @@ setup(name='jif',
       license='MIT',
       packages=['jif'],
       package_data={'jif': ['input/*.dat', 'input/*.sed']},
+      ### The python scripts in this package can be designated as distinct command-line executables
+      ### here. Be careful about potential name clashes.
+      entry_points = {
+      	'console_scripts': ['jif_roaster=jif.Roaster:main',
+      					    'jif_roaster_inspector=jif.RoasterInspector:main'],
+      },
       zip_safe=False)
