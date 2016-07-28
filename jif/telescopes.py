@@ -152,7 +152,7 @@ def load_filter_file_to_bandpass(table, wavelength_scale=1.0,
         table = galsim.LookupTable(x=dat[:,0]*wavelength_scale, f=dat[:,1])
     elif not isinstance(table, galsim.LookupTable):
         raise ValueError("table must be a file name or galsim.LookupTable")
-    bp = galsim.Bandpass(table)
+    bp = galsim.Bandpass(table, wave_type='nm')
     bp = bp.thin(rel_err=1e-4)
     return bp.withZeropoint(zeropoint='AB',
         effective_diameter=effective_diameter_meters,

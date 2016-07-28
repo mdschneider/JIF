@@ -15,7 +15,8 @@ import warnings
 import galsim
 import galsim.wfirst
 ###
-import segments
+# import segments
+import footprints
 import parameters as jifparams
 import telescopes
 import psf_model as pm
@@ -183,7 +184,7 @@ class GalSimGalaxyModel(object):
         self.SEDs = {}
         for SED_name in jifparams.k_SED_names:
             SED_filename = os.path.join(datapath, '{0}.sed'.format(SED_name))
-            self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang')
+            self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang', flux_type='flambda')
         return None
 
     def _load_filter_files(self, wavelength_scale=1.0):
@@ -362,7 +363,7 @@ class GalSimGalaxyModel(object):
             lam_over_diam = self.filters[filter_name].effective_wavelength*1.e-9 / self.primary_diam_meters
             lam_over_diam *= 206264.8 # arcsec
             optics = galsim.Airy(lam_over_diam, 
-                                 obscuration=telescopes[self.telescope_name]['obscuration'], 
+                                 obscuration=telescopes.k_telescopes[self.telescope_name]['obscuration'], 
                                  flux=1.,
                                  gsparams=self.gsparams)
             if self.atmosphere:
@@ -390,7 +391,7 @@ class GalSimGalaxyModel(object):
             if appr_mag < 98.:
                 bp = self.filters[filter_name]
                 bp_ref = self.filters['ref']
-                SED = self.SEDs[k_SED_names[sed_index]]
+                SED = self.SEDs[jifparams.k_SED_names[sed_index]]
                 SED = SED.atRedshift(redshift).withMagnitude(target_magnitude=appr_mag, bandpass=bp)
                 mag_model = SED.atRedshift(0.).calculateMagnitude(bp_ref)
                 self.params['mag_sed{:d}'.format(sed_index+1)][0] = mag_model
@@ -630,7 +631,7 @@ class GalSimGalaxyModel(object):
             ngrid = 32
         # image_epsf = psf.drawImage(image=None,
         #     scale=self.pixel_scale, nx=ngrid, ny=ngrid)
-        image_epsf = self.get_psf_image(ngrid=ngrid, add_noise=add_noise)
+        image_epsf = self.get_psf_image(ngrid=ngrid, add_noise=add_noise, filter_name=filter_name)
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
@@ -754,15 +755,15 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
 
     lsst_data = lsst.get_image(galsim.Image(ngrid_lsst, ngrid_lsst), add_noise=True,
         filter_name=filter_name_ground).array
-    wfirst_data = wfirst.get_image(galsim.Image(ngrid_wfirst, ngrid_wfirst), add_noise=True,
-        filter_name=filter_name_space).array
+    # wfirst_data = wfirst.get_image(galsim.Image(ngrid_wfirst, ngrid_wfirst), add_noise=True,
+        # filter_name=filter_name_space).array
 
     # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster
     segfile = os.path.join(os.path.dirname(__file__),
-        '../TestData/test_image_data' + file_lab + '.h5')
+        '../data/TestData/test_image_data' + file_lab + '.h5')
     print("Writing {}".format(segfile))
-    seg = segments.Segments(segfile)
+    seg = footprints.Footprints(segfile)
 
     seg_ndx = 0
     src_catalog = lsst.params
@@ -785,19 +786,19 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
         filter_name=filter_name_ground)
     save_bandpasses_to_segment(seg, lsst, telescopes.k_lsst_filter_names, "LSST")
 
-    ### Space data
-    seg.save_images([wfirst_data], [wfirst.noise.getVariance()], [dummy_mask],
-        [dummy_background], segment_index=seg_ndx,
-        telescope='wfirst',
-        filter_name=filter_name_space)
-    seg.save_tel_metadata(telescope='wfirst',
-        primary_diam=wfirst.primary_diam_meters,
-        pixel_scale_arcsec=wfirst.pixel_scale,
-        atmosphere=wfirst.atmosphere)
-    seg.save_psf_images([wfirst.get_psf_image(filter_name_space).array], segment_index=seg_ndx,
-        telescope='wfirst',
-        filter_name=filter_name_space)
-    save_bandpasses_to_segment(seg, wfirst, telescopes.k_wfirst_filter_names, "WFIRST", scale=1)
+    # ### Space data
+    # seg.save_images([wfirst_data], [wfirst.noise.getVariance()], [dummy_mask],
+    #     [dummy_background], segment_index=seg_ndx,
+    #     telescope='wfirst',
+    #     filter_name=filter_name_space)
+    # seg.save_tel_metadata(telescope='wfirst',
+    #     primary_diam=wfirst.primary_diam_meters,
+    #     pixel_scale_arcsec=wfirst.pixel_scale,
+    #     atmosphere=wfirst.atmosphere)
+    # seg.save_psf_images([wfirst.get_psf_image(filter_name_space).array], segment_index=seg_ndx,
+    #     telescope='wfirst',
+    #     filter_name=filter_name_space)
+    # save_bandpasses_to_segment(seg, wfirst, telescopes.k_wfirst_filter_names, "WFIRST", scale=1)
 
     # -------------------------------------------------------------------------
 
