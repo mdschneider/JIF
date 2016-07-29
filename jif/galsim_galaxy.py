@@ -183,7 +183,7 @@ class GalSimGalaxyModel(object):
         self.SEDs = {}
         for SED_name in jifparams.k_SED_names:
             SED_filename = os.path.join(datapath, '{0}.sed'.format(SED_name))
-            self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang')
+            self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang', flux_type='flambda')
         return None
 
     def _load_filter_files(self, wavelength_scale=1.0):

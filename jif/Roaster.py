@@ -548,6 +548,16 @@ def walker_ball(omega, spread, nwalkers):
     return [omega+(np.random.rand(len(omega))*spread-0.5*spread)
             for i in xrange(nwalkers)]
 
+def cluster_walkers(pps, lnps):
+    """
+    Down-select walkers to those with the largest mean posteriors
+
+    Follows the algorithm of Hou, Goodman, Hogg et al. (2012)
+    """
+    lk = -np.mean(np.array(lnps), axis=0)
+    ndx = np.argsort(lk, axis=0)
+    return pps, lnps
+
 
 def do_sampling(args, roaster, return_samples=False):
     """
@@ -590,6 +600,8 @@ def do_sampling(args, roaster, return_samples=False):
         lnprior = np.array([roaster.lnprior(omega) for omega in pp])
         pps.append(np.column_stack((pp.copy(), lnprior)))
         lnps.append(lnp.copy())
+
+    # pps, lnps = cluster_walkers(pps, lnps)
 
     write_results(args, pps, lnps, roaster)
     if return_samples:
