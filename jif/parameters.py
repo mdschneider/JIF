@@ -99,7 +99,7 @@ k_galparams_defaults = {
                  1.0,                   # hlr
                  0.1,                   # e
                  np.pi/6,               # beta
-                 20.,                   # mag_sed1
+                 26.,                   # mag_sed1
                  k_mag_param_minval,    # mag_sed2
                  k_mag_param_minval,    # mag_sed3
                  k_mag_param_minval,    # mag_sed4
@@ -169,13 +169,21 @@ def replace_psf_parameters(model_params, model_params_new_psf, active_parameters
     return p_out
 
 
-def flux_from_AB_mag(mag, exposure_time_s=30, gain=1.0):
+def flux_from_AB_mag(mag, exposure_time_s=15, gain=2.1, 
+                     bandpass_over_wavelength=2.,
+                     pixel_scale_arcsec=0.2):
     """
     Convert an AB apparent magnitude to a flux
     """
+    h = 6.62606957e-27 # Planck's constant in erg seconds
     # flux_AB = 3.63e-20 # ergs / s / Hz / cm^2
-    mag_AB = 48.6 - 84. ### kludgey offset here to make fluxes look okay in GalSim units
+    mag_AB = 48.6# - 84. ### kludgey offset here to make fluxes look okay in GalSim units
+    ### This flux is in units of erg / s / Hz
     flux = 10. ** (-(mag + mag_AB) / 2.5)
+    ### Convert the flux to ADU / pixel
+    ### See galsim sed.py
+    flux *= gain * exposure_time_s * bandpass_over_wavelength / h
+    flux *= 4*np.pi/(pixel_scale_arcsec / (180*60*60))
     return flux
 
 

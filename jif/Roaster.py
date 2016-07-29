@@ -370,7 +370,7 @@ class Roaster(object):
         params = config.items("parameters")
         for paramname, val in params:
             vals = str.split(val, ' ')
-            if len(val) > 1: ### Assume multiple sources
+            if len(vals) > 1: ### Assume multiple sources
                 fval = [float(v) for v in vals[0:self.num_sources]]
             else:
                 fval = float(val)
@@ -495,17 +495,34 @@ class Roaster(object):
 
     def _get_model_image(self, iepochs, add_noise=False):
         """
-        Create a galsim.Image from the source model(s)
+        Create a galsim.Image from the source model(s) for epcoh iepochs
         """
-        model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs],
+        nx = self.nx[iepochs]
+        ny = self.ny[iepochs]
+        model_image = galsim.ImageF(nx, ny,
             scale=self.src_models[0][iepochs].pixel_scale)
 
         for isrcs in xrange(self.num_sources):
-            ### Draw every source using the full output array
-            b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
-            sub_image = model_image[b]
+            sub_image = galsim.Image(nx, ny)
             model = self.src_models[isrcs][iepochs].get_image(sub_image,
                 filter_name=self.filter_names[iepochs], add_noise=add_noise)
+            ix = nx/2
+            iy = ny/2
+            sub_bounds = galsim.BoundsI(ix-0.5*nx, ix+0.5*nx-1,
+                            iy-0.5*ny, iy+0.5*ny-1)
+            sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin, sub_bounds.ymin))
+            # Find the overlapping bounds between the large image and the individual postage
+            # stamp.
+            bounds = sub_image.bounds & model_image.bounds
+            model_image[bounds] += sub_image[bounds]
+
+
+            # ### Draw every source using the full output array
+            # b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
+            # sub_image = model_image[b]
+            # model = self.src_models[isrcs][iepochs].get_image(sub_image,
+            #     filter_name=self.filter_names[iepochs], add_noise=add_noise)
+            # model_image[b] + sub_image[b]
         return model_image
 
     def lnlike(self, omega, *args, **kwargs):
@@ -545,8 +562,8 @@ class Roaster(object):
                         plt.savefig(os.path.join('debug', 'resid_iepoch%d_istep%d.png' % (iepochs,
                             self.istep)))
 
-                    lnlike += (-0.5 * np.sum((self.pixel_data[iepochs] -
-                        model_image.array) ** 2) /
+                    delta = (self.pixel_data[iepochs] - model_image.array)
+                    lnlike += (-0.5 * np.sum(delta ** 2) /
                         self.pix_noise_var[iepochs])
         else:
             lnlike = -np.inf
@@ -756,6 +773,49 @@ class DefaultPriorBulgeDisk(object):
         return lnp
 
 # ------------------------------------------------------------------------------
+# For inspection: skip sampling and just save the model initialized in Roaster
+# ------------------------------------------------------------------------------
+def save_model_image(args, roaster):
+    """
+    Save the initial Roaster model image to FITS and png files
+
+    This routine is intended for inspection to see what kind of model image is 
+    created once Roaster is initialized but before any MCMC sampling. 
+    If the model image looks very different from the input data then it may 
+    take a long time for the MCMC chain to settle in to a high probability 
+    region of parameter space, or there may be a bug somewhere. 
+    """
+    epoch_num = 0 # FIXME: loop over this index
+
+    model_image = roaster._get_model_image(epoch_num)
+
+    ### Save a FITS image using the GalSim 'write' method for Image() class
+    outfile = args.outfile + "_initial_model_image.fits"
+    model_image.write(outfile)
+    logging.debug('Wrote model image to %r', outfile)
+
+    ### Save a PNG plot using matplotlib
+    import matplotlib.pyplot as plt
+    plt.style.use('ggplot')
+    fig = plt.figure(figsize=(12, 6))
+    ### Data
+    plt.subplot(1, 2, 1)
+    plt.imshow(roaster.pixel_data[epoch_num], interpolation='none',
+               cmap=plt.cm.pink)
+    plt.colorbar()
+    plt.title("Data")
+    ### Model
+    plt.subplot(1, 2, 2)
+    plt.imshow(model_image.array, interpolation='none',
+               cmap=plt.cm.pink)
+    plt.colorbar()
+    plt.title("Model")
+
+    outfile = args.outfile + "_initial_model_image.png"
+    plt.savefig(outfile, bbox_inches='tight')
+    return None
+
+# ------------------------------------------------------------------------------
 class ConfigFileParser(object):
     """
     Parse a configuration file for this script 
@@ -800,6 +860,9 @@ class ConfigFileParser(object):
         self.epoch_num = int(epoch_num)
 
         self.init_param_file = config.get("init", "init_param_file")
+
+        output_model = config.get("run", "output_model", default="False")
+        self.output_model = (output_model == "True")
 
         self.seed = config.get("init", "seed")
         if self.seed is not None:
@@ -871,6 +934,10 @@ def main():
                         help="Name of a config file with parameter values to "+
                              "initialize the chain")
 
+    parser.add_argument("--output_model", action="store_true",
+                        help="Just save the initial model image to file. "+
+                             "Don't sample")
+
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
 
@@ -917,7 +984,8 @@ def main():
 
     ### Set galaxy priors
     if args.galaxy_model_type == "Spergel":
-        lnprior_omega = DefaultPriorSpergel()
+        # lnprior_omega = DefaultPriorSpergel()
+        lnprior_omega = EmptyPrior()
     elif args.galaxy_model_type == "BulgeDisk":
         lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
     else:
@@ -946,7 +1014,10 @@ def main():
         print("\nsource model 0:")
         pp.pprint(roaster.src_models[0][0].__dict__)
 
-    do_sampling(args, roaster)
+    if args.output_model:
+        save_model_image(args, roaster)
+    else:
+        do_sampling(args, roaster)
 
     logging.debug('--- Roaster finished')
     return 0

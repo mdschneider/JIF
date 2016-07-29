@@ -80,7 +80,8 @@ class RoasterInspector(object):
     def report(self):
         print "\n"
         for i, p in enumerate(self.paramnames):
-            print("%s = %4.3g +/- %4.3g" % (p, np.mean(self.data[-self.args.keeplast:, :, i]),
+            print("%s = %4.3g +/- %4.3g" % (p, 
+                np.mean(self.data[-self.args.keeplast:, :, i]),
                 np.std(self.data[:, :, i])))
         print "\n"
 
@@ -88,20 +89,44 @@ class RoasterInspector(object):
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
         opt_params = np.vstack(self.data[-self.args.keeplast:,...])[ndx,...]
         opt_params = opt_params[0:self.nparams]
-        # opt_params = np.median(np.vstack(self.data[-self.args.keeplast:,...]), axis=0)
         print "optimal parameters:", opt_params
         return opt_params
 
     def _load_roaster_input_data(self):
-        self.roaster = Roaster.Roaster(galaxy_model_type=self.galaxy_model_type,
-            telescope=self.telescope,
-            model_paramnames=self.model_paramnames,
-            filters_to_load=self.filters_to_load,
-            debug=False,
-            achromatic_galaxy=self.achromatic_galaxy)
+        args = Roaster.ConfigFileParser(self.args.roaster_config)
+
+        if args.segment_numbers is None:
+            args.segment_numbers = [0 for f in args.infiles]
+        if args.epoch_num >= 0:
+            epoch_num = args.epoch_num
+        else:
+            epoch_num = None
+
+        # self.roaster = Roaster.Roaster(galaxy_model_type=self.galaxy_model_type,
+        #     telescope=self.telescope,
+        #     model_paramnames=self.model_paramnames,
+        #     filters_to_load=self.filters_to_load,
+        #     debug=False,
+        #     achromatic_galaxy=self.achromatic_galaxy)
         ### The following puts data in self.roaster.pixel_data
-        self.roaster.Load(self.roaster_infile, segment=self.segment_number, epoch_num=self.epoch_num)
-        print "Length of Roaster pixel data list: {:d}".format(len(self.roaster.pixel_data))
+        # self.roaster.Load(self.roaster_infile, segment=self.segment_number,
+        #                   epoch_num=self.epoch_num)
+        self.roaster = Roaster.Roaster(debug=args.debug, 
+            data_format=args.data_format,
+            # lnprior_omega=lnprior_omega,
+            # lnprior_Pi=lnprior_Pi,
+            galaxy_model_type=args.galaxy_model_type,
+            model_paramnames=args.model_params,
+            telescope=args.telescope,
+            filters_to_load=args.filters,
+            achromatic_galaxy=args.achromatic)
+        self.roaster.Load(args.infiles[0], segment=args.segment_numbers[0],
+                          epoch_num=epoch_num)
+        if args.init_param_file is not None:
+            self.roaster.initialize_param_values(args.init_param_file)
+
+        print "Length of Roaster pixel data list: {:d}".format(
+            len(self.roaster.pixel_data))
         return None
 
     def plot(self):
@@ -205,8 +230,12 @@ def main():
     parser.add_argument("infile",
                         help="input HDF5 file with samples from Roaster")
 
+    parser.add_argument("roaster_config",
+                        help="Name of Roaster config file")
+
     parser.add_argument("--truths", type=float,
-                        help="true values of hyperparameters: {Omega_m, sigma_8, ...}",
+                        help="true values of hyperparameters: "+
+                             "{Omega_m, sigma_8, ...}",
                         nargs='+')
 
     parser.add_argument("--keeplast", type=int, default=0,

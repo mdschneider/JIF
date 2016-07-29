@@ -111,7 +111,7 @@ def wfirst_noise(random_seed):
     pixel_scale_arcsec = 0.11
     read_noise_e_rms = 0.5 #5.
     sky_background = 3.6e-2 #3.60382E-01 # e-/pix/s
-    gain = 2.1 # e- / ADU
+    gain = galsim.wfirst.gain # e- / ADU
     return galsim.CCDNoise(rng, gain=gain,
         read_noise=(read_noise_e_rms / gain) ** 2,
         sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
