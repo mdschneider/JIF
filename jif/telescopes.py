@@ -111,7 +111,7 @@ def wfirst_noise(random_seed):
     pixel_scale_arcsec = 0.11
     read_noise_e_rms = 0.5 #5.
     sky_background = 3.6e-2 #3.60382E-01 # e-/pix/s
-    gain = 2.1 # e- / ADU
+    gain = galsim.wfirst.gain # e- / ADU
     return galsim.CCDNoise(rng, gain=gain,
         read_noise=(read_noise_e_rms / gain) ** 2,
         sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
@@ -152,7 +152,7 @@ def load_filter_file_to_bandpass(table, wavelength_scale=1.0,
         table = galsim.LookupTable(x=dat[:,0]*wavelength_scale, f=dat[:,1])
     elif not isinstance(table, galsim.LookupTable):
         raise ValueError("table must be a file name or galsim.LookupTable")
-    bp = galsim.Bandpass(table)
+    bp = galsim.Bandpass(table, wave_type='nm')
     bp = bp.thin(rel_err=1e-4)
     return bp.withZeropoint(zeropoint='AB',
         effective_diameter=effective_diameter_meters,

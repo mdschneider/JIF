@@ -15,7 +15,8 @@ import warnings
 import galsim
 import galsim.wfirst
 ###
-import segments
+# import segments
+import footprints
 import parameters as jifparams
 import telescopes
 import psf_model as pm
@@ -154,21 +155,21 @@ class GalSimGalaxyModel(object):
         if not self.achromatic_galaxy:
             ### Set GalSim SED model parameters
             self._load_sed_files()
-            ### Load the filters that can be used to draw galaxy images
-            if self.filters is None:
-                if self.filter_names is not None:
-                    self._load_filter_files(filter_wavelength_scale)
-                else:
-                    warnings.warn("No filters available in GalSimGalaxyModel: supply"
-                                  + "'filters' or 'filter_names' argument")
+        ### Load the filters that can be used to draw galaxy images
+        if self.filters is None:
+            if self.filter_names is not None:
+                self._load_filter_files(filter_wavelength_scale)
             else:
-                self.filter_names = self.filters.keys()
-            ### Add the reference filter for defining the magnitude parameters
-            path, filename = os.path.split(__file__)
-            datapath = os.path.abspath(os.path.join(path, "input/"))
-            ref_filename = os.path.join(datapath, '{}_{}.dat'.format('LSST',
-                GalSimGalaxyModel.ref_filter))
-            self.filters['ref'] = telescopes.load_filter_file_to_bandpass(ref_filename)
+                warnings.warn("No filters available in GalSimGalaxyModel: supply"
+                              + "'filters' or 'filter_names' argument")
+        else:
+            self.filter_names = self.filters.keys()
+        ### Add the reference filter for defining the magnitude parameters
+        path, filename = os.path.split(__file__)
+        datapath = os.path.abspath(os.path.join(path, "input/"))
+        ref_filename = os.path.join(datapath, '{}_{}.dat'.format('LSST',
+            GalSimGalaxyModel.ref_filter))
+        self.filters['ref'] = telescopes.load_filter_file_to_bandpass(ref_filename)
         return None
 
 
@@ -183,7 +184,8 @@ class GalSimGalaxyModel(object):
         self.SEDs = {}
         for SED_name in jifparams.k_SED_names:
             SED_filename = os.path.join(datapath, '{0}.sed'.format(SED_name))
-            self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang', flux_type='flambda')
+            self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang',
+                                             flux_type='flambda')
         return None
 
     def _load_filter_files(self, wavelength_scale=1.0):
@@ -362,7 +364,7 @@ class GalSimGalaxyModel(object):
             lam_over_diam = self.filters[filter_name].effective_wavelength*1.e-9 / self.primary_diam_meters
             lam_over_diam *= 206264.8 # arcsec
             optics = galsim.Airy(lam_over_diam, 
-                                 obscuration=telescopes[self.telescope_name]['obscuration'], 
+                                 obscuration=telescopes.k_telescopes[self.telescope_name]['obscuration'], 
                                  flux=1.,
                                  gsparams=self.gsparams)
             if self.atmosphere:
@@ -390,7 +392,7 @@ class GalSimGalaxyModel(object):
             if appr_mag < 98.:
                 bp = self.filters[filter_name]
                 bp_ref = self.filters['ref']
-                SED = self.SEDs[k_SED_names[sed_index]]
+                SED = self.SEDs[jifparams.k_SED_names[sed_index]]
                 SED = SED.atRedshift(redshift).withMagnitude(target_magnitude=appr_mag, bandpass=bp)
                 mag_model = SED.atRedshift(0.).calculateMagnitude(bp_ref)
                 self.params['mag_sed{:d}'.format(sed_index+1)][0] = mag_model
@@ -477,7 +479,6 @@ class GalSimGalaxyModel(object):
                 gsparams=self.gsparams)
             if self.achromatic_galaxy:
                 gal = mono_gal
-                ### Add offset to 'mag' here to make defaults look better for achromatic models
                 gal = gal.withFlux(jifparams.flux_from_AB_mag(self.params[0].mag_sed1))
                 # gal = gal.withFlux(1.e6)
             else:
@@ -496,8 +497,9 @@ class GalSimGalaxyModel(object):
                 gsparams=self.gsparams)
             if self.achromatic_galaxy:
                 gal = mono_gal
-                ### Add offset to 'mag' here to make defaults look better for achromatic models
-                gal = gal.withFlux(jifparams.flux_from_AB_mag(self.params[0].mag_sed1))
+                gal = gal.withFlux(jifparams.flux_from_AB_mag(
+                    self.params[0].mag_sed1,
+                    pixel_scale_arcsec=self.pixel_scale_arcsec))
             else:
                 SED = self.get_SED()
                 gal = galsim.Chromatic(mono_gal, SED)
@@ -630,7 +632,7 @@ class GalSimGalaxyModel(object):
             ngrid = 32
         # image_epsf = psf.drawImage(image=None,
         #     scale=self.pixel_scale, nx=ngrid, ny=ngrid)
-        image_epsf = self.get_psf_image(ngrid=ngrid, add_noise=add_noise)
+        image_epsf = self.get_psf_image(ngrid=ngrid, add_noise=add_noise, filter_name=filter_name)
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
@@ -754,15 +756,15 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
 
     lsst_data = lsst.get_image(galsim.Image(ngrid_lsst, ngrid_lsst), add_noise=True,
         filter_name=filter_name_ground).array
-    wfirst_data = wfirst.get_image(galsim.Image(ngrid_wfirst, ngrid_wfirst), add_noise=True,
-        filter_name=filter_name_space).array
+    # wfirst_data = wfirst.get_image(galsim.Image(ngrid_wfirst, ngrid_wfirst), add_noise=True,
+        # filter_name=filter_name_space).array
 
     # -------------------------------------------------------------------------
     ### Save a file with joint image data for input to the Roaster
     segfile = os.path.join(os.path.dirname(__file__),
-        '../TestData/test_image_data' + file_lab + '.h5')
+        '../data/TestData/test_image_data' + file_lab + '.h5')
     print("Writing {}".format(segfile))
-    seg = segments.Segments(segfile)
+    seg = footprints.Footprints(segfile)
 
     seg_ndx = 0
     src_catalog = lsst.params
@@ -780,28 +782,30 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
         primary_diam=lsst.primary_diam_meters,
         pixel_scale_arcsec=lsst.pixel_scale,
         atmosphere=lsst.atmosphere)
-    seg.save_psf_images([lsst.get_psf_image(filter_name_ground).array], segment_index=seg_ndx,
+    seg.save_psf_images([lsst.get_psf_image(filter_name_ground).array],
+        segment_index=seg_ndx,
         telescope='lsst',
         filter_name=filter_name_ground)
     save_bandpasses_to_segment(seg, lsst, telescopes.k_lsst_filter_names, "LSST")
 
-    ### Space data
-    seg.save_images([wfirst_data], [wfirst.noise.getVariance()], [dummy_mask],
-        [dummy_background], segment_index=seg_ndx,
-        telescope='wfirst',
-        filter_name=filter_name_space)
-    seg.save_tel_metadata(telescope='wfirst',
-        primary_diam=wfirst.primary_diam_meters,
-        pixel_scale_arcsec=wfirst.pixel_scale,
-        atmosphere=wfirst.atmosphere)
-    seg.save_psf_images([wfirst.get_psf_image(filter_name_space).array], segment_index=seg_ndx,
-        telescope='wfirst',
-        filter_name=filter_name_space)
-    save_bandpasses_to_segment(seg, wfirst, telescopes.k_wfirst_filter_names, "WFIRST", scale=1)
+    # ### Space data
+    # seg.save_images([wfirst_data], [wfirst.noise.getVariance()], [dummy_mask],
+    #     [dummy_background], segment_index=seg_ndx,
+    #     telescope='wfirst',
+    #     filter_name=filter_name_space)
+    # seg.save_tel_metadata(telescope='wfirst',
+    #     primary_diam=wfirst.primary_diam_meters,
+    #     pixel_scale_arcsec=wfirst.pixel_scale,
+    #     atmosphere=wfirst.atmosphere)
+    # seg.save_psf_images([wfirst.get_psf_image(filter_name_space).array], segment_index=seg_ndx,
+    #     telescope='wfirst',
+    #     filter_name=filter_name_space)
+    # save_bandpasses_to_segment(seg, wfirst, telescopes.k_wfirst_filter_names, "WFIRST", scale=1)
 
     # -------------------------------------------------------------------------
 
-def make_blended_test_image(num_sources=3, random_seed=75256611):
+def make_blended_test_image(num_sources=3, random_seed=75256611, 
+                            galaxy_model="Spergel", achromatic_galaxy=True):
     lsst_pixel_scale_arcsec = 0.2
 
     ellipticities = [0.05, 0.3, 0.16]
@@ -832,10 +836,17 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
         sub_image = galsim.Image(npix_gal, npix_gal, scale=lsst_pixel_scale_arcsec)
 
-        src_model = GalSimGalaxyModel(pixel_scale=lsst_pixel_scale_arcsec,
+        src_model = GalSimGalaxyModel(
+            telescope_name="LSST",
+            pixel_scale_arcsec=telescopes.k_telescopes['LSST']['pixel_scale'],
             noise=telescopes.lsst_noise(82357),
-            galaxy_model="Spergel",
-            primary_diam_meters=8.4, atmosphere=True)
+            galaxy_model=galaxy_model,
+            primary_diam_meters=8.4,
+            filter_names=telescopes.k_lsst_filter_names,
+            filter_wavelength_scale=1.0,
+            atmosphere=True,
+            achromatic_galaxy=achromatic_galaxy)
+
         src_model.params[0]["e"] = ellipticities[isrcs]
         src_model.params[0]["beta"] = orientations[isrcs]
         src_model.params[0]["hlr"] = hlrs[isrcs]
@@ -868,5 +879,5 @@ def make_blended_test_image(num_sources=3, random_seed=75256611):
 
 
 if __name__ == "__main__":
-    make_test_images(achromatic_galaxy=False)
-    # make_blended_test_image()
+    make_test_images(achromatic_galaxy=True)
+    # make_blended_test_image(num_sources=2)

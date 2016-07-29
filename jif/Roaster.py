@@ -5,8 +5,8 @@ Roaster.py
 
 Draw samples of source model parameters given the pixel data for image segments.
 
-This script is intended to run on one segment at a time (i.e., call multiple
-instances of the script to process multiple segments).
+This script is intended to run on one footprint at a time (i.e., call multiple
+instances of the script to process multiple footprint).
 """
 
 import argparse
@@ -18,6 +18,7 @@ import numpy as np
 import h5py
 import emcee
 ###
+import config as jifconf
 import telescopes as jiftel
 import parameters as jifparams
 import galsim_galaxy
@@ -69,10 +70,11 @@ class Roaster(object):
     @param data_format        Format for the input data file.
     @param galaxy_model_type  Type of parametric galaxy model - see
                               galsim_galaxy types.
-                              ['Sersic', 'Spergel', 'BulgeDisk' (default), 'star']
-                              If 'star' is specified, then any PSF model sampling is turned off.
-                              This takes precedence over any other PSF sampling arguments or
-                              settings.
+                              ['Sersic', 'Spergel', 'BulgeDisk' (default), 
+                               'star']
+                              If 'star' is specified, then any PSF model 
+                              sampling is turned off. This takes precedence over
+                              any other PSF sampling arguments or                 settings.
     @param telescope          Select only this telescope observations from the
                               input, if provided.
                               If not provided, then get data for all available
@@ -193,118 +195,124 @@ class Roaster(object):
                 epochs = [epoch_num]
 
         logging.info("<Roaster> Loading image data")
-        if self.data_format == "jif_segment" or self.data_format == "test_galsim_galaxy":
-            f = h5py.File(infile, 'r')
-            if self.telescope is None:
-                self.num_telescopes = len(f['telescopes'])
-                telescopes = f['telescopes'].keys()
+        try:
+            if self.data_format == "jif_segment" or self.data_format == "test_galsim_galaxy":
+                f = h5py.File(infile, 'r')
+                if self.telescope is None:
+                    self.num_telescopes = len(f['telescopes'])
+                    telescopes = f['telescopes'].keys()
+                else:
+                    self.num_telescopes = 1
+                    telescopes = [self.telescope]
+                if self.debug:
+                    print("Num. telescopes: {:d}".format(self.num_telescopes))
+                    print("Telescope names: {}".format(telescopes))
+                if segment == None:
+                    segment = 0
+                self.num_sources = f['Footprints/seg{:d}'.format(segment)].attrs['num_sources']
+                if self.debug:
+                    print("Num. sources: {:d}".format(self.num_sources))
+
+                instruments = telescopes
+
+                have_bandpasses = False
+
+                pixel_scales = []
+                primary_diams = []
+                atmospheres = []
+                tel_names = []
+                psfs = []
+                psf_types = []
+                self.filters = {}
+                self.filter_names = []
+                for itel, tel in enumerate(telescopes):
+                    g = 'Footprints/seg{:d}/{}'.format(segment, tel.lower())
+                    filter_names = f[g].keys()
+                    if self.filters_to_load is not None:
+                        filter_names = [filt for filt in filter_names
+                                        if filt in self.filters_to_load]
+                    if len(filter_names) == 0:
+                        raise ValueError("No data available in the requested filters")
+                    for ifilt, filter_name in enumerate(filter_names):
+                        logging.debug("Loading data for filter {} in telescope {}".format(
+                            filter_name, tel))
+                        ### If present in the segments file,
+                        ### load filter information and instantiate the galsim Bandpass.
+                        ### If the filters section is not found, then revert to using
+                        ### a known filter selection given the 'telescope' name in
+                        ### the segments file. If the telescope name is not known by
+                        ### galsim_galaxy then raise an error and stop.
+                        fg = 'telescopes/{}/filters/{}'.format(tel, filter_name)
+                        try:
+                            waves_nm = f[fg + '/waves_nm']
+                            throughput = f[fg + '/throughput']
+                            table = galsim.LookupTable(x=waves_nm, f=throughput)
+                            bp = jiftel.load_filter_file_to_bandpass(table,
+                                effective_diameter_meters=jiftel.k_telescopes[tel]['effective_diameter'],
+                                exptime_sec=jiftel.k_telescopes[tel]['exptime_zeropoint'])
+                            self.filters[filter_name] = bp
+                            have_bandpasses = True
+                        except KeyError:
+                            have_bandpasses = False
+                            self.filters = None
+
+                        tel_model = jiftel.k_telescopes[tel]
+                        lam_over_diam = (tel_model["filter_central_wavelengths"][filter_name] * 1e-9 /
+                                         tel_model["primary_diam_meters"]) * 180*3600/np.pi
+                        print "lam_over_diam: {:5.4g} (arcseconds)".format(lam_over_diam)
+
+                        h = 'Footprints/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
+                        if epoch_num is None:
+                            nepochs = len(f[h])
+                            epochs = range(nepochs)
+                            if self.debug:
+                                print("Number of epochs for {}: {:d}".format(tel, nepochs))
+                        for iepoch in epochs:
+                            seg = f[h + '/epoch_{:d}'.format(iepoch)]
+                            # obs = f[branch+'/observation']
+                            dat = seg['image']
+                            noise = seg['noise']
+                            if self.debug:
+                                print itel, ifilt, iepoch, "dat shape:", dat.shape
+                            self.pixel_data.append(np.array(dat))
+                            self.pix_noise_var.append(seg.attrs['variance'])
+                            ###
+                            if self.sample_psf:
+                                psf_types.append('PSFModel class')
+                                psfs.append(pm.PSFModel(
+                                    active_parameters=self.psf_model_paramnames,
+                                    telescope=self.telescope,
+                                    achromatic=self.achromatic_galaxy,
+                                    lam_over_diam=lam_over_diam,
+                                    gsparams=None))
+                            elif use_PSFModel:
+                                psf_types.append('PSFModel class')
+                                psfs.append(pm.PSFModel(
+                                    active_parameters=[],
+                                    telescope=self.telescope,
+                                    achromatic=self.achromatic_galaxy,
+                                    lam_over_diam=lam_over_diam,
+                                    gsparams=None))
+                            else:
+                                psf_types.append(seg.attrs['psf_type'])
+                                psfs.append(seg['psf'])
+                            ###
+                            tel_group = f['telescopes/{}'.format(tel)]
+                            pixel_scales.append(tel_group.attrs['pixel_scale_arcsec'])
+                            primary_diams.append(tel_group.attrs['primary_diam'])
+                            atmospheres.append(tel_group.attrs['atmosphere'])
+                            tel_names.append(tel)
+                            self.filter_names.append(filter_name)
+                print "Have data for instruments:", instruments
+                print "pixel noise variances:", self.pix_noise_var
             else:
-                self.num_telescopes = 1
-                telescopes = [self.telescope]
-            if self.debug:
-                print("Num. telescopes: {:d}".format(self.num_telescopes))
-                print("Telescope names: {}".format(telescopes))
-            if segment == None:
-                segment = 0
-            self.num_sources = f['Footprints/seg{:d}'.format(segment)].attrs['num_sources']
-
-            instruments = telescopes
-
-            have_bandpasses = False
-
-            pixel_scales = []
-            primary_diams = []
-            atmospheres = []
-            tel_names = []
-            psfs = []
-            psf_types = []
-            self.filters = {}
-            self.filter_names = []
-            for itel, tel in enumerate(telescopes):
-                g = 'Footprints/seg{:d}/{}'.format(segment, tel.lower())
-                filter_names = f[g].keys()
-                if self.filters_to_load is not None:
-                    filter_names = [filt for filt in filter_names
-                                    if filt in self.filters_to_load]
-                if len(filter_names) == 0:
-                    raise ValueError("No data available in the requested filters")
-                for ifilt, filter_name in enumerate(filter_names):
-                    logging.debug("Loading data for filter {} in telescope {}".format(
-                        filter_name, tel))
-                    ### If present in the segments file,
-                    ### load filter information and instantiate the galsim Bandpass.
-                    ### If the filters section is not found, then revert to using
-                    ### a known filter selection given the 'telescope' name in
-                    ### the segments file. If the telescope name is not known by
-                    ### galsim_galaxy then raise an error and stop.
-                    fg = 'telescopes/{}/filters/{}'.format(tel, filter_name)
-                    try:
-                        waves_nm = f[fg + '/waves_nm']
-                        throughput = f[fg + '/throughput']
-                        table = galsim.LookupTable(x=waves_nm, f=throughput)
-                        bp = jiftel.load_filter_file_to_bandpass(table,
-                            effective_diameter_meters=jiftel.k_telescopes[tel]['effective_diameter'],
-                            exptime_sec=jiftel.k_telescopes[tel]['exptime_zeropoint'])
-                        self.filters[filter_name] = bp
-                        have_bandpasses = True
-                    except KeyError:
-                        have_bandpasses = False
-                        self.filters = None
-
-                    tel_model = jiftel.k_telescopes[tel]
-                    lam_over_diam = (tel_model["filter_central_wavelengths"][filter_name] * 1e-9 /
-                                     tel_model["primary_diam_meters"]) * 180*3600/np.pi
-                    print "lam_over_diam: {:5.4g} (arcseconds)".format(lam_over_diam)
-
-                    h = 'Footprints/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
-                    if epoch_num is None:
-                        nepochs = len(f[h])
-                        epochs = range(nepochs)
-                        if self.debug:
-                            print("Number of epochs for {}: {:d}".format(tel, nepochs))
-                    for iepoch in epochs:
-                        seg = f[h + '/epoch_{:d}'.format(iepoch)]
-                        # obs = f[branch+'/observation']
-                        dat = seg['image']
-                        noise = seg['noise']
-                        if self.debug:
-                            print itel, ifilt, iepoch, "dat shape:", dat.shape
-                        self.pixel_data.append(np.array(dat))
-                        self.pix_noise_var.append(seg.attrs['variance'])
-                        ###
-                        if self.sample_psf:
-                            psf_types.append('PSFModel class')
-                            psfs.append(pm.PSFModel(
-                                active_parameters=self.psf_model_paramnames,
-                                telescope=self.telescope,
-                                achromatic=self.achromatic_galaxy,
-                                lam_over_diam=lam_over_diam,
-                                gsparams=None))
-                        elif use_PSFModel:
-                            psf_types.append('PSFModel class')
-                            psfs.append(pm.PSFModel(
-                                active_parameters=[],
-                                telescope=self.telescope,
-                                achromatic=self.achromatic_galaxy,
-                                lam_over_diam=lam_over_diam,
-                                gsparams=None))
-                        else:
-                            psf_types.append(seg.attrs['psf_type'])
-                            psfs.append(seg['psf'])
-                        ###
-                        tel_group = f['telescopes/{}'.format(tel)]
-                        pixel_scales.append(tel_group.attrs['pixel_scale_arcsec'])
-                        primary_diams.append(tel_group.attrs['primary_diam'])
-                        atmospheres.append(tel_group.attrs['atmosphere'])
-                        tel_names.append(tel)
-                        self.filter_names.append(filter_name)
-            print "Have data for instruments:", instruments
-            print "pixel noise variances:", self.pix_noise_var
-        else:
-            raise KeyError("Unsupported input data format in Roaster")
-            # if segment == None:
-            #     logging.info("<Roaster> Must specify a segment number as an integer")
-            # print "Have data for instruments:", instruments
+                raise KeyError("Unsupported input data format in Roaster")
+                # if segment == None:
+                #     logging.info("<Roaster> Must specify a segment number as an integer")
+                # print "Have data for instruments:", instruments
+        except KeyError:
+            print "Error parsing the input file -- Perhaps it's in a deprecated format? Try rerunning footprint extraction."
+            sys.exit(1)
 
         if have_bandpasses:
             print "Filters:", self.filters.keys()
@@ -361,7 +369,12 @@ class Roaster(object):
 
         params = config.items("parameters")
         for paramname, val in params:
-            self.set_param_by_name(paramname, float(val))
+            vals = str.split(val, ' ')
+            if len(vals) > 1: ### Assume multiple sources
+                fval = [float(v) for v in vals[0:self.num_sources]]
+            else:
+                fval = float(val)
+            self.set_param_by_name(paramname, fval)
         return None
 
     def _get_noise_var(self, i=0):
@@ -433,9 +446,10 @@ class Roaster(object):
         """
         if isinstance(value, list):
             if len(value) == self.num_sources:
-                for isrcs in xrange(self.num_sources):
+                for isrc in xrange(self.num_sources):
                     for idat in xrange(self.num_epochs):
-                        self.src_models[isrcs][idat].set_param_by_name(paramname, value[isrcs])
+                        self.src_models[isrc][idat].set_param_by_name(paramname,
+                                                                      value[isrc])
             else:
                 raise ValueError("If passing list, must be of length num_sources")
         elif isinstance(value, float):
@@ -481,17 +495,34 @@ class Roaster(object):
 
     def _get_model_image(self, iepochs, add_noise=False):
         """
-        Create a galsim.Image from the source model(s)
+        Create a galsim.Image from the source model(s) for epcoh iepochs
         """
-        model_image = galsim.ImageF(self.nx[iepochs], self.ny[iepochs],
+        nx = self.nx[iepochs]
+        ny = self.ny[iepochs]
+        model_image = galsim.ImageF(nx, ny,
             scale=self.src_models[0][iepochs].pixel_scale)
 
         for isrcs in xrange(self.num_sources):
-            ### Draw every source using the full output array
-            b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
-            sub_image = model_image[b]
+            sub_image = galsim.Image(nx, ny)
             model = self.src_models[isrcs][iepochs].get_image(sub_image,
                 filter_name=self.filter_names[iepochs], add_noise=add_noise)
+            ix = nx/2
+            iy = ny/2
+            sub_bounds = galsim.BoundsI(ix-0.5*nx, ix+0.5*nx-1,
+                            iy-0.5*ny, iy+0.5*ny-1)
+            sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin, sub_bounds.ymin))
+            # Find the overlapping bounds between the large image and the individual postage
+            # stamp.
+            bounds = sub_image.bounds & model_image.bounds
+            model_image[bounds] += sub_image[bounds]
+
+
+            # ### Draw every source using the full output array
+            # b = galsim.BoundsI(1, self.nx[iepochs], 1, self.ny[iepochs])
+            # sub_image = model_image[b]
+            # model = self.src_models[isrcs][iepochs].get_image(sub_image,
+            #     filter_name=self.filter_names[iepochs], add_noise=add_noise)
+            # model_image[b] + sub_image[b]
         return model_image
 
     def lnlike(self, omega, *args, **kwargs):
@@ -531,8 +562,8 @@ class Roaster(object):
                         plt.savefig(os.path.join('debug', 'resid_iepoch%d_istep%d.png' % (iepochs,
                             self.istep)))
 
-                    lnlike += (-0.5 * np.sum((self.pixel_data[iepochs] -
-                        model_image.array) ** 2) /
+                    delta = (self.pixel_data[iepochs] - model_image.array)
+                    lnlike += (-0.5 * np.sum(delta ** 2) /
                         self.pix_noise_var[iepochs])
         else:
             lnlike = -np.inf
@@ -642,8 +673,10 @@ def write_results(args, pps, lnps, roaster):
     f.attrs['model_paramnames'] = roaster.model_paramnames
     f.attrs['achromatic_galaxy'] = roaster.achromatic_galaxy
 
-    ### Collect the galaxy model parameter names, appending source indices if needed.
-    ### If sampling in PSF parameters, handle these separately from the galaxy parameters.
+    ### Collect the galaxy model parameter names, appending source indices if 
+    ### needed.
+    ### If sampling in PSF parameters, handle these separately from the galaxy
+    ### parameters.
     if roaster.num_sources == 1:
         paramnames = roaster.galaxy_model_paramnames
     elif roaster.num_sources > 1:
@@ -751,29 +784,147 @@ class DefaultPriorBulgeDisk(object):
         lnp += -0.5 * (omega[7]) ** 2 / self.e_var_disk
         return lnp
 
-# ---------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# For inspection: skip sampling and just save the model initialized in Roaster
+# ------------------------------------------------------------------------------
+def save_model_image(args, roaster):
+    """
+    Save the initial Roaster model image to FITS and png files
+
+    This routine is intended for inspection to see what kind of model image is 
+    created once Roaster is initialized but before any MCMC sampling. 
+    If the model image looks very different from the input data then it may 
+    take a long time for the MCMC chain to settle in to a high probability 
+    region of parameter space, or there may be a bug somewhere. 
+    """
+    epoch_num = 0 # FIXME: loop over this index
+
+    model_image = roaster._get_model_image(epoch_num)
+
+    ### Save a FITS image using the GalSim 'write' method for Image() class
+    outfile = args.outfile + "_initial_model_image.fits"
+    model_image.write(outfile)
+    logging.debug('Wrote model image to %r', outfile)
+
+    ### Save a PNG plot using matplotlib
+    import matplotlib.pyplot as plt
+    plt.style.use('ggplot')
+    fig = plt.figure(figsize=(12, 6))
+    ### Data
+    plt.subplot(1, 2, 1)
+    plt.imshow(roaster.pixel_data[epoch_num], interpolation='none',
+               cmap=plt.cm.pink)
+    plt.colorbar()
+    plt.title("Data")
+    ### Model
+    plt.subplot(1, 2, 2)
+    plt.imshow(model_image.array, interpolation='none',
+               cmap=plt.cm.pink)
+    plt.colorbar()
+    plt.title("Model")
+
+    outfile = args.outfile + "_initial_model_image.png"
+    plt.savefig(outfile, bbox_inches='tight')
+    return None
+
+# ------------------------------------------------------------------------------
+class ConfigFileParser(object):
+    """
+    Parse a configuration file for this script 
+    """
+    def __init__(self, config_file_name):
+        self.config_file = config_file_name
+
+        config = jifconf.DefConfigParser()
+        config.read(config_file_name)
+
+        infiles = config.items("infiles")
+        print "infiles:"
+        for key, infile in infiles:
+            print infile
+        self.infiles = [infile for key, infile in infiles]
+
+        segment_numbers = config.get("data", "segment_numbers")
+        self.segment_numbers = [int(segnum) 
+                                for segnum in str.split(segment_numbers, " ")]
+
+        self.outfile = config.get("metadata", "outfile",
+                                  default="../output/roasting/roaster_out")
+
+        self.galaxy_model_type = config.get("model", "galaxy_model_type", 
+                                            default="Spergel")
+
+        model_params = config.get("model", "model_params", default='e beta')
+        self.model_params = str.split(model_params, ' ')
+
+        self.telescope = config.get("data", "telescope")
+
+        self.data_format = config.get("data", "data_format")
+
+        filters = config.get("data", "filters")
+        if filters is not None:
+            self.filters = str.split(filters, ' ')
+
+        achromatic = config.get("model", "achromatic")
+        self.achromatic = achromatic == 'True'
+
+        epoch_num = config.get("data", "epoch_num", default=-1)
+        self.epoch_num = int(epoch_num)
+
+        self.init_param_file = config.get("init", "init_param_file")
+
+        output_model = config.get("run", "output_model", default="False")
+        self.output_model = (output_model == "True")
+
+        self.seed = config.get("init", "seed")
+        if self.seed is not None:
+            self.seed = int(self.seed)
+
+        self.nsamples = int(config.get("sampling", "nsamples", default=100))
+        self.nwalkers = int(config.get("sampling", "nwalkers", default=32))
+        self.nburn = int(config.get("sampling", "nburn", default=50))
+        self.nthreads = int(config.get("sampling", "nthreads", default=1))
+
+        quiet = config.get("run", "quiet")
+        self.quiet = (quiet == "True")
+        debug = config.get("run", "debug")
+        self.debug = (debug == "True")
+
+        return None
+
+
+# ------------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(
         description='Draw interim samples of source model parameters via MCMC.')
 
-    parser.add_argument("infiles",
+    parser.add_argument("--infiles", type=str,
                         help="input image files to roast", nargs='+')
+
+    parser.add_argument('--config_file', type=str, default=None,
+                        help="Name of a configuration file listing inputs." +
+                             "If specified, ignore other command line flags." +
+                             "(Default: None)")
 
     parser.add_argument("--segment_numbers", type=int, nargs='+',
                         help="Index of the segments to load from each infile")
 
-    parser.add_argument("-o", "--outfile", default="../output/roasting/roaster_out",
-                        help="output HDF5 to record posterior samples and loglikes."
-                             +"(Default: `roaster_out`)")
+    parser.add_argument("-o", "--outfile",
+                        default="../output/roasting/roaster_out",
+                        help="output HDF5 to record posterior samples and "+
+                             "loglikes. (Default: `roaster_out`)")
 
     parser.add_argument("--galaxy_model_type", type=str, default="Spergel",
-                        help="Type of parametric galaxy model (Default: 'Spergel')")
+                        help="Type of parametric galaxy model "+
+                             "(Default: 'Spergel')")
 
     parser.add_argument("--data_format", type=str, default="jif_segment",
-                        help="Format of the input image data file (Default: 'jif_segment')")
+                        help="Format of the input image data file " +
+                             "(Default: 'jif_segment')")
 
     parser.add_argument("--model_params", type=str, nargs='+',
-                        default=['nu', 'hlr', 'e', 'beta', 'mag_sed1', 'dx', 'dy', 'psf_fwhm'],
+                        default=['nu', 'hlr', 'e', 'beta', 'mag_sed1', 'dx', 
+                                 'dy', 'psf_fwhm'],
                         help="Names of the galaxy model parameters for sampling.")
 
     parser.add_argument("--telescope", type=str, default=None,
@@ -788,16 +939,23 @@ def main():
                         help="Use an achromatic galaxy or star model")
 
     parser.add_argument("--epoch_num", type=int, default=-1,
-                        help="Index of single epoch to fit. If not supplied, then fit all epochs.")
+                        help="Index of single epoch to fit. If not supplied, "+
+                             "then fit all epochs.")
 
     parser.add_argument("--init_param_file", type=str, default=None,
-                        help="Name of a config file with parameter values to initialize the chain")
+                        help="Name of a config file with parameter values to "+
+                             "initialize the chain")
+
+    parser.add_argument("--output_model", action="store_true",
+                        help="Just save the initial model image to file. "+
+                             "Don't sample")
 
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
 
     parser.add_argument("--nsamples", default=100, type=int,
-                        help="Number of samples for each emcee walker (Default: 100)")
+                        help="Number of samples for each emcee walker "+
+                             "(Default: 100)")
 
     parser.add_argument("--nwalkers", default=32, type=int,
                         help="Number of emcee walkers (Default: 16)")
@@ -813,6 +971,17 @@ def main():
     parser.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
+
+    ###
+    ### Get the parameters for input/output from configuration file or argument list
+    ###
+    if isinstance(args.config_file, str):
+        logging.info('Reading from configuration file {}'.format(args.config_file))
+        args = ConfigFileParser(args.config_file)
+
+    elif not isinstance(args.infiles, list):
+        raise ValueError("Must specify either 'config_file' or 'infiles' argument")
+
     np.random.seed(args.seed)
 
     logging.debug('--- Roaster started')
@@ -827,7 +996,8 @@ def main():
 
     ### Set galaxy priors
     if args.galaxy_model_type == "Spergel":
-        lnprior_omega = DefaultPriorSpergel()
+        # lnprior_omega = DefaultPriorSpergel()
+        lnprior_omega = EmptyPrior()
     elif args.galaxy_model_type == "BulgeDisk":
         lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
     else:
@@ -844,7 +1014,8 @@ def main():
                       telescope=args.telescope,
                       filters_to_load=args.filters,
                       achromatic_galaxy=args.achromatic)
-    roaster.Load(args.infiles[0], segment=args.segment_numbers[0], epoch_num=epoch_num)
+    roaster.Load(args.infiles[0], segment=args.segment_numbers[0],
+                 epoch_num=epoch_num)
     if args.init_param_file is not None:
         roaster.initialize_param_values(args.init_param_file)
 
@@ -855,7 +1026,10 @@ def main():
         print("\nsource model 0:")
         pp.pprint(roaster.src_models[0][0].__dict__)
 
-    do_sampling(args, roaster)
+    if args.output_model:
+        save_model_image(args, roaster)
+    else:
+        do_sampling(args, roaster)
 
     logging.debug('--- Roaster finished')
     return 0

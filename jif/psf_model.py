@@ -61,18 +61,19 @@ class PSFModel(object):
         Copied from GalSim demo12.py
         """
         path, filename = os.path.split(__file__)
-        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        datapath = os.path.abspath(os.path.join(path, "input/"))
         self.SEDs = {}
         for SED_name in jifparams.k_star_SED_names:
             SED_filename = os.path.join(datapath, '{0}.sed'.format(SED_name))
-            self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang')
+            self.SEDs[SED_name] = galsim.SED(SED_filename, wave_type='Ang',
+                                             flux_type='flambda')
 
     def _load_filter_files(self):
         self.filters = telescopes.load_filter_files(wavelength_scale=1.0,
                                                     telescope_name=self.telescope_name)
         ### Add the reference filter for defining the magnitude parameters
         path, filename = os.path.split(__file__)
-        datapath = os.path.abspath(os.path.join(path, "../input/"))
+        datapath = os.path.abspath(os.path.join(path, "input/"))
         ref_filename = os.path.join(datapath, '{}_{}.dat'.format('LSST',
             PSFModel.ref_filter))
         self.filters['ref'] = telescopes.load_filter_file_to_bandpass(ref_filename)        
