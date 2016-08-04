@@ -12,6 +12,28 @@ import corner
 import galsim
 import Roaster
 
+plt.style.use('ggplot')
+
+
+def gelman_rubin(chain):
+    """
+    Compute the Gelman-Rubin MCMC chain convergence statistic
+
+    Assumes the input chain is in the emcee format.
+
+    Copied from: http://joergdietrich.github.io/emcee-convergence.html
+    """
+    ssq = np.var(chain, axis=0, ddof=1)
+    W = np.mean(ssq, axis=0)
+    thetab = np.mean(chain, axis=1)
+    thetabb = np.mean(thetab, axis=0)
+    m = chain.shape[0]
+    n = chain.shape[1]
+    B = n / (m - 1.) * np.sum((thetabb - thetab)**2, axis=0)
+    var_theta = (n - 1.) / n * W + 1. / n * B
+    R = np.sqrt(var_theta / W)
+    return R
+
 
 class RoasterInspector(object):
     """
@@ -83,6 +105,11 @@ class RoasterInspector(object):
             print("%s = %4.3g +/- %4.3g" % (p, 
                 np.mean(self.data[-self.args.keeplast:, :, i]),
                 np.std(self.data[:, :, i])))
+        print "\n"
+        n = self.data.shape[2]
+        rhat = gelman_rubin(self.data[:,:,0:(n-1)])
+        print rhat
+        print "Gelman-Rubin statistic: {:4.3f}".format(rhat[0])
         print "\n"
 
     def _get_opt_params(self):
@@ -223,6 +250,33 @@ class RoasterInspector(object):
             fig.savefig(outfile)
         return None
 
+    def plot_GR_statistic(self):
+        """
+        Plot the Gelman-Rubin statistic versus chain step to monitor convergence
+
+        Copied from: http://joergdietrich.github.io/emcee-convergence.html
+        """
+        fig = plt.figure(figsize=(8.9, 5.5))
+        xmin = 500
+
+        n = self.data.shape[2]
+        chain = self.data[:, :, 0:(n-1)]
+        chain_length = chain.shape[0]
+        step_sampling = np.arange(xmin, chain_length, 50)
+        rhat = np.array([gelman_rubin(chain[0:steps, :, :])  for steps in step_sampling])
+        plt.plot(step_sampling, rhat, linewidth=2)
+            
+        ax = plt.gca()
+        xmax = ax.get_xlim()[1]
+        plt.hlines(1.1, xmin, xmax, linestyles="--")
+        plt.ylabel("$\hat R$")
+        plt.xlabel("chain length")
+        # plt.ylim(1, np.max((2., rhat)))
+        # legend = plt.legend(loc='best')
+        outfile = (self._outfile_head() + '_gr_statistic.png')
+        print "Saving {}".format(outfile)
+        fig.savefig(outfile, bbox_inches='tight')
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -251,6 +305,7 @@ def main():
     inspector.report()
     inspector.plot()
     inspector.plot_data_and_model()
+    inspector.plot_GR_statistic()
     return 0
 
 

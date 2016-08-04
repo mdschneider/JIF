@@ -14,8 +14,9 @@ import numpy as np
 #import matplotlib.pyplot as plt
 
 from astropy.io import fits
-import jif.segments as segments
+# import jif.segments as segments
 import jif.galsim_galaxy as gg
+import footprints
 
 import logging
 
@@ -38,6 +39,7 @@ k_g3_primary_diameters = {"ground": 8.2, "space": 2.4}
 ### Guess that GREAT3 used LSST 'r' band to render images
 k_filter_name = 'r'
 k_filter_central_wavelengths = {'r':620.}
+
 
 def get_background_and_noise_var(data, clip_n_sigma=3, clip_converg_tol=0.1,
     verbose=False):
@@ -99,6 +101,7 @@ def get_background_and_noise_var(data, clip_n_sigma=3, clip_converg_tol=0.1,
     noise_var = float(np.var(x))
     return background, noise_var
 
+
 def create_segments(subfield_index=0, experiment="control",
     observation_type="ground", shear_type="constant",
     n_gals=10000, verbose=False):
@@ -110,7 +113,7 @@ def create_segments(subfield_index=0, experiment="control",
 
     ### Reconstruct the GREAT3 image input file path and name
     indir = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-        "../../great3", experiment, observation_type, shear_type)
+        "../data/great3", experiment, observation_type, shear_type)
 
     ### Collect input image filenames for all epochs.
     ### FIXME: Get correct 'experiment' names here
@@ -156,7 +159,7 @@ def create_segments(subfield_index=0, experiment="control",
     ### Create and fill the elements of the segment file for all galaxies
     ### in the current sub-field. Different sub-fields go in different segment
     ### files (no particular reason for this - just seems convenient).
-    seg = segments.Segments(seg_filename)
+    seg = footprints.Footprints(seg_filename)
 
     ### There are 1e4 galaxies in one GREAT3 image file.
     ### Save all images to the segment file, but with distinct 'segment_index'

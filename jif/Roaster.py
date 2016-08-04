@@ -15,6 +15,7 @@ import os.path
 import string
 import copy
 import numpy as np
+from scipy.optimize import minimize as sp_minimize
 import h5py
 import emcee
 ###
@@ -295,7 +296,7 @@ class Roaster(object):
                                     gsparams=None))
                             else:
                                 psf_types.append(seg.attrs['psf_type'])
-                                psfs.append(seg['psf'])
+                                psfs.append(galsim.Image(seg['psf'][...]))
                             ###
                             tel_group = f['telescopes/{}'.format(tel)]
                             pixel_scales.append(tel_group.attrs['pixel_scale_arcsec'])
@@ -305,6 +306,7 @@ class Roaster(object):
                             self.filter_names.append(filter_name)
                 print "Have data for instruments:", instruments
                 print "pixel noise variances:", self.pix_noise_var
+                print "PSF types:", psf_types
             else:
                 raise KeyError("Unsupported input data format in Roaster")
                 # if segment == None:
@@ -600,6 +602,24 @@ def do_sampling(args, roaster, return_samples=False):
     omega_interim = roaster.get_params()
     logging.info("Have {:d} sampling parameters".format(len(omega_interim)))
     print "Starting parameters: ", omega_interim
+
+    # Optimize the ln-posterior function
+    def neg_lnp(omega, *args, **kwargs):
+        return -roaster(omega, *args, **kwargs)
+
+    res = sp_minimize(fun=neg_lnp,
+                      x0=omega_interim,
+                      method='L-BFGS-B',
+                      jac=False,
+                      options={
+                          'disp': not args.quiet, # Set True to print convergence messages
+                          'maxcor': 50,
+                          'factor': 10,
+                          'eps': 1.e-10
+                      })
+    print "Optimization result:", res.success, res.x
+    if res.success:
+        omega_interim = res.x
 
     nvars = len(omega_interim)
     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)

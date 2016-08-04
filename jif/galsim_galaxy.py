@@ -323,7 +323,7 @@ class GalSimGalaxyModel(object):
                 valid_params *= False
         ### ===================================================================
         if self.galaxy_model == "Spergel":
-            if self.params[0].nu < -0.8 or self.params[0].nu > 0.6:
+            if self.params[0].nu < -0.8 or self.params[0].nu > 0.8:
                 valid_params *= False
         ### ===================================================================
         elif self.galaxy_model == "BulgeDisk":
