@@ -294,22 +294,25 @@ class GalSimGalaxyModel(object):
         @returns a boolean indicating the validity of the current model
                  parameters
         """
+        def inbounds(p, b):
+            return p >= b[0] and p<= b[1]
+
         valid_params = True
         ### ===================================================================
         ### Parameters common to 'Sersic' and 'Spergel' parameterizations
         if self.galaxy_model == "Sersic" or self.galaxy_model == "Spergel":
             ### Redshift must be positive and less than a large value
-            if self.params[0].redshift < 0.0 or self.params[0].redshift > 6.0:
+            if not inbounds(self.params[0].redshift, jifparams.k_param_bounds['redshift']):
                 valid_params *= False
-            ### Ellipticity must be on [0, 1]
-            if self.params[0].e < 0. or self.params[0].e > 0.9:
+            ### Ellipticity must be on [0, 1 - eps]
+            if not inbounds(self.params[0].e, jifparams.k_param_bounds['e']):
                 valid_params *= False
             ### Half-light radius must be positive and less than a large value
             ### (Large value here assumed in arcseconds)
-            if self.params[0].hlr < 0.0 or self.params[0].hlr > 10.:
+            if not inbounds(self.params[0].hlr, jifparams.k_param_bounds['hlr']):
                 valid_params *= False
             ### Position angle (in radians) must be on [0, pi]
-            if self.params[0].beta < 0.0 or self.params[0].beta > np.pi:
+            if not inbounds(self.params[0].beta, jifparams.k_param_bounds['beta']):
                 valid_params *= False
             # ### Flux must be strictly positive
             # for i in xrange(len(k_SED_names)):
@@ -317,13 +320,13 @@ class GalSimGalaxyModel(object):
             #         valid_params *= False
             ### Put a hard bound on the position parameters to avoid absurd
             ### translations of the galaxy
-            if self.params[0].dx < -10. or self.params[0].dx > 10.:
+            if not inbounds(self.params[0].dx, jifparams.k_param_bounds['dx']):
                 valid_params *= False
-            if self.params[0].dy < -10. or self.params[0].dy > 10.:
+            if not inbounds(self.params[0].dy, jifparams.k_param_bounds['dy']):
                 valid_params *= False
         ### ===================================================================
         if self.galaxy_model == "Spergel":
-            if self.params[0].nu < -0.8 or self.params[0].nu > 0.8:
+            if not inbounds(self.params[0].nu, jifparams.k_param_bounds['nu']):
                 valid_params *= False
         ### ===================================================================
         elif self.galaxy_model == "BulgeDisk":

@@ -90,7 +90,8 @@ class RoasterInspector(object):
         print self.__str__()
         # print "Parameter names:", self.paramnames
         print "Roaster input file: ", self.roaster_infile
-        print "Segment number: {:d}".format(self.segment_number)
+        print "Segment number:", self.segment_number
+        # print "Segment number: {:d}".format(self.segment_number)
         print "data: ", self.data.shape
         print "galaxy model: {}".format(self.galaxy_model_type)
         print "filter subset: ", self.filters_to_load
@@ -122,8 +123,12 @@ class RoasterInspector(object):
     def _load_roaster_input_data(self):
         args = Roaster.ConfigFileParser(self.args.roaster_config)
 
-        if args.segment_numbers is None:
-            args.segment_numbers = [0 for f in args.infiles]
+        ### Force the segment_number to match that of the Roaster output file,
+        ### even if the config file has a different value. This can happen if 
+        ### the segment_number in the config file was overridden at the Roaster
+        ### command line.
+        args.segment_number = self.segment_number
+
         if args.epoch_num >= 0:
             epoch_num = args.epoch_num
         else:
@@ -147,13 +152,21 @@ class RoasterInspector(object):
             telescope=args.telescope,
             filters_to_load=args.filters,
             achromatic_galaxy=args.achromatic)
-        self.roaster.Load(args.infiles[0], segment=args.segment_numbers[0],
+        self.roaster.Load(args.infiles[0], segment=args.segment_number,
                           epoch_num=epoch_num)
         if args.init_param_file is not None:
             self.roaster.initialize_param_values(args.init_param_file)
 
         print "Length of Roaster pixel data list: {:d}".format(
             len(self.roaster.pixel_data))
+        return None
+
+    def save_param_cov(self):
+        n = len(self.paramnames)
+        cov = np.cov(np.vstack(self.data[-self.args.keeplast:,:, 0:n]).transpose())
+        print "cov:", cov
+        outfile = (self._outfile_head() + '_param_cov.txt')
+        np.savetxt(outfile, cov)
         return None
 
     def plot(self):
@@ -257,12 +270,12 @@ class RoasterInspector(object):
         Copied from: http://joergdietrich.github.io/emcee-convergence.html
         """
         fig = plt.figure(figsize=(8.9, 5.5))
-        xmin = 500
+        xmin = 100
 
         n = self.data.shape[2]
         chain = self.data[:, :, 0:(n-1)]
         chain_length = chain.shape[0]
-        step_sampling = np.arange(xmin, chain_length, 50)
+        step_sampling = np.arange(xmin, chain_length, 5)
         rhat = np.array([gelman_rubin(chain[0:steps, :, :])  for steps in step_sampling])
         plt.plot(step_sampling, rhat, linewidth=2)
             
@@ -303,6 +316,7 @@ def main():
     inspector = RoasterInspector(args)
     inspector.summary()
     inspector.report()
+    # inspector.save_param_cov()
     inspector.plot()
     inspector.plot_data_and_model()
     inspector.plot_GR_statistic()

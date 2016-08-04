@@ -18,6 +18,7 @@ import numpy as np
 from scipy.optimize import minimize as sp_minimize
 import h5py
 import emcee
+# from emcee.utils import MPIPool
 ###
 import config as jifconf
 import telescopes as jiftel
@@ -577,52 +578,81 @@ class Roaster(object):
 # ---------------------------------------------------------------------------------------
 # MCMC routines
 # ---------------------------------------------------------------------------------------
-def walker_ball(omega, spread, nwalkers):
-    return [omega+(np.random.rand(len(omega))*spread-0.5*spread)
-            for i in xrange(nwalkers)]
+# def walker_ball(omega, spread, nwalkers):
+#     return [omega+(np.random.rand(len(omega))*spread-0.5*spread)
+#             for i in xrange(nwalkers)]
 
-def cluster_walkers(pps, lnps):
+def optimize_params(omega_interim, roaster, quiet=False):
     """
-    Down-select walkers to those with the largest mean posteriors
-
-    Follows the algorithm of Hou, Goodman, Hogg et al. (2012)
+    Optimize the ln-posterior function
     """
-    lk = -np.mean(np.array(lnps), axis=0)
-    ndx = np.argsort(lk, axis=0)
-    return pps, lnps
-
-
-def do_sampling(args, roaster, return_samples=False):
-    """
-    Execute the MCMC chain to fit galaxy (and PSF) model parameters to a segment
-
-    Save the MCMC chain steps to an HDF5 file, and optionally also return the
-    steps if `return_samples` is True.
-    """
-    omega_interim = roaster.get_params()
-    logging.info("Have {:d} sampling parameters".format(len(omega_interim)))
-    print "Starting parameters: ", omega_interim
-
-    # Optimize the ln-posterior function
     def neg_lnp(omega, *args, **kwargs):
         return -roaster(omega, *args, **kwargs)
 
     res = sp_minimize(fun=neg_lnp,
                       x0=omega_interim,
-                      method='L-BFGS-B',
-                      jac=False,
+                      # method='L-BFGS-B',
+                      method='SLSQP',
+                      jac=False, # Estimate Jacobian numerically
+                      # tol=1e-10,
+                      bounds=jifparams.get_bounds(roaster.model_paramnames),
                       options={
-                          'disp': not args.quiet, # Set True to print convergence messages
-                          'maxcor': 50,
-                          'factor': 10,
-                          'eps': 1.e-10
+                          'disp': not quiet # Set True to print convergence messages
                       })
     print "Optimization result:", res.success, res.x
     if res.success:
         omega_interim = res.x
+    return omega_interim, res.success
 
+
+def cluster_walkers(pps, lnps, thresh_multiplier=1):
+    """
+    FIXME: Finish implementation
+
+    Down-select emcee walkers to those with the largest mean posteriors
+
+    Follows the algorithm of Hou, Goodman, Hogg et al. (2012)
+    """
+    logging.debug("Clustering emcee walkers with threshold multiplier {:3.2f}".format(
+        thresh_multiplier))
+    pps = np.array(pps)
+    lnps = np.array(lnps)
+    ### lnps.shape == (Nsteps, Nwalkers) => lk.shape == (Nwalkers,)
+    lk = -np.mean(np.array(lnps), axis=0)
+    nwalkers = len(lk)
+    ndx = np.argsort(lk)
+    lks = lk[ndx]
+    d = np.diff(lks)
+    thresh = np.cumsum(d) / np.arange(1, nwalkers)
+    selection = d > (thresh_multiplier * thresh)
+    if np.any(selection):
+        nkeep = np.argmax(selection)
+    else:
+        nkeep = nwalkers
+    print "pps, lnps:", pps.shape, lnps.shape
+    pps = pps[:, ndx[0:nkeep], :]
+    lnps = lnps[:, ndx[0:nkeep]]
+    print "New pps, lnps:", pps.shape, lnps.shape
+    return pps, lnps
+
+
+def run_emcee_sampler(omega_interim, args, roaster, use_MPI=False):
+    """
+    Run emcee MCMC algorithm to select interim posterior samples
+    """
+    logging.debug("Using emcee sampler")
     nvars = len(omega_interim)
-    p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
+
+    # p0 = walker_ball(omega_interim, 0.01, args.nwalkers)
+    p0 = emcee.utils.sample_ball(omega_interim, np.ones_like(omega_interim) * 0.01, args.nwalkers)
+
+    if use_MPI:
+        pool = MPIPool(loadbalance=True)
+        if not pool.is_master():
+            pool.wait()
+            sys.exit(0)
+    else:
+        pool = None
 
     # logging.debug("Initializing parameters for MCMC to yield finite posterior values")
     # while not all([np.isfinite(roaster(p)) for p in p0]):
@@ -630,9 +660,10 @@ def do_sampling(args, roaster, return_samples=False):
     sampler = emcee.EnsembleSampler(args.nwalkers,
                                     nvars,
                                     roaster,
-                                    threads=args.nthreads)
+                                    threads=args.nthreads,
+                                    pool=pool)
     nburn = max([1,args.nburn])
-    logging.info("Burning")
+    logging.info("Burning with {:d} steps".format(nburn))
     pp, lnp, rstate = sampler.run_mcmc(p0, nburn)
     sampler.reset()
     pps = []
@@ -652,7 +683,71 @@ def do_sampling(args, roaster, return_samples=False):
         pps.append(np.column_stack((pp.copy(), lnprior)))
         lnps.append(lnp.copy())
 
-    # pps, lnps = cluster_walkers(pps, lnps)
+    pps, lnps = cluster_walkers(pps, lnps, thresh_multiplier=4)
+
+    if use_MPI:
+        pool.close()
+    return pps, lnps
+
+
+def run_SIRS_sampler(omega_interim, args, roaster):
+    """
+    Run Sampling Importance-Resampling sampler to select interim posterior samples
+    """
+    def dmvnorm(x, mu, var, norm):
+        if norm is None:
+            norm = -0.5 * np.sum(np.log(var))
+        delta = x - mu
+        return -0.5 * np.sum(delta * delta / var) + norm
+
+    logging.debug("Using SIRS sampler")
+    ### Define the mean and cov for the Gaussian proposal distribution
+    mu = omega_interim
+    var = np.array([jifparams.k_param_vars[p] for p in roaster.model_paramnames])
+    cov = np.diag(var)
+    # cov = np.loadtxt("output/great3/CGC/000/roaster_CGC_000_seg0_LSST_param_cov.txt")
+    # var = np.diag(cov)
+    norm = -0.5 * np.sum(np.log(var))
+    ### Draw samples
+    x = np.random.multivariate_normal(mu, cov, size=args.nsamples)
+
+    ### Evaluate importance sampling weights
+    ww = np.array([roaster(v) - dmvnorm(v, mu, var, norm) for v in x])
+    ww_norm = np.logaddexp.reduce(ww, axis=0)
+    qq = np.array([w - ww_norm for w in ww])    
+
+    ### Sample with replacement using probabilities qq
+    n = args.nsamples
+    ndx = np.random.choice(n, 100, replace=True, p=np.exp(qq))
+    logging.debug("Number of unique samples in SIRS sampler: {:d}".format(len(np.unique(ndx))))
+
+    pps = None
+    lnps = None
+    return pps, lnps
+
+
+def do_sampling(args, roaster, return_samples=False, sampler='emcee'):
+    """
+    Execute the MCMC chain to fit galaxy (and PSF) model parameters to a segment
+
+    Save the MCMC chain steps to an HDF5 file, and optionally also return the
+    steps if `return_samples` is True.
+    """
+    omega_interim = roaster.get_params()
+    logging.info("Have {:d} sampling parameters".format(len(omega_interim)))
+    print "Starting parameters: ", omega_interim
+
+    omega_interim, opt_success = optimize_params(omega_interim, roaster, args.quiet)
+
+    if sampler == 'emcee':
+        ### Double the burn-in period if optimization failed
+        if not opt_success:
+            args.nburn *= 2
+        pps, lnps = run_emcee_sampler(omega_interim, args, roaster)
+    elif sampler == 'sirs':
+        pps, lnps = run_SIRS_sampler(omega_interim, args, roaster)
+    else:
+        raise KeyError("Unsupported sampler type in Roaster: {}".format(sampler))
 
     write_results(args, pps, lnps, roaster)
     if return_samples:
@@ -673,11 +768,13 @@ def write_results(args, pps, lnps, roaster):
     logging.info("Writing MCMC results to %s" % outfile)
     f = h5py.File(outfile, 'w')
 
+    # group_name='Roaster/seg{:d}/{}/{}'.format(args.segment_number, telescope.lower(), epoch)
+
     ### Save attributes so we can later instantiate Roaster with the same
     ### settings.
     f.attrs['infile'] = args.infiles[0]
-    if isinstance(args.segment_numbers, list):
-        f.attrs['segment_number'] = args.segment_numbers[0]
+    if isinstance(args.segment_number, int):
+        f.attrs['segment_number'] = args.segment_number
     else:
         f.attrs['segment_number'] = 'all'
     f.attrs['epoch_num'] = args.epoch_num
@@ -864,9 +961,8 @@ class ConfigFileParser(object):
             print infile
         self.infiles = [infile for key, infile in infiles]
 
-        segment_numbers = config.get("data", "segment_numbers")
-        self.segment_numbers = [int(segnum) 
-                                for segnum in str.split(segment_numbers, " ")]
+        segment_number = config.get("data", "segment_number")
+        self.segment_number = int(segment_number)
 
         self.outfile = config.get("metadata", "outfile",
                                   default="../output/roasting/roaster_out")
@@ -900,6 +996,8 @@ class ConfigFileParser(object):
         if self.seed is not None:
             self.seed = int(self.seed)
 
+        self.sampler = config.get("sampling", "sampler", default='emcee')
+
         self.nsamples = int(config.get("sampling", "nsamples", default=100))
         self.nwalkers = int(config.get("sampling", "nwalkers", default=32))
         self.nburn = int(config.get("sampling", "nburn", default=50))
@@ -926,8 +1024,8 @@ def main():
                              "If specified, ignore other command line flags." +
                              "(Default: None)")
 
-    parser.add_argument("--segment_numbers", type=int, nargs='+',
-                        help="Index of the segments to load from each infile")
+    parser.add_argument("--segment_number", type=int, default=None,
+                        help="Index of the segment to load")
 
     parser.add_argument("-o", "--outfile",
                         default="../output/roasting/roaster_out",
@@ -973,6 +1071,9 @@ def main():
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")
 
+    parser.add_argument("--sampler", type=str, default='emcee',
+                        help="Type of MC sampler to use (Default: 'emcee')")
+
     parser.add_argument("--nsamples", default=100, type=int,
                         help="Number of samples for each emcee walker "+
                              "(Default: 100)")
@@ -992,22 +1093,30 @@ def main():
 
     args = parser.parse_args()
 
+    ### Parse some parameters that can override those in the config_file, if present
+    segment_number = args.segment_number
+    outfile = args.outfile
+
     ###
     ### Get the parameters for input/output from configuration file or argument list
     ###
     if isinstance(args.config_file, str):
         logging.info('Reading from configuration file {}'.format(args.config_file))
         args = ConfigFileParser(args.config_file)
+        if segment_number is not None:
+            args.segment_number = segment_number
 
     elif not isinstance(args.infiles, list):
         raise ValueError("Must specify either 'config_file' or 'infiles' argument")
+
+    args.outfile += '_seg{:d}'.format(args.segment_number)
 
     np.random.seed(args.seed)
 
     logging.debug('--- Roaster started')
 
-    if args.segment_numbers is None:
-        args.segment_numbers = [0 for f in args.infiles]
+    if args.segment_number is None:
+        args.segment_number = 0
 
     if args.epoch_num >= 0:
         epoch_num = args.epoch_num
@@ -1034,7 +1143,7 @@ def main():
                       telescope=args.telescope,
                       filters_to_load=args.filters,
                       achromatic_galaxy=args.achromatic)
-    roaster.Load(args.infiles[0], segment=args.segment_numbers[0],
+    roaster.Load(args.infiles[0], segment=args.segment_number,
                  epoch_num=epoch_num)
     if args.init_param_file is not None:
         roaster.initialize_param_values(args.init_param_file)
@@ -1049,7 +1158,7 @@ def main():
     if args.output_model:
         save_model_image(args, roaster)
     else:
-        do_sampling(args, roaster)
+        do_sampling(args, roaster, sampler=args.sampler)
 
     logging.debug('--- Roaster finished')
     return 0

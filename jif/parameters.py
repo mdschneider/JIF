@@ -131,6 +131,36 @@ k_galparams_defaults = {
     "star": k_galsim_psf_defaults
 }
 
+### Lower, upper bounds on each possible parameter
+k_param_bounds = {
+  "redshift": (0.0, 6.0),
+  "nu": (-0.8, 0.8),
+  "hlr": (0.0, 10.0),
+  "e": (0.0, 0.9), ### Max |e| < 1 to avoid numerical instabilities
+  "beta": (0.0, np.pi),
+  "mag_sed1": (10.0, k_mag_param_minval),
+  "mag_sed2": (10.0, k_mag_param_minval),
+  "mag_sed3": (10.0, k_mag_param_minval),
+  "mag_sed4": (10.0, k_mag_param_minval),
+  "dx": (-10.0, 10.0),
+  "dy": (-10.0, 10.0)
+}
+
+### Nominal expected variance of each parameter (for sampling)
+k_param_vars = {
+  "redshift": 1.0,
+  "nu": 0.05**2,
+  "hlr": 0.015**2,
+  "e": 0.04**2,
+  "beta": 0.07**2,
+  "mag_sed1": 0.04**2,
+  "mag_sed2": 0.04**2,
+  "mag_sed3": 0.04**2,
+  "mag_sed4": 0.04**2,
+  "dx": 0.008**2,
+  "dy": 0.008**2
+}
+
 def select_psf_paramnames(model_paramnames):
     """
     Given a list of galaxy and PSF model parameter names, select just the PSF
@@ -192,3 +222,14 @@ def wrap_ellipticity_phase(phase):
     Map a phase in radians to [0, pi) to model ellipticity orientation.
     """
     return (phase % np.pi)
+
+
+def get_bounds(paramnames):
+  """
+  Get (min,max) bounds for the listed parameters
+
+  Return a list of tuples to match the 'bounds' argument of scipy.optimize.minimze:
+  http://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html#scipy.optimize.minimize
+  """
+  bounds = [k_param_bounds[p] for p in paramnames]
+  return bounds

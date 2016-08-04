@@ -167,7 +167,7 @@ def create_segments(subfield_index=0, experiment="control",
     n_gals_image_file = n_gals
     ngals_per_dim = 100 ### The image is a 100 x 100 grid of galaxies
     for igal in xrange(n_gals_image_file):
-        if verbose and np.mod(igal, 100) == 0:
+        if verbose and np.mod(igal, 2) == 0:
             print "Galaxy {:d} / {:d}".format(igal+1, n_gals_image_file)
         ### Specify input image grid ranges for this segment
         ng = k_g3_ngrid[observation_type]
@@ -202,7 +202,7 @@ def create_segments(subfield_index=0, experiment="control",
             psfs.append(np.asarray(s[0].data[0:ng, 0:ng], dtype=np.float64))
             s.close()
 
-        print "noise_vars:", noise_vars
+        # print "noise_vars:", noise_vars
         seg.save_images(images, noise_vars, [dummy_mask], backgrounds,
             segment_index=igal, telescope=telescope_name)
         seg.save_psf_images(psfs, segment_index=igal, telescope=telescope_name,
@@ -248,7 +248,7 @@ def main():
                         help="Enable verbose messaging")
 
     args = parser.parse_args()
-    logging.debug('Creating segment file for subfield {:d}'.format(
+    logging.debug('Creating footprints file for subfield {:d}'.format(
         args.subfield_index))
 
 
@@ -259,7 +259,7 @@ def main():
                     n_gals=args.n_gals,
                     verbose=args.verbose)
 
-    logging.debug('Finished creating segment for subfield {:d}'.format(
+    logging.debug('Finished creating footprints for subfield {:d}'.format(
         args.subfield_index))
     return 0
 
