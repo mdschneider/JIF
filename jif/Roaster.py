@@ -589,13 +589,16 @@ def optimize_params(omega_interim, roaster, quiet=False):
     def neg_lnp(omega, *args, **kwargs):
         return -roaster(omega, *args, **kwargs)
 
+    ### Replicate the parameter names for each source we're fitting
+    paramnames = roaster.model_paramnames * roaster.num_sources
+
     res = sp_minimize(fun=neg_lnp,
                       x0=omega_interim,
                       # method='L-BFGS-B',
                       method='SLSQP',
                       jac=False, # Estimate Jacobian numerically
                       # tol=1e-10,
-                      bounds=jifparams.get_bounds(roaster.model_paramnames),
+                      bounds=jifparams.get_bounds(paramnames),
                       options={
                           'disp': not quiet # Set True to print convergence messages
                       })
@@ -768,27 +771,30 @@ def write_results(args, pps, lnps, roaster):
     logging.info("Writing MCMC results to %s" % outfile)
     f = h5py.File(outfile, 'w')
 
-    # group_name='Roaster/seg{:d}/{}/{}'.format(args.segment_number, telescope.lower(), epoch)
+    if roaster.telescope is not None:
+        telescope = roaster.telescope
+    else:
+        telescope = 'None'
+
+    group_name='Samples/seg{:d}'.format(args.segment_number)
+    g = f.create_group(group_name)
 
     ### Save attributes so we can later instantiate Roaster with the same
     ### settings.
-    f.attrs['infile'] = args.infiles[0]
+    g.attrs['infile'] = args.infiles[0]
     if isinstance(args.segment_number, int):
-        f.attrs['segment_number'] = args.segment_number
+        g.attrs['segment_number'] = args.segment_number
     else:
-        f.attrs['segment_number'] = 'all'
-    f.attrs['epoch_num'] = args.epoch_num
-    f.attrs['galaxy_model_type'] = roaster.galaxy_model_type
+        g.attrs['segment_number'] = 'all'
+    g.attrs['epoch_num'] = args.epoch_num
+    g.attrs['galaxy_model_type'] = roaster.galaxy_model_type
     if roaster.filters_to_load is not None:
-        f.attrs['filters_to_load'] = roaster.filters_to_load
+        g.attrs['filters_to_load'] = roaster.filters_to_load
     else:
-        f.attrs['filters_to_load'] = 'None'
-    if roaster.telescope is not None:
-        f.attrs['telescope'] = roaster.telescope
-    else:
-        f.attrs['telescope'] = 'None'
-    f.attrs['model_paramnames'] = roaster.model_paramnames
-    f.attrs['achromatic_galaxy'] = roaster.achromatic_galaxy
+        g.attrs['filters_to_load'] = 'None'
+    g.attrs['telescope'] = telescope
+    g.attrs['model_paramnames'] = roaster.model_paramnames
+    g.attrs['achromatic_galaxy'] = roaster.achromatic_galaxy
 
     ### Collect the galaxy model parameter names, appending source indices if 
     ### needed.
@@ -807,15 +813,15 @@ def write_results(args, pps, lnps, roaster):
                            for p in roaster.psf_model_paramnames]
 
     ### Write the MCMC samples and log probabilities
-    if "post" in f:
-        del f["post"]
-    post = f.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
+    if "post" in g:
+        del g["post"]
+    post = g.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
     # pnames = np.array(roaster.src_models[0][0].paramnames)
     post.attrs['paramnames'] = paramnames
-    if "logprobs" in f:
-        del f["logprobs"]
-    logprobs = f.create_dataset("logprobs", data=np.vstack(lnps))
-    f.attrs["nburn"] = args.nburn
+    if "logprobs" in g:
+        del g["logprobs"]
+    logprobs = g.create_dataset("logprobs", data=np.vstack(lnps))
+    g.attrs["nburn"] = args.nburn
     f.close()
     return None
 
