@@ -776,6 +776,8 @@ def write_results(args, pps, lnps, roaster):
     else:
         telescope = 'None'
 
+    ### Store outputs in an HDF5 (sub-)group so we don't always 
+    ### need a separate HDF5 file for every segment.
     group_name='Samples/seg{:d}'.format(args.segment_number)
     g = f.create_group(group_name)
 

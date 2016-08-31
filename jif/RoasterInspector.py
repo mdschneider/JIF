@@ -40,36 +40,38 @@ class RoasterInspector(object):
     Compute summary statistics and plots for Roaster outputs
     """
     def __init__(self, args):
+        print "<RoasterInspector> Loading segment {:d}".format(args.segment_number)
         self.args = args
         f = h5py.File(args.infile, 'r')
+        g = f['Samples/seg{:d}'.format(args.segment_number)]
         self.infile = args.infile
-        self.roaster_infile = f.attrs['infile']
-        self.segment_number = f.attrs['segment_number']
-        epoch_num = f.attrs['epoch_num']
+        self.roaster_infile = g.attrs['infile']
+        self.segment_number = g.attrs['segment_number']
+        epoch_num = g.attrs['epoch_num']
         if epoch_num >= 0:
             self.epoch_num = epoch_num
         else:
             self.epoch_num = None
-        self.galaxy_model_type = f.attrs['galaxy_model_type']
-        self.filters_to_load = f.attrs['filters_to_load']
+        self.galaxy_model_type = g.attrs['galaxy_model_type']
+        self.filters_to_load = g.attrs['filters_to_load']
         if isinstance(self.filters_to_load, str):
             if self.filters_to_load == 'None':
                 self.filters_to_load = None
             else:
                 self.filters_to_load = [self.filters_to_load]
-        self.telescope = f.attrs['telescope']
+        self.telescope = g.attrs['telescope']
         if self.telescope == 'None':
             self.telescope = None
-        self.model_paramnames = f.attrs['model_paramnames']
-        self.achromatic_galaxy = f.attrs['achromatic_galaxy']
-        self.paramnames = f['post'].attrs['paramnames']
+        self.model_paramnames = g.attrs['model_paramnames']
+        self.achromatic_galaxy = g.attrs['achromatic_galaxy']
+        self.paramnames = g['post'].attrs['paramnames']
         if len(self.paramnames.shape) > 1:
             self.paramnames = np.array(self.paramnames).ravel()
         #     self.paramnames = self.paramnames[0]
         self.nparams = len(self.paramnames)
-        self.data = f['post'][...]
-        self.logprob = f['logprobs'][...]
-        self.nburn = f.attrs['nburn']
+        self.data = g['post'][...]
+        self.logprob = g['logprobs'][...]
+        self.nburn = g.attrs['nburn']
         f.close()
 
         outdir = os.path.dirname(args.infile)[0]
@@ -299,6 +301,9 @@ def main():
 
     parser.add_argument("roaster_config",
                         help="Name of Roaster config file")
+
+    parser.add_argument("--segment_number", type=int, default=0,
+                        help="Index of the segment to load")
 
     parser.add_argument("--truths", type=float,
                         help="true values of hyperparameters: "+
