@@ -16,6 +16,7 @@ import string
 import copy
 import numpy as np
 from scipy.optimize import minimize as sp_minimize
+from scipy.optimize import basinhopping
 import h5py
 import emcee
 # from emcee.utils import MPIPool
@@ -592,21 +593,59 @@ def optimize_params(omega_interim, roaster, quiet=False):
     ### Replicate the parameter names for each source we're fitting
     paramnames = roaster.model_paramnames * roaster.num_sources
 
-    res = sp_minimize(fun=neg_lnp,
-                      x0=omega_interim,
-                      # method='L-BFGS-B',
-                      method='SLSQP',
-                      jac=False, # Estimate Jacobian numerically
-                      # tol=1e-10,
-                      bounds=jifparams.get_bounds(paramnames),
-                      options={
-                          'disp': not quiet # Set True to print convergence messages
-                      })
-    print "Optimization result:", res.success, res.x
-    if res.success:
-        omega_interim = res.x
-    return omega_interim, res.success
+    print "\n"
+    print "--optimize_params-- paramnames: ", paramnames
+    print "--optimize_params-- param bounds:", jifparams.get_bounds(paramnames)
+    print "--optimize_params-- omega_interim:", omega_interim
+    print "\n"
 
+    # res = sp_minimize(fun=neg_lnp,
+    #                   x0=omega_interim,
+    #                   # method='L-BFGS-B',
+    #                   method='SLSQP',
+    #                   jac=False, # Estimate Jacobian numerically
+    #                   # tol=1e-10,
+    #                   bounds=jifparams.get_bounds(paramnames),
+    #                   options={
+    #                       'ftol': 1e-10,
+    #                       # 'eps': 1.0e-9,
+    #                       'maxiter': 200,
+    #                       'disp': not quiet # Set True to print convergence messages
+    #                   })
+    # #----------------------------
+    # res = sp_minimize(fun=neg_lnp,
+    #               x0=omega_interim,
+    #               method='L-BFGS-B',
+    #               jac=False, # Estimate Jacobian numerically
+    #               bounds=jifparams.get_bounds(paramnames),
+    #               options={
+    #                   'ftol': 1e-12,
+    #                   'gtol': 1e-8,
+    #                   'factr': 1e1,
+    #                   'maxcor': 10,
+    #                   # 'eps': 1.0e-6,
+    #                   # 'maxiter': 200,
+    #                   'disp': True # Set True to print convergence messages
+    #               })
+    #----------------------------
+    # res = sp_minimize(fun=neg_lnp,
+    #               x0=omega_interim,
+    #               method='TNC',
+    #               jac=False, # Estimate Jacobian numerically
+    #               bounds=jifparams.get_bounds(paramnames),
+    #               options={
+    #                   'disp': True # Set True to print convergence messages
+    #               })
+    # print "Optimization result:", res.success, res.x
+    # if res.success:
+    #     omega_interim = res.x
+    # return omega_interim, res.success
+    # -----------------------------
+    minimizer_kwargs = dict(method="L-BFGS-B", bounds=jifparams.get_bounds(paramnames), options={'disp': False})
+    res = basinhopping(neg_lnp, omega_interim, niter=100, minimizer_kwargs=minimizer_kwargs)
+    # print "Optimization result: \n", res
+    print "Optimization result:", res.x
+    return res.x, True
 
 def cluster_walkers(pps, lnps, thresh_multiplier=1):
     """
@@ -1133,8 +1172,8 @@ def main():
 
     ### Set galaxy priors
     if args.galaxy_model_type == "Spergel":
-        # lnprior_omega = DefaultPriorSpergel()
-        lnprior_omega = EmptyPrior()
+        lnprior_omega = DefaultPriorSpergel()
+        # lnprior_omega = EmptyPrior()
     elif args.galaxy_model_type == "BulgeDisk":
         lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
     else:

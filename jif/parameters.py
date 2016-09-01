@@ -135,8 +135,8 @@ k_galparams_defaults = {
 k_param_bounds = {
   "redshift": (0.0, 6.0),
   "nu": (-0.8, 0.8),
-  "hlr": (0.0, 10.0),
-  "e": (0.0, 0.9), ### Max |e| < 1 to avoid numerical instabilities
+  "hlr": (0.01, 10.0),
+  "e": (0.0001, 0.9), ### Max |e| < 1 to avoid numerical instabilities
   "beta": (0.0, np.pi),
   "mag_sed1": (10.0, k_mag_param_minval),
   "mag_sed2": (10.0, k_mag_param_minval),

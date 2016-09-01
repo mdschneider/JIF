@@ -213,6 +213,8 @@ class GalSimGalaxyModel(object):
             self.psf_model.params[paramname][0] = value
         else:
             self.params[paramname][0] = value
+            if 'beta' in paramname:
+                self.params[paramname][0] = np.mod(value, np.pi)
         return None
 
     def get_param_by_name(self, paramname):
@@ -250,6 +252,8 @@ class GalSimGalaxyModel(object):
             #     self.params[pname][0] = p[ip]
             # else:
             #     self.params[pname][0] = p[ip]
+            if 'beta' in pname:
+                self.params[pname][0] = np.mod(p[ip], np.pi)
         if self.psf_model_type == "PSFModel class":
             ### Assumes the PSF parameters are appended to the galaxy parameters
             self.psf_model.set_params(p[len(self.active_parameters_galaxy):])
@@ -303,16 +307,20 @@ class GalSimGalaxyModel(object):
         if self.galaxy_model == "Sersic" or self.galaxy_model == "Spergel":
             ### Redshift must be positive and less than a large value
             if not inbounds(self.params[0].redshift, jifparams.k_param_bounds['redshift']):
+                # print "Invalid redshift: ", self.params[0].redshift
                 valid_params *= False
             ### Ellipticity must be on [0, 1 - eps]
             if not inbounds(self.params[0].e, jifparams.k_param_bounds['e']):
+                # print "Invalid e: ", self.params[0].e
                 valid_params *= False
             ### Half-light radius must be positive and less than a large value
             ### (Large value here assumed in arcseconds)
             if not inbounds(self.params[0].hlr, jifparams.k_param_bounds['hlr']):
+                # print "Invalid hlr: ",self.params[0].hlr
                 valid_params *= False
             ### Position angle (in radians) must be on [0, pi]
             if not inbounds(self.params[0].beta, jifparams.k_param_bounds['beta']):
+                # print "Invalid beta: ",self.params[0].beta
                 valid_params *= False
             # ### Flux must be strictly positive
             # for i in xrange(len(k_SED_names)):
@@ -321,12 +329,15 @@ class GalSimGalaxyModel(object):
             ### Put a hard bound on the position parameters to avoid absurd
             ### translations of the galaxy
             if not inbounds(self.params[0].dx, jifparams.k_param_bounds['dx']):
+                # print "Invalid dx: ", self.params[0].dx
                 valid_params *= False
             if not inbounds(self.params[0].dy, jifparams.k_param_bounds['dy']):
+                # print "Invalid dy: ", self.params[0].dy
                 valid_params *= False
         ### ===================================================================
         if self.galaxy_model == "Spergel":
             if not inbounds(self.params[0].nu, jifparams.k_param_bounds['nu']):
+                # print "Invalid nu: ", self.params[0].nu
                 valid_params *= False
         ### ===================================================================
         elif self.galaxy_model == "BulgeDisk":
