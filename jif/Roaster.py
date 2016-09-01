@@ -185,7 +185,6 @@ class Roaster(object):
         ### Reset the global data lists in case Roaster had been used before
         self.pixel_data = []
         self.pix_noise_var = []
-        self.src_models = []
 
         if epoch_num is not None:
             if self.telescope is None:
@@ -341,6 +340,17 @@ class Roaster(object):
         logging.debug("<Roaster> num_epochs: {:d}, num_sources: {:d}".format(
             self.num_epochs, self.num_sources))
         print "Active parameters: ", self.model_paramnames
+
+        self._init_galaxy_models(nimages, tel_names, pixel_scales,
+                                 primary_diams, atmospheres, psfs)
+        logging.debug("<Roaster> Finished loading data")
+        if self.debug:
+            print "\npixel data shapes:", [dat.shape for dat in self.pixel_data]
+        return None
+
+    def _init_galaxy_models(self, nimages, tel_names, pixel_scales, 
+                            primary_diams, atmospheres, psfs):
+        self.src_models = []
         self.src_models = [[galsim_galaxy.GalSimGalaxyModel(
                                 telescope_name=tel_names[idat],
                                 galaxy_model=self.galaxy_model_type,
@@ -358,9 +368,6 @@ class Roaster(object):
         self.n_psf_params = self.src_models[0][0].n_psf_params
         self.n_gal_params = self.src_models[0][0].n_params - self.n_psf_params
         self.n_params = self.n_gal_params + self.num_epochs * self.n_psf_params
-        logging.debug("<Roaster> Finished loading data")
-        if self.debug:
-            print "\npixel data shapes:", [dat.shape for dat in self.pixel_data]
         return None
 
     def initialize_param_values(self, param_file_name):
