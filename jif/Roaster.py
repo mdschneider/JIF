@@ -606,19 +606,19 @@ def optimize_params(omega_interim, roaster, quiet=False):
     print "--optimize_params-- omega_interim:", omega_interim
     print "\n"
 
-    # res = sp_minimize(fun=neg_lnp,
-    #                   x0=omega_interim,
-    #                   # method='L-BFGS-B',
-    #                   method='SLSQP',
-    #                   jac=False, # Estimate Jacobian numerically
-    #                   # tol=1e-10,
-    #                   bounds=jifparams.get_bounds(paramnames),
-    #                   options={
-    #                       'ftol': 1e-10,
-    #                       # 'eps': 1.0e-9,
-    #                       'maxiter': 200,
-    #                       'disp': not quiet # Set True to print convergence messages
-    #                   })
+    res = sp_minimize(fun=neg_lnp,
+                      x0=omega_interim,
+                      # method='L-BFGS-B',
+                      method='SLSQP',
+                      jac=False, # Estimate Jacobian numerically
+                      # tol=1e-10,
+                      bounds=jifparams.get_bounds(paramnames),
+                      options={
+                          'ftol': 1e-10,
+                          # 'eps': 1.0e-9,
+                          'maxiter': 200,
+                          'disp': not quiet # Set True to print convergence messages
+                      })
     # #----------------------------
     # res = sp_minimize(fun=neg_lnp,
     #               x0=omega_interim,
@@ -643,16 +643,16 @@ def optimize_params(omega_interim, roaster, quiet=False):
     #               options={
     #                   'disp': True # Set True to print convergence messages
     #               })
-    # print "Optimization result:", res.success, res.x
-    # if res.success:
-    #     omega_interim = res.x
-    # return omega_interim, res.success
+    print "Optimization result:", res.success, res.x
+    if res.success:
+        omega_interim = res.x
+    return omega_interim, res.success
     # -----------------------------
-    minimizer_kwargs = dict(method="L-BFGS-B", bounds=jifparams.get_bounds(paramnames), options={'disp': False})
-    res = basinhopping(neg_lnp, omega_interim, niter=100, minimizer_kwargs=minimizer_kwargs)
-    # print "Optimization result: \n", res
-    print "Optimization result:", res.x
-    return res.x, True
+    # minimizer_kwargs = dict(method="L-BFGS-B", bounds=jifparams.get_bounds(paramnames), options={'disp': False})
+    # res = basinhopping(neg_lnp, omega_interim, niter=100, minimizer_kwargs=minimizer_kwargs)
+    # # print "Optimization result: \n", res
+    # print "Optimization result:", res.x
+    # return res.x, True
 
 def cluster_walkers(pps, lnps, thresh_multiplier=1):
     """
@@ -1026,6 +1026,8 @@ class ConfigFileParser(object):
 
         model_params = config.get("model", "model_params", default='e beta')
         self.model_params = str.split(model_params, ' ')
+
+        self.num_sources = int(config.get("model", "num_sources", default=1))
 
         self.telescope = config.get("data", "telescope")
 
