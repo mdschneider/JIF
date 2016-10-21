@@ -519,11 +519,14 @@ class Roaster(object):
                 filter_name=self.filter_names[iepochs], add_noise=add_noise)
             ix = nx/2
             iy = ny/2
+            print isrcs, ix, iy, nx, ny
             sub_bounds = galsim.BoundsI(int(ix-0.5*nx), int(ix+0.5*nx-1),
                                         int(iy-0.5*ny), int(iy+0.5*ny-1))
-            sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin, sub_bounds.ymin))
-            # Find the overlapping bounds between the large image and the individual postage
-            # stamp.
+            sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin,
+                                                 sub_bounds.ymin))
+
+            # Find the overlapping bounds between the large image and the 
+            # individual stamp.
             bounds = sub_image.bounds & model_image.bounds
             model_image[bounds] += sub_image[bounds]
 
@@ -1068,6 +1071,49 @@ class ConfigFileParser(object):
 
 
 # ------------------------------------------------------------------------------
+def InitRoaster(args):
+    args.outfile += '_seg{:d}'.format(args.segment_number)
+
+    np.random.seed(args.seed)
+
+    logging.debug('--- Roaster started')
+
+    if args.segment_number is None:
+        args.segment_number = 0
+
+    if args.epoch_num >= 0:
+        epoch_num = args.epoch_num
+    else:
+        epoch_num = None
+
+    ### Set galaxy priors
+    if args.galaxy_model_type == "Spergel":
+        lnprior_omega = DefaultPriorSpergel()
+        # lnprior_omega = EmptyPrior()
+    elif args.galaxy_model_type == "BulgeDisk":
+        lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
+    else:
+        lnprior_omega = EmptyPrior()
+
+    ### Set PSF priors
+    lnprior_Pi = pm.DefaultPriorPSF()
+
+    roaster = Roaster(debug=args.debug, data_format=args.data_format,
+                      lnprior_omega=lnprior_omega,
+                      lnprior_Pi=lnprior_Pi,
+                      galaxy_model_type=args.galaxy_model_type,
+                      model_paramnames=args.model_params,
+                      telescope=args.telescope,
+                      filters_to_load=args.filters,
+                      achromatic_galaxy=args.achromatic)
+    roaster.Load(args.infiles[0], segment=args.segment_number,
+                 epoch_num=epoch_num)
+    if args.init_param_file is not None:
+        roaster.initialize_param_values(args.init_param_file)
+    return roaster, args
+
+
+# ------------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(
         description='Draw interim samples of source model parameters via MCMC.')
@@ -1165,44 +1211,7 @@ def main():
     elif not isinstance(args.infiles, list):
         raise ValueError("Must specify either 'config_file' or 'infiles' argument")
 
-    args.outfile += '_seg{:d}'.format(args.segment_number)
-
-    np.random.seed(args.seed)
-
-    logging.debug('--- Roaster started')
-
-    if args.segment_number is None:
-        args.segment_number = 0
-
-    if args.epoch_num >= 0:
-        epoch_num = args.epoch_num
-    else:
-        epoch_num = None
-
-    ### Set galaxy priors
-    if args.galaxy_model_type == "Spergel":
-        lnprior_omega = DefaultPriorSpergel()
-        # lnprior_omega = EmptyPrior()
-    elif args.galaxy_model_type == "BulgeDisk":
-        lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
-    else:
-        lnprior_omega = EmptyPrior()
-
-    ### Set PSF priors
-    lnprior_Pi = pm.DefaultPriorPSF()
-
-    roaster = Roaster(debug=args.debug, data_format=args.data_format,
-                      lnprior_omega=lnprior_omega,
-                      lnprior_Pi=lnprior_Pi,
-                      galaxy_model_type=args.galaxy_model_type,
-                      model_paramnames=args.model_params,
-                      telescope=args.telescope,
-                      filters_to_load=args.filters,
-                      achromatic_galaxy=args.achromatic)
-    roaster.Load(args.infiles[0], segment=args.segment_number,
-                 epoch_num=epoch_num)
-    if args.init_param_file is not None:
-        roaster.initialize_param_values(args.init_param_file)
+    roaster, args = InitRoaster(args)
 
     import pprint
     pp = pprint.PrettyPrinter(indent=4)
