@@ -519,8 +519,8 @@ class Roaster(object):
                 filter_name=self.filter_names[iepochs], add_noise=add_noise)
             ix = nx/2
             iy = ny/2
-            sub_bounds = galsim.BoundsI(ix-0.5*nx, ix+0.5*nx-1,
-                            iy-0.5*ny, iy+0.5*ny-1)
+            sub_bounds = galsim.BoundsI(int(ix-0.5*nx), int(ix+0.5*nx-1),
+                                        int(iy-0.5*ny), int(iy+0.5*ny-1))
             sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin, sub_bounds.ymin))
             # Find the overlapping bounds between the large image and the individual postage
             # stamp.

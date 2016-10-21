@@ -12,7 +12,8 @@ setup(name='jif',
       ### The python scripts in this package can be designated as distinct command-line executables
       ### here. Be careful about potential name clashes.
       entry_points = {
-      	'console_scripts': ['jif_roaster=jif.Roaster:main',
-      					    'jif_roaster_inspector=jif.RoasterInspector:main'],
+      	'console_scripts': ['jif_sheller=jif.sheller:main',
+                                'jif_roaster=jif.Roaster:main',
+      				  'jif_roaster_inspector=jif.RoasterInspector:main'],
       },
       zip_safe=False)
