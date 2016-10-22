@@ -16,6 +16,7 @@ if ($#argv != 0) then
 endif
 
 set config_file=devel/great3_cgc/roaster_cgc.cfg
+set field=001
 
 ### Run Roaster
 foreach segnum (`seq 0 1000`)
@@ -29,8 +30,9 @@ foreach segnum (`seq 0 1000`)
 	echo "================================================="
 	echo "Making Inspector plots for segment "$segnum
 	echo "================================================="
-	set roaster_file=output/great3/CGC/000/roaster_CGC_000_seg${segnum}_LSST.h5
-	jif_roaster_inspector $roaster_file $config_file || goto error	
+	set roaster_file=output/great3/CGC/${field}/roaster_CGC_${field}_seg${segnum}_LSST.h5
+	echo jif_roaster_inspector $roaster_file $config_file	
+	jif_roaster_inspector $roaster_file $config_file --segment_number $segnum || goto error	
 end
 
 ## labels for proper exit or error

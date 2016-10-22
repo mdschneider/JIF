@@ -115,8 +115,10 @@ def create_segments(subfield_index=0, experiment="control",
         raise ValueError("subfield_index must be in range [0, 199]")
 
     ### Reconstruct the GREAT3 image input file path and name
-    indir = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-        "../data/great3", experiment, observation_type, shear_type)
+    # indir = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+    #     "../data/great3", experiment, observation_type, shear_type)
+    indir = os.path.join("/Volumes/Promise Pegasus/JIF/data/great3",
+                         experiment, observation_type, shear_type)
 
     ### Collect input image filenames for all epochs.
     ### FIXME: Get correct 'experiment' names here
@@ -149,7 +151,8 @@ def create_segments(subfield_index=0, experiment="control",
     if verbose:
         print "seg_filename:", seg_filename
 
-    ### Set some common metadata required by the Segment file structure
+    ## Set some common metadata required by the Segment file structure
+    ## The telescope name must match a model in the JIF telescopes.py module. 
     # telescope_name = "GREAT3_{}".format(observation_type)
     telescope_name = {"ground": "LSST", "space": "WFIRST"}[observation_type]
     if verbose:
@@ -162,6 +165,19 @@ def create_segments(subfield_index=0, experiment="control",
     ### in the current sub-field. Different sub-fields go in different segment
     ### files (no particular reason for this - just seems convenient).
     seg = footprints.Footprints(seg_filename)
+
+    ## Get the noise and background for the entire image, before iterating 
+    ## over galaxy stamps. This is *much* faster than separate noise estimates
+    ## for each stamp 
+    noise_vars = []
+    backgrounds = []
+    for ifile, infile in enumerate(infiles): # Iterate over epochs
+        f = fits.open(infile)
+        bkgrnd, noise_var = get_background_and_noise_var(f[0].data)
+        noise_vars.append(noise_var)
+        backgrounds.append(bkgrnd)
+        # print "empirical nosie variance: {:5.4g}".format(np.var(f[0].data))
+        f.close()
 
     ### There are 1e4 galaxies in one GREAT3 image file.
     ### Save all images to the segment file, but with distinct 'segment_index'
@@ -183,16 +199,11 @@ def create_segments(subfield_index=0, experiment="control",
 
         images = []
         psfs = []
-        noise_vars = []
-        backgrounds = []
-        for ifile, infile in enumerate(infiles): # Iterate over epochs, select same galaxy
+        for ifile, infile in enumerate(infiles): # Iterate over epochs, 
+                                                 # select same galaxy
             f = fits.open(infile)
             images.append(np.asarray(f[0].data[ymin:ymax, xmin:xmax],
                 dtype=np.float64))
-            bkgrnd, noise_var = get_background_and_noise_var(f[0].data)
-            noise_vars.append(noise_var)
-            backgrounds.append(bkgrnd)
-            # print "empirical nosie variance: {:5.4g}".format(np.var(f[0].data))
             f.close()
 
             s = fits.open(starfiles[ifile])
@@ -215,10 +226,10 @@ def create_segments(subfield_index=0, experiment="control",
     ### It's not strictly necessary to instantiate a GalSimGalaxyModel object
     ### here, but it's useful to do the parsing of existing bandpass files to
     ### copy filter curves into the segment file.
-    gg_obj = gg.GalSimGalaxyModel(telescope_name=telescope_name,
-        filter_names=list(filter_name), filter_wavelength_scale=1.0)
-    gg.save_bandpasses_to_segment(seg, gg_obj, k_filter_name, telescope_name,
-        scale={"LSST": 1.0, "WFIRST": 1.e3}[telescope_name])
+    # gg_obj = gg.GalSimGalaxyModel(telescope_name=telescope_name,
+    #     filter_names=list(filter_name), filter_wavelength_scale=1.0)
+    # gg.save_bandpasses_to_segment(seg, gg_obj, k_filter_name, telescope_name,
+    #     scale={"LSST": 1.0, "WFIRST": 1.e3}[telescope_name])
 
     seg.save_tel_metadata(telescope=telescope_name,
                           primary_diam=k_g3_primary_diameters[observation_type],
