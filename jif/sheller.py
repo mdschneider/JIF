@@ -82,16 +82,14 @@ def get_background_and_noise_var(data, clip_n_sigma=3, clip_converg_tol=0.1,
         if verbose:
             print 'Masked {0} outlier values from this iteration.'.format(
                 np.sum(~mask_outliers))
-            print 'Current fractional sigma change between clipping ' +
-                  'iterations = {0:0.2f}'.format(sigma_frac_change)
+            print 'Current fractional sigma change between clipping iterations = {0:0.2f}'.format(sigma_frac_change)
         # Replace old values with estimates from this iteration.
         x_std_old = x_std_new.copy()
         x_median_old = np.median(x)
         # Make sure that we don't have a run away while statement.
         i += 1
         if i > 100:
-            print 'Background variance failed to converge after 100 sigma ' + 
-                  'clipping iterations, exiting.'
+            print 'Background variance failed to converge after 100 sigma clipping iterations, exiting.'
             sys.exit()
     # Calculate the clipped image median.
     x_clip_median = np.median(x)

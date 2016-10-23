@@ -257,7 +257,7 @@ class PSFModel(object):
         return psf
 
     def get_psf_image(self, filter_name='r', ngrid=None, pixel_scale_arcsec=0.2, out_image=None,
-                      gain=1.0):
+                      gain=1.0, normalize_flux=False):
         """
         Get a GalSim Image instance of the PSF
 
@@ -270,7 +270,11 @@ class PSFModel(object):
             raise ValueError("Must specify either ngrid or out_image")
         psf = self.get_psf()
         if self.achromatic:
-            psf = psf.withFlux(jifparams.flux_from_AB_mag(self.params[0].psf_mag))
+            if normalize_flux:
+                flux = 1.0
+            else:
+                flux = jifparams.flux_from_AB_mag(self.params[0].psf_mag)
+            psf = psf.withFlux(flux)
             image_epsf = psf.drawImage(image=out_image, scale=pixel_scale_arcsec,
                                        nx=ngrid, ny=ngrid, gain=gain)
         else:

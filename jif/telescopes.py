@@ -20,7 +20,7 @@ k_telescopes = {
         ### Exposure time for defining the zero point reference
         "exptime_zeropoint": 30.,  # seconds
         "zeropoint": 'AB',
-        "gain": 2.1,
+        "gain": 1.0,
         "filter_names": 'ugrizy',
         "filter_central_wavelengths": {'u':360., 'g':500., 'r':620., 'i':750.,
                                        'z':880., 'y':1000.},
