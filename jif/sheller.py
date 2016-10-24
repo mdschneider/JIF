@@ -80,7 +80,8 @@ def get_background_and_noise_var(data, clip_n_sigma=3, clip_converg_tol=0.1,
         # deviation values.
         sigma_frac_change = np.abs(x_std_new-x_std_old)/((x_std_new+x_std_old)/2.)
         if verbose:
-            print 'Masked {0} outlier values from this iteration.'.format(np.sum(~mask_outliers))
+            print 'Masked {0} outlier values from this iteration.'.format(
+                np.sum(~mask_outliers))
             print 'Current fractional sigma change between clipping iterations = {0:0.2f}'.format(sigma_frac_change)
         # Replace old values with estimates from this iteration.
         x_std_old = x_std_new.copy()
@@ -132,7 +133,6 @@ def create_segments(subfield_index=0, experiment="control",
             "starfield_image-{:03d}-{:d}.fits".format(subfield_index, epoch_index)))
     if verbose:
         print "input files:", infiles
-
 
     ### Load the galaxy catalog for this subfield
     f = fits.open(os.path.join(indir,
@@ -241,19 +241,22 @@ def main():
         description='Parse GREAT3 data file and save as galaxy segment files.')
 
     parser.add_argument('--subfield_index', type=int, default=0,
-                        help="GREAT3 data set subfield index (0-199) [Default: 0]")
+                        help="GREAT3 data set subfield index (0-199) " +
+                             "[Default: 0]")
 
     parser.add_argument('--experiment', type=str, default="control",
                         help="GREAT3 'experiment' name. [Default: control]")
 
     parser.add_argument('--observation_type', type=str, default="ground",
-                        help="GREAT3 'observation' type (ground/space) [Default: ground]")
+                        help="GREAT3 'observation' type (ground/space) " +
+                             "[Default: ground]")
 
     parser.add_argument('--shear_type', type=str, default="constant",
                         help="GREAT shear type [Default: constant]")
 
     parser.add_argument('--n_gals', type=int, default=10,
-                        help="How many galaxies to process from a sub-field? [Default: 10]")
+                        help="How many galaxies to process from a sub-field? " +
+                             "[Default: 10]")
 
     parser.add_argument('--verbose', action='store_true',
                         help="Enable verbose messaging")

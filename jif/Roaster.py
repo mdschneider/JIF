@@ -464,6 +464,7 @@ class Roaster(object):
             else:
                 raise ValueError("If passing list, must be of length num_sources")
         elif isinstance(value, float):
+            logging.debug("Setting {} to {:8.6f}".format(paramname, value))
             if 'psf' in paramname:
                 p = paramname.split("_")
                 if len(p) != 3:
@@ -511,15 +512,17 @@ class Roaster(object):
         nx = self.nx[iepochs]
         ny = self.ny[iepochs]
         model_image = galsim.ImageF(nx, ny,
-            scale=self.src_models[0][iepochs].pixel_scale)
+            scale=self.src_models[0][iepochs].pixel_scale, init_value=0.)
+        # print "Roaster model image pixel scale:", self.src_models[0][iepochs].pixel_scale
 
         for isrcs in xrange(self.num_sources):
-            sub_image = galsim.Image(nx, ny)
+            # print "Roaster model parameters:", self.src_models[isrcs][iepochs].params            
+            sub_image = galsim.Image(nx, ny, init_value=0.)
             model = self.src_models[isrcs][iepochs].get_image(sub_image,
                 filter_name=self.filter_names[iepochs], add_noise=add_noise)
             ix = nx/2
             iy = ny/2
-            print isrcs, ix, iy, nx, ny
+            # print isrcs, ix, iy, nx, ny
             sub_bounds = galsim.BoundsI(int(ix-0.5*nx), int(ix+0.5*nx-1),
                                         int(iy-0.5*ny), int(iy+0.5*ny-1))
             sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin,
@@ -659,8 +662,6 @@ def optimize_params(omega_interim, roaster, quiet=False):
 
 def cluster_walkers(pps, lnps, thresh_multiplier=1):
     """
-    FIXME: Finish implementation
-
     Down-select emcee walkers to those with the largest mean posteriors
 
     Follows the algorithm of Hou, Goodman, Hogg et al. (2012)
@@ -789,7 +790,9 @@ def do_sampling(args, roaster, return_samples=False, sampler='emcee'):
     logging.info("Have {:d} sampling parameters".format(len(omega_interim)))
     print "Starting parameters: ", omega_interim
 
-    omega_interim, opt_success = optimize_params(omega_interim, roaster, args.quiet)
+    # omega_interim, opt_success = optimize_params(omega_interim, roaster, args.quiet)
+    ## Optimization needs fixing - turn off for now [2016-10-22] 
+    opt_success = True
 
     if sampler == 'emcee':
         ### Double the burn-in period if optimization failed
@@ -973,7 +976,10 @@ def save_model_image(args, roaster):
     """
     epoch_num = 0 # FIXME: loop over this index
 
-    model_image = roaster._get_model_image(epoch_num)
+    model_image = roaster._get_model_image(iepochs=epoch_num, add_noise=False)
+
+    dat = roaster.pixel_data[epoch_num]
+    mdat = model_image.array
 
     ### Save a FITS image using the GalSim 'write' method for Image() class
     outfile = args.outfile + "_initial_model_image.fits"
@@ -983,23 +989,43 @@ def save_model_image(args, roaster):
     ### Save a PNG plot using matplotlib
     import matplotlib.pyplot as plt
     plt.style.use('ggplot')
-    fig = plt.figure(figsize=(12, 6))
+    colors = ['#348ABD', '#7A68A6', '#A60628', '#467821', '#CF4457', '#188487']
+    fig = plt.figure(figsize=(12, 12/1.618))
     ### Data
-    plt.subplot(1, 2, 1)
-    plt.imshow(roaster.pixel_data[epoch_num], interpolation='none',
+    plt.subplot(2, 2, 1)
+    plt.imshow(dat, interpolation='none',
                cmap=plt.cm.pink)
     plt.colorbar()
     plt.title("Data")
     ### Model
-    plt.subplot(1, 2, 2)
-    plt.imshow(model_image.array, interpolation='none',
+    plt.subplot(2, 2, 2)
+    plt.imshow(mdat, interpolation='none',
                cmap=plt.cm.pink)
     plt.colorbar()
     plt.title("Model")
+    ### Data - Model
+    resid = dat - mdat
+    plt.subplot(2, 2, 4)
+    plt.imshow(resid, interpolation='none', cmap=plt.cm.BrBG)
+    plt.colorbar()
+    plt.title("Residual")
+    ### Cross-sections of the profile
+    nx, ny = dat.shape
+    x = (np.arange(0, nx) - nx/2.) * model_image.scale
+    y = (np.arange(0, ny) - ny/2.) * model_image.scale
+    plt.subplot(2, 2, 3)
+    plt.plot(y, dat[(nx/2), :], color=colors[0], linestyle='solid', label="data")
+    plt.plot(x, dat[:, (ny/2)], color=colors[0], linestyle='dashed', label=None)
+    plt.plot(y, mdat[(nx/2), :], color=colors[1], linestyle='solid', label="model")
+    plt.plot(x, mdat[:, (ny/2)], color=colors[1], linestyle='dashed', label=None)
+    plt.legend()
+    plt.xlabel(r"position (arcsec.)")
+    plt.ylabel(r"surface brightness (ADU/pix$^2$)")
+    plt.title("x,y cross-sections")
 
     outfile = args.outfile + "_initial_model_image.png"
     plt.savefig(outfile, bbox_inches='tight')
-    return None
+    return np.sqrt(np.var(resid.ravel()) / roaster.pix_noise_var[epoch_num])
 
 # ------------------------------------------------------------------------------
 class ConfigFileParser(object):
@@ -1107,7 +1133,7 @@ def InitRoaster(args):
                       filters_to_load=args.filters,
                       achromatic_galaxy=args.achromatic)
     roaster.Load(args.infiles[0], segment=args.segment_number,
-                 epoch_num=epoch_num)
+                 epoch_num=epoch_num, use_PSFModel=True)
     if args.init_param_file is not None:
         roaster.initialize_param_values(args.init_param_file)
     return roaster, args
@@ -1207,7 +1233,6 @@ def main():
         args = ConfigFileParser(args.config_file)
         if segment_number is not None:
             args.segment_number = segment_number
-
     elif not isinstance(args.infiles, list):
         raise ValueError("Must specify either 'config_file' or 'infiles' argument")
 
@@ -1221,7 +1246,10 @@ def main():
         pp.pprint(roaster.src_models[0][0].__dict__)
 
     if args.output_model:
-        save_model_image(args, roaster)
+        resid_rms = save_model_image(args, roaster)
+        if resid_rms > 1:
+            print "\n======== WARNING: large model residual ==========="
+        print "Residual r.m.s. for initial model: {:12.10g}\n".format(resid_rms)
     else:
         do_sampling(args, roaster, sampler=args.sampler)
 

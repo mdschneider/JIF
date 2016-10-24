@@ -146,7 +146,8 @@ class GalSimGalaxyModel(object):
                                              achromatic=achromatic_galaxy)
         if isinstance(self.psf_model, np.ndarray):
             self.psf_model_type = 'InterpolatedImage'
-            self.psf_model = galsim.InterpolatedImage(self.psf_model)
+            self.psf_model = galsim.InterpolatedImage(self.psf_model, 
+                scale=pixel_scale_arcsec, gsparams=self.gsparams, flux=1.0)
         elif isinstance(self.psf_model, pm.PSFModel):
             self.psf_model_type = 'PSFModel class'
         else:
@@ -275,7 +276,8 @@ class GalSimGalaxyModel(object):
         ### Transform fluxes to ln(Flux) for MCMC sampling
         for ip, pname in enumerate(self.active_parameters):
             if 'beta' in pname:
-                p[ip] = jifparams.wrap_ellipticity_phase(p[ip])
+                # p[ip] = jifparams.wrap_ellipticity_phase(p[ip])
+                p[ip] = np.mod(p[ip], np.pi)
             # if 'flux_sed' in pname:
             #     p[ip] = np.log(p[ip])
         return p
@@ -478,7 +480,7 @@ class GalSimGalaxyModel(object):
     def get_image(self, out_image=None, add_noise=False,
                   filter_name='r', gain=1.0, snr=None):
         if self.galaxy_model == "star":
-            return self.get_psf_image(filter_name=filter_name, out_image=out_image, gain=gain)
+            return self.get_psf_image(filter_name=filter_name,out_image=out_image, gain=gain)
         elif self.galaxy_model == "Gaussian":
             # gal = galsim.Gaussian(flux=self.params.gal_flux, sigma=self.params.gal_sigma)
             # gal_shape = galsim.Shear(g=self.params.e, beta=self.params.beta*galsim.radians)
@@ -486,15 +488,18 @@ class GalSimGalaxyModel(object):
             raise AttributeError("Unimplemented galaxy model")
 
         elif self.galaxy_model == "Spergel":
+            # print "GG hlr param: {:12.10f}".format(self.params[0].hlr)
             mono_gal = galsim.Spergel(nu=self.params[0].nu,
                 half_light_radius=self.params[0].hlr,
                 # flux=self.params[0].gal_flux,
                 flux=1.0,
                 gsparams=self.gsparams)
+            # print "GG mono_gal HLR: {:12.10g}".format(mono_gal.calculateHLR())
             if self.achromatic_galaxy:
                 gal = mono_gal
-                gal = gal.withFlux(jifparams.flux_from_AB_mag(self.params[0].mag_sed1))
-                # gal = gal.withFlux(1.e6)
+                flux = jifparams.flux_from_AB_mag(self.params[0].mag_sed1)
+                # print "GG flux: {:12.10g}".format(flux)
+                gal = gal.withFlux(flux)
             else:
                 SED = self.get_SED()
                 gal = galsim.Chromatic(mono_gal, SED)
@@ -502,6 +507,7 @@ class GalSimGalaxyModel(object):
                 beta=self.params[0].beta*galsim.radians)
             gal = gal.shear(gal_shape)
             gal = gal.shift(self.params[0].dx, self.params[0].dy)
+            # print "GG gal HLR: {:12.10g}".format(gal.calculateHLR())
 
         elif self.galaxy_model == "Sersic":
             mono_gal = galsim.Sersic(n=self.params[0].n,
@@ -551,13 +557,22 @@ class GalSimGalaxyModel(object):
 
         else:
             raise AttributeError("Unimplemented galaxy model")
+        # print "GG gal flux: {:12.10g}".format(gal.getFlux())
+        # print "GG PSF HLR: {:12.10g}".format(self.get_psf(filter_name).calculateHLR())
         final = galsim.Convolve([gal, self.get_psf(filter_name)])
+        # print "GG final flux: {:12.10g}".format(final.getFlux())
+        # print "GG hlr: {:12.10g}".format(final.calculateHLR())
         # wcs = galsim.PixelScale(self.pixel_scale)'
+        
+        # print "GG pixel scale: {:8.6f}".format(self.pixel_scale)
+        # print "GG gain: {:8.6f}".format(gain)
 
         try:
             if self.achromatic_galaxy:
                 image = final.drawImage(image=out_image, scale=self.pixel_scale,
                     gain=gain, add_to_image=False, method='fft')
+                # print "GG image range: {:10.8g}, {:10.8g}".format(np.min(image.array), 
+                    # np.max(image.array))
             else:
                 image = final.drawImage(bandpass=self.filters[filter_name],
                     image=out_image, scale=self.pixel_scale, gain=gain,
@@ -590,7 +605,7 @@ class GalSimGalaxyModel(object):
         elif self.psf_model_type == 'PSFModel class':
             image = self.psf_model.get_psf_image(filter_name=filter_name, out_image=out_image,
                                                  ngrid=ngrid, pixel_scale_arcsec=self.pixel_scale,
-                                                 gain=gain)
+                                                 gain=gain, normalize_flux=True)
             if add_noise:
                 image.addNoise(self.noise)
         else:

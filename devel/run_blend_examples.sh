@@ -125,7 +125,7 @@ nsamples=2000
 ; Number of emcee walkers
 nwalkers=32
 ; Number of burn-in steps to discard from the start of the MCMC chain.
-nburn=300
+nburn=1
 ; Number of compute threads to use - buggy
 nthreads=1
 EOF
@@ -133,13 +133,6 @@ EOF
 
 		### Simulate the image for this stamp and passband
 		python sim_image_from_roaster_config.py $roaster_config
-
-		### Run the fitting
-		jif_roaster --config_file $roaster_config
-
-		### Make plots from the fitting
-		set roaster_outfile=$workdir/roaster_seg0_${tel}.h5
-		jif_roaster_inspector $roaster_outfile $roaster_config
 	end
 end
 

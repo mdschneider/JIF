@@ -60,7 +60,7 @@ def init_galaxy_models(args, roaster):
 
 
 def save_model_image(args, roaster):
-    model_image = roaster._get_model_image(iepochs=0)
+    model_image = roaster._get_model_image(iepochs=0, add_noise=False)
 
     if args.telescope.lower() == "lsst":
         noise_model = jif.telescopes.lsst_noise(args.seed)
@@ -100,8 +100,8 @@ def save_model_image(args, roaster):
     ### ========================================================================
     psf_image = roaster.src_models[0][0].get_psf_image(
         filter_name=args.filters[0],
-        ngrid=32,
-        gain=tel_dict["gain"])
+        ngrid=64, gain=1.0, add_noise=False)
+    print "PSF HLR: {:12.10g}".format(psf_image.calculateHLR())
 
     outfile = args.outfile + "_psf_image.png"
     fig=plt.figure(figsize=(6,6))
@@ -135,19 +135,9 @@ def save_model_image(args, roaster):
     return None
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Draw interim samples of source model parameters via MCMC.')
-
-    parser.add_argument('config_file', type=str, 
-                        help="Name of a configuration file listing inputs." +
-                             "If specified, ignore other command line flags." +
-                             "(Default: None)")
-
-    args = parser.parse_args()
-
-    logging.info('Reading from configuration file {}'.format(args.config_file))
-    args = jif.RoasterModule.ConfigFileParser(args.config_file)
+def main(**kwargs):
+    logging.info('Reading from configuration file {}'.format(kwargs['config_file']))
+    args = jif.RoasterModule.ConfigFileParser(kwargs['config_file'])
 
     roaster = jif.Roaster(debug=args.debug,
                           lnprior_omega=jif.RoasterModule.EmptyPrior(),
@@ -169,5 +159,21 @@ def main():
     return 0
 
 
+def run():
+    parser = argparse.ArgumentParser(
+        description='Draw interim samples of source model parameters via MCMC.')
+
+    parser.add_argument('config_file', type=str, #default="../config/roaster_defaults.cfg",
+                        help="Name of a configuration file listing inputs." +
+                             "If specified, ignore other command line flags." +
+                             "(Default: None)")
+
+    args = parser.parse_args()
+    d = vars(args)
+
+    main(**d)
+    return 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())

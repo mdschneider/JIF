@@ -82,7 +82,7 @@ def cross_pollinate(args, roasters, epoch_samples):
                 ### Evaluate the ln-posterior of the i'th samples given the j'th data set
                 lnp_val = np.array([
                     np.array([lnp_func(omega[istep, iwalk, :])
-                        for iwalk in xrange(roaster_args.nwalkers)])
+                        for iwalk in xrange(args.nwalkers)])
                     for istep in xrange(nsamples)])
                 # print("lnp: ", lnp_val)
             lnp.append(lnp_val)
@@ -129,6 +129,9 @@ def main():
     parser = argparse.ArgumentParser(
         description='Combine multiple epochs from Roaster with importance '+
                     'sampling weights')
+
+    parser.add_argument("--config_files", type=str, nargs='+',
+                        "Names of the Roaster configuration files to process")
 
     args = parser.parse_args()
 
