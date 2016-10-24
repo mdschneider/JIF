@@ -363,7 +363,8 @@ class GalSimGalaxyModel(object):
             image = psf
         elif self.psf_model_type == 'PSFModel class':
             image = self.psf_model.get_psf_image(filter_name=filter_name, out_image=out_image,
-                                                 ngrid=ngrid, pixel_scale_arcsec=self.pixel_scale,
+                                                 ngrid=ngrid, 
+                                                 pixel_scale_arcsec=self.pixel_scale_arcsec,
                                                  gain=gain, normalize_flux=True)
             if add_noise:
                 image.addNoise(self.noise)

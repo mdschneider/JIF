@@ -46,6 +46,7 @@ def init_galaxy_models(args, roaster):
                      tel_dict["primary_diam_meters"]) * 180*3600/np.pi
 
     psfs = [jif.PSFModel(telescope=args.telescope, achromatic=args.achromatic,
+                         active_parameters=[],
                          lam_over_diam=lam_over_diam, 
                          gsparams=None)]
 

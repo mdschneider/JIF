@@ -97,7 +97,7 @@ class Roaster(object):
     def __init__(self, lnprior_omega=None,
                  lnprior_Pi=None,
                  data_format='test_galsim_galaxy',
-                 galaxy_model_type='BulgeDisk',
+                 galaxy_model_type='Spergel',
                  telescope=None,
                  filters_to_load=None,
                  debug=False,
@@ -352,16 +352,10 @@ class Roaster(object):
                             primary_diams, atmospheres, psfs):
         self.src_models = []
         self.src_models = [[galsim_galaxy.GalSimGalaxyModel(
-                                telescope_name=tel_names[idat],
+                                telescope_model=tel_names[idat],
                                 galaxy_model=self.galaxy_model_type,
-                                active_parameters=self.model_paramnames,
-                                pixel_scale_arcsec=pixel_scales[idat],
-                                primary_diam_meters=primary_diams[idat],
-                                filters=self.filters,
-                                filter_names=self.filter_names[idat],
-                                atmosphere=atmospheres[idat],
                                 psf_model=psfs[idat],
-                                achromatic_galaxy=self.achromatic_galaxy)
+                                active_parameters=self.model_paramnames)
                             for idat in xrange(nimages)]
                            for isrcs in xrange(self.num_sources)]
         ### Count galaxy 'active' parameters plus distinct PSF parameters for all epochs.
@@ -512,13 +506,13 @@ class Roaster(object):
         nx = self.nx[iepochs]
         ny = self.ny[iepochs]
         model_image = galsim.ImageF(nx, ny,
-            scale=self.src_models[0][iepochs].pixel_scale, init_value=0.)
+            scale=self.src_models[0][iepochs].pixel_scale_arcsec, init_value=0.)
         # print "Roaster model image pixel scale:", self.src_models[0][iepochs].pixel_scale
 
         for isrcs in xrange(self.num_sources):
             # print "Roaster model parameters:", self.src_models[isrcs][iepochs].params            
             sub_image = galsim.Image(nx, ny, init_value=0.)
-            model = self.src_models[isrcs][iepochs].get_image(sub_image,
+            model = self.src_models[isrcs][iepochs].get_image(out_image=sub_image,
                 filter_name=self.filter_names[iepochs], add_noise=add_noise)
             ix = nx/2
             iy = ny/2
@@ -1133,7 +1127,7 @@ def InitRoaster(args):
                       filters_to_load=args.filters,
                       achromatic_galaxy=args.achromatic)
     roaster.Load(args.infiles[0], segment=args.segment_number,
-                 epoch_num=epoch_num, use_PSFModel=True)
+                 epoch_num=epoch_num, use_PSFModel=False)
     if args.init_param_file is not None:
         roaster.initialize_param_values(args.init_param_file)
     return roaster, args
