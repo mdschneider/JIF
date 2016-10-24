@@ -120,18 +120,13 @@ class PSFModel(object):
         """
         Check that all model parameters take values inside allowed ranges.
         """
+        def inbounds(p, b):
+            return p >= b[0] and p<= b[1]
+
         valid_params = True
-        ### Width must be greater than a small value (in arcseconds)
-        ### Note that very small PSF widths will require large GalSim FFTs - so bound it here.
-        if self.params[0].psf_fwhm <=0.1 or self.params[0].psf_fwhm > 2.:
-            valid_params *= False
-        ### Ellipticity must be on [0, 1]. But highly elliptical PSFs probably indicated artifacts
-        ### or other failure modes of the fit, so bound to be something less than 1.
-        if self.params[0].psf_e < 0. or self.params[0].psf_e > 0.6:
-            valid_params *= False
-        ### Position angle (in radians) must be on [0, pi]
-        if self.params[0].psf_beta < 0.0 or self.params[0].psf_beta > np.pi:
-            valid_params *= False
+        for pname, dtype in self.params.dtype.descr:
+            if not inbounds(self.params[pname][0], jifparams.k_psf_param_bounds[pname]):
+                valid_params *= False
         return valid_params
 
     def set_mag_from_obs(self, appr_mag, filter_name='r'):

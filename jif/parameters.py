@@ -161,6 +161,25 @@ k_param_vars = {
   "dy": 0.008**2
 }
 
+### Lower, upper bounds on each possible PSF parameter
+k_psf_param_bounds = {
+  "psf_fwhm": (0.1, 2.0), ## in arcseconds
+                          ## Note that very small PSF widths will require large GalSim FFTs
+  "psf_e": (0., 0.6),
+  "psf_beta": (0., np.pi),
+  "psf_mag": (10.0, k_mag_param_minval),
+  "psf_dx": (-10.0, 10.0),
+  "psf_dy": (-10.0, 10.0),
+  "psf_aber_defocus": (-10., 10.),
+  "psf_aber_astig1": (-10., 10.),
+  "psf_aber_astig2": (-10., 10.),
+  "psf_aber_coma1": (-10., 10.),
+  "psf_aber_coma2": (-10., 10.),
+  "psf_aber_trefoil1": (-10., 10.),
+  "psf_aber_trefoil2": (-10., 10.),
+  "psf_aber_spher": (-10., 10.)
+}
+
 def select_psf_paramnames(model_paramnames):
     """
     Given a list of galaxy and PSF model parameter names, select just the PSF

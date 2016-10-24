@@ -57,6 +57,59 @@ class TestGalSimGalaxyModel(unittest.TestCase):
 		gg = jif.GalSimGalaxyModel(psf_model="model")
 		self.assertEqual(gg.psf_model_type, "PSFModel class")
 
+	def test_set_param_by_name(self):
+		gg = jif.GalSimGalaxyModel()
+		## Standard galaxy parameter
+		gg.set_param_by_name('e', 0.4)
+		self.assertAlmostEqual(gg.get_param_by_name('e'), 0.4)
+		## Galaxy ellipticity angle - modulo pi
+		gg.set_param_by_name('beta', 0.1 + 3 * np.pi)
+		self.assertAlmostEqual(gg.get_param_by_name('beta'), 0.1)
+		## PSF parameter
+		gg.set_param_by_name('psf_e', 0.12)
+		self.assertAlmostEqual(gg.get_param_by_name('psf_e'), 0.12)
+		## Set a PSF parameter when using InterpolatedImage PSF
+		psf = galsim.Kolmogorov(fwhm=0.6).drawImage()
+		gg = jif.GalSimGalaxyModel(psf_model=psf)
+		with self.assertRaises(ValueError):
+			gg.set_param_by_name('psf_e', 0.12)
+		with self.assertRaises(ValueError):
+			gg.get_param_by_name('psf_e')
+
+	def test_set_params(self):
+		gg = jif.GalSimGalaxyModel(active_parameters=['e', 'beta', 'psf_fwhm'])
+		self.assertEqual(len(gg.get_params()), 3)
+		p0 = [0.17, 0.1, 0.12]
+		gg.set_params(p0)
+		for i in xrange(len(p0)):
+			self.assertAlmostEqual(gg.get_params()[i], p0[i])
+		p1 = [0.17]
+		with self.assertRaises(AssertionError):
+			gg.set_params(p1)
+		self.assertAlmostEqual(gg.get_psf_params()[0], p0[2])
+		self.assertEqual(len(gg.get_psf_params()), 1)
+
+	def test_validate_params(self):
+		gg = jif.GalSimGalaxyModel(active_parameters=['e', 'beta', 'psf_fwhm'])
+		valid = gg.validate_params()
+		self.assertTrue(valid)
+		## Set some bad galaxy model parameter
+		gg.set_param_by_name('e', 2.0)
+		valid = gg.validate_params()
+		self.assertFalse(valid)
+		gg.set_param_by_name('e', 0.1)
+		## Set a bad PSF model parameter
+		gg.set_param_by_name('psf_fwhm', 20.)
+		valid = gg.validate_params()
+		self.assertFalse(valid)
+
+	def test_get_image(self):
+		## Use all default parameters
+		gg = jif.GalSimGalaxyModel()
+		im = gg.get_image()
+		self.assertAlmostEqual(im.scale, 0.2)
+		rms = np.sqrt(np.sum(im.array.ravel()**2))
+		self.assertAlmostEqual(rms, 31177.847656250)
 
 if __name__ == "__main__":
 	unittest.main()

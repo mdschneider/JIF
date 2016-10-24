@@ -100,22 +100,29 @@ def lsst_noise(random_seed, gain=2.1, read_noise=3.6, sky_level=720.):
                            sky_level=sky_level)
 
 
-def wfirst_noise(random_seed):
+def wfirst_noise(filter_name, image):
     """
     Deprecated in favor of GalSim WFIRST module
 
     From http://wfirst-web.ipac.caltech.edu/wfDepc/visitor/temp1927222740/results.jsp
     """
-    rng = galsim.BaseDeviate(random_seed)
-    exposure_time_s = 150.
-    pixel_scale_arcsec = 0.11
-    read_noise_e_rms = 0.5 #5.
-    sky_background = 3.6e-2 #3.60382E-01 # e-/pix/s
-    gain = galsim.wfirst.gain # e- / ADU
-    return galsim.CCDNoise(rng, gain=gain,
-        read_noise=(read_noise_e_rms / gain) ** 2,
-        sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
-
+    # rng = galsim.BaseDeviate(random_seed)
+    # exposure_time_s = 150.
+    # pixel_scale_arcsec = 0.11
+    # read_noise_e_rms = 0.5 #5.
+    # sky_background = 3.6e-2 #3.60382E-01 # e-/pix/s
+    # gain = galsim.wfirst.gain # e- / ADU
+    # return galsim.CCDNoise(rng, gain=gain,
+    #     read_noise=(read_noise_e_rms / gain) ** 2,
+    #     sky_level=sky_background / pixel_scale_arcsec ** 2 * exposure_time_s)
+    #     
+    #
+    bandpass = None
+    sky_level = telescopes.wfirst_sky_background(filter_name)
+    image += sky_level
+    galsim.wfirst.allDetectorEffects(image)
+    image -= (sky_level + galsim.wfirst.dark_current*galsim.wfirst.exptime) / galsim.wfirst.gain
+    return image
 
 def wfirst_sky_background(filter_name, bandpass):
     """

@@ -104,13 +104,13 @@ class GalSimGalaxyModel(object):
         return None
 
     def _init_model_params(self):
-        ## Separate the galaxy model parameters from the galaxy+PSF parameter names
-        self.active_parameters_galaxy = jifparams.select_galaxy_paramnames(self.active_parameters)        
         ### Set GalSim galaxy model parameters
-        self.params = np.core.records.array(jifparams.k_galparams_defaults[self.galaxy_model],
-            dtype=jifparams.k_galparams_types[self.galaxy_model])
         self.paramtypes = jifparams.k_galparams_types[self.galaxy_model]
+        self.params = np.core.records.array(jifparams.k_galparams_defaults[self.galaxy_model],
+            dtype=self.paramtypes)
         self.paramnames = self.active_parameters
+        ## Separate the galaxy model parameters from the galaxy+PSF parameter names
+        self.active_parameters_galaxy = jifparams.select_galaxy_paramnames(self.active_parameters)
         self.n_params = len(self.active_parameters)
         self.psf_paramnames = jifparams.select_psf_paramnames(self.active_parameters)
         self.n_psf_params = len(self.psf_paramnames)
@@ -149,8 +149,11 @@ class GalSimGalaxyModel(object):
         @param paramname    The name of the galaxy or PSF model parameter to set
         @param value        The value to assign to the model parameter
         """
-        if 'psf' in paramname and self.psf_model_type == "PSFModel class":
-            self.psf_model.params[paramname][0] = value
+        if 'psf' in paramname: 
+            if self.psf_model_type == "PSFModel class":
+                self.psf_model.params[paramname][0] = value
+            else:
+                raise ValueError("Cannot set PSF parameter when PSF is an InterpolatedImage")
         else:
             self.params[paramname][0] = value
             if 'beta' in paramname:
@@ -163,8 +166,11 @@ class GalSimGalaxyModel(object):
 
         Can access 'active' or 'inactive' parameters.
         """
-        if 'psf' in paramname and self.psf_model_type == "PSFModel class":
-            p = self.psf_model.params[paramname][0]
+        if 'psf' in paramname:
+            if self.psf_model_type == "PSFModel class":
+                p = self.psf_model.params[paramname][0]
+            else:
+                raise ValueError("Cannot get PSF parameter when PSF is an InterpolatedImage")
         else:
             p = self.params[paramname][0]
         return p
@@ -185,6 +191,7 @@ class GalSimGalaxyModel(object):
 
         @param p    A list or array of galaxy (and PSF) model parameter values
         """
+        assert len(p) >= self.n_params
         for ip, pname in enumerate(self.active_parameters_galaxy):
             self.params[pname][0] = p[ip]
             # if 'mag_sed' in pname:
@@ -212,13 +219,10 @@ class GalSimGalaxyModel(object):
             psf_active_params = self.psf_model.get_params()
             if len(psf_active_params) > 0:
                 p = np.append(p, self.psf_model.get_params())
-        ### Transform fluxes to ln(Flux) for MCMC sampling
+        ### Transform parameters for sampling
         for ip, pname in enumerate(self.active_parameters):
             if 'beta' in pname:
-                # p[ip] = jifparams.wrap_ellipticity_phase(p[ip])
                 p[ip] = np.mod(p[ip], np.pi)
-            # if 'flux_sed' in pname:
-            #     p[ip] = np.log(p[ip])
         return p
 
     def get_psf_params(self):
@@ -243,56 +247,9 @@ class GalSimGalaxyModel(object):
             return p >= b[0] and p<= b[1]
 
         valid_params = True
-        ### ===================================================================
-        ### Parameters common to 'Sersic' and 'Spergel' parameterizations
-        if self.galaxy_model == "Sersic" or self.galaxy_model == "Spergel":
-            ### Redshift must be positive and less than a large value
-            if not inbounds(self.params[0].redshift, jifparams.k_param_bounds['redshift']):
-                # print "Invalid redshift: ", self.params[0].redshift
+        for pname, dtype in self.params.dtype.descr:
+            if not inbounds(self.params[pname][0], jifparams.k_param_bounds[pname]):
                 valid_params *= False
-            ### Ellipticity must be on [0, 1 - eps]
-            if not inbounds(self.params[0].e, jifparams.k_param_bounds['e']):
-                # print "Invalid e: ", self.params[0].e
-                valid_params *= False
-            ### Half-light radius must be positive and less than a large value
-            ### (Large value here assumed in arcseconds)
-            if not inbounds(self.params[0].hlr, jifparams.k_param_bounds['hlr']):
-                # print "Invalid hlr: ",self.params[0].hlr
-                valid_params *= False
-            ### Position angle (in radians) must be on [0, pi]
-            if not inbounds(self.params[0].beta, jifparams.k_param_bounds['beta']):
-                # print "Invalid beta: ",self.params[0].beta
-                valid_params *= False
-            # ### Flux must be strictly positive
-            # for i in xrange(len(k_SED_names)):
-            #     if self.params[0]['flux_sed{:d}'.format(i+1)] <= 0.:
-            #         valid_params *= False
-            ### Put a hard bound on the position parameters to avoid absurd
-            ### translations of the galaxy
-            if not inbounds(self.params[0].dx, jifparams.k_param_bounds['dx']):
-                # print "Invalid dx: ", self.params[0].dx
-                valid_params *= False
-            if not inbounds(self.params[0].dy, jifparams.k_param_bounds['dy']):
-                # print "Invalid dy: ", self.params[0].dy
-                valid_params *= False
-        ### ===================================================================
-        if self.galaxy_model == "Spergel":
-            if not inbounds(self.params[0].nu, jifparams.k_param_bounds['nu']):
-                # print "Invalid nu: ", self.params[0].nu
-                valid_params *= False
-        ### ===================================================================
-        elif self.galaxy_model == "BulgeDisk":
-            if (self.params[0].e_bulge < 0. or self.params[0].e_bulge > 1. or
-                self.params[0].e_disk < 0. or self.params[0].e_disk > 1.):
-                valid_params *= False
-            if (self.params[0].nu_bulge < -0.6 or self.params[0].nu_bulge > 055 or
-                self.params[0].nu_disk < -0.6 or self.params[0].nu_disk > 0.55):
-                valid_params *= False
-            # for i in xrange(len(k_SED_names)):
-            #     if self.params[0]['flux_sed{:d}_bulge'.format(i+1)] <= 0.:
-            #         valid_params *= False
-            #     if self.params[0]['flux_sed{:d}_disk'.format(i+1)] <= 0.:
-            #         valid_params *= False
         if self.psf_model_type == "PSFModel class":
             valid_params *= self.psf_model.validate_params()
         return valid_params
@@ -316,7 +273,7 @@ class GalSimGalaxyModel(object):
             raise AttributeError("Invalid PSF model type name")
         return psf
 
-    def get_image(self, out_image=None, add_noise=False, gain=1.0, snr=None):
+    def get_image(self, filter_name='r', out_image=None, add_noise=False, gain=1.0, snr=None):
         if self.galaxy_model == "star":
             return self.get_psf_image(filter_name=filter_name,out_image=out_image, gain=gain)
 
@@ -324,13 +281,11 @@ class GalSimGalaxyModel(object):
             if self.galaxy_model == "Spergel":
                 gal = galsim.Spergel(nu=self.params[0].nu,
                     half_light_radius=self.params[0].hlr,
-                    flux=1.0,
-                    gsparams=self.gsparams)
+                    flux=1.0, gsparams=self.gsparams)
             else:
                 gal = galsim.Sersic(n=self.params[0].n,
                     half_light_radius=self.params[0].hlr,
-                    flux=1.0,
-                    gsparams=self.gsparams)
+                    flux=1.0, gsparams=self.gsparams)
             flux = jifparams.flux_from_AB_mag(self.params[0].mag_sed1)
             gal = gal.withFlux(flux)
             gal_shape = galsim.Shear(g=self.params[0].e,
@@ -379,14 +334,15 @@ class GalSimGalaxyModel(object):
         # print "GG gain: {:8.6f}".format(gain)
 
         try:
-            image = final.drawImage(image=out_image, scale=self.pixel_scale,
+            image = final.drawImage(image=out_image, scale=self.pixel_scale_arcsec,
                 gain=gain, add_to_image=False, method='fft')
             if add_noise:
                 if self.telescope_name == "WFIRST":
-                    sky_level = telescopes.wfirst_sky_background(filter_name, self.filters[filter_name])
-                    image += sky_level
-                    galsim.wfirst.allDetectorEffects(image)
-                    image -= (sky_level + galsim.wfirst.dark_current*galsim.wfirst.exptime) / galsim.wfirst.gain
+                    # sky_level = telescopes.wfirst_sky_background(filter_name, self.filters[filter_name])
+                    # image += sky_level
+                    # galsim.wfirst.allDetectorEffects(image)
+                    # image -= (sky_level + galsim.wfirst.dark_current*galsim.wfirst.exptime) / galsim.wfirst.gain
+                    image = telescopes.wfirst_noise(filter_name, image)
                 else:
                     if self.noise is not None:
                         if snr is None:
