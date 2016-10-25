@@ -58,10 +58,10 @@ def make_param_config(cfg_name, shear):
     Config.add_section('parameters')
     Config.set('parameters', 'redshift', 1.0)
     Config.set('parameters', 'nu', 0.3)
-    Config.set('parameters', 'hlr', 1.2)
+    Config.set('parameters', 'hlr', 1.4)
     Config.set('parameters', 'e', e)
     Config.set('parameters', 'beta', beta)
-    Config.set('parameters', 'mag_sed1', 25)
+    Config.set('parameters', 'mag_sed1', 26)
     Config.set('parameters', 'dx', 0.0)
     Config.set('parameters', 'dy', 0.0)
 

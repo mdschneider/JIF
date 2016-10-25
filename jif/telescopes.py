@@ -85,7 +85,7 @@ k_sdss_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,
 # k_wfirst_filter_names = k_lsst_filter_names
 # k_wfirst_filter_central_wavelengths = k_lsst_filter_central_wavelengths
 
-def lsst_noise(random_seed, gain=2.1, read_noise=3.6, sky_level=720.):
+def lsst_noise(random_seed, gain=1.0, read_noise=3.6, sky_level=720.):
     """
     See GalSim/examples/lsst.yaml
 

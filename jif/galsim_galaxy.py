@@ -101,6 +101,7 @@ class GalSimGalaxyModel(object):
     def _init_telescope(self):
         tel = telescopes.k_telescopes[self.telescope_model]
         self.pixel_scale_arcsec = tel['pixel_scale']
+        self.gain = tel['gain']
         return None
 
     def _init_model_params(self):
@@ -273,9 +274,9 @@ class GalSimGalaxyModel(object):
             raise AttributeError("Invalid PSF model type name")
         return psf
 
-    def get_image(self, filter_name='r', out_image=None, add_noise=False, gain=1.0, snr=None):
+    def get_image(self, filter_name='r', out_image=None):
         if self.galaxy_model == "star":
-            return self.get_psf_image(filter_name=filter_name,out_image=out_image, gain=gain)
+            return self.get_psf_image(filter_name=filter_name, out_image=out_image, gain=self.gain)
 
         elif self.galaxy_model in ["Spergel", "Sersic"]:
             if self.galaxy_model == "Spergel":
@@ -335,29 +336,14 @@ class GalSimGalaxyModel(object):
 
         try:
             image = final.drawImage(image=out_image, scale=self.pixel_scale_arcsec,
-                gain=gain, add_to_image=False, method='fft')
-            if add_noise:
-                if self.telescope_name == "WFIRST":
-                    # sky_level = telescopes.wfirst_sky_background(filter_name, self.filters[filter_name])
-                    # image += sky_level
-                    # galsim.wfirst.allDetectorEffects(image)
-                    # image -= (sky_level + galsim.wfirst.dark_current*galsim.wfirst.exptime) / galsim.wfirst.gain
-                    image = telescopes.wfirst_noise(filter_name, image)
-                else:
-                    if self.noise is not None:
-                        if snr is None:
-                            image.addNoise(self.noise)
-                        else:
-                            image.addNoiseSNR(self.noise, snr=snr)
-                    else:
-                        raise AttributeError("A GalSim noise model must be specified to add noise to an image.")
+                gain=self.gain, add_to_image=False, method='fft')
         except RuntimeError:
             print "Trying to make an image that's too big."
             print self.get_params()
             image = None
         return image
 
-    def get_psf_image(self, filter_name='r', ngrid=None, out_image=None, gain=1.0, add_noise=False):
+    def get_psf_image(self, filter_name='r', ngrid=None, out_image=None):
         psf = self.get_psf(filter_name)
         if self.psf_model_type == 'InterpolatedImage':
             image = psf
@@ -365,9 +351,8 @@ class GalSimGalaxyModel(object):
             image = self.psf_model.get_psf_image(filter_name=filter_name, out_image=out_image,
                                                  ngrid=ngrid, 
                                                  pixel_scale_arcsec=self.pixel_scale_arcsec,
-                                                 gain=gain, normalize_flux=True)
-            if add_noise:
-                image.addNoise(self.noise)
+                                                 gain=self.gain, 
+                                                 normalize_flux=True)
         else:
             raise AttributeError("Invalid PSF model type")
         return image
@@ -382,14 +367,16 @@ class GalSimGalaxyModel(object):
         image_epsf.write(file_name)
         return None
 
-    def plot_image(self, file_name, ngrid=None, filter_name='r', title=None):
+    def plot_image(self, file_name, ngrid=None, filter_name='r', title=None, noise=None):
         import matplotlib.pyplot as plt
         if ngrid is not None:
             out_image = galsim.Image(ngrid, ngrid)
         else:
             out_image = None
 
-        im = self.get_image(out_image, add_noise=True, filter_name=filter_name)
+        im = self.get_image(out_image=out_image, filter_name=filter_name)
+        if noise is not None:
+            im.addNoise(noise)
         print "Image rms: ", np.sqrt(np.var(im.array.ravel()))
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
@@ -397,7 +384,7 @@ class GalSimGalaxyModel(object):
         im = ax.imshow(im.array,
             cmap=plt.get_cmap('pink'), origin='lower',
             interpolation='none',
-            extent=[0, ngrid*self.pixel_scale, 0, ngrid*self.pixel_scale])
+            extent=[0, ngrid*self.pixel_scale_arcsec, 0, ngrid*self.pixel_scale_arcsec])
         ax.set_xlabel(r"Detector $x$-axis (arcsec.)")
         ax.set_ylabel(r"Detector $y$-axis (arcsec.)")
         if title is not None:
@@ -407,14 +394,16 @@ class GalSimGalaxyModel(object):
         fig.savefig(file_name)
         return None
 
-    def plot_psf(self, file_name, ngrid=None, title=None, filter_name='r', add_noise=False):
+    def plot_psf(self, file_name, ngrid=None, title=None, filter_name='r', noise=None):
         import matplotlib.pyplot as plt
         psf = self.get_psf(filter_name)
         if ngrid is None:
             ngrid = 32
         # image_epsf = psf.drawImage(image=None,
         #     scale=self.pixel_scale, nx=ngrid, ny=ngrid)
-        image_epsf = self.get_psf_image(ngrid=ngrid, add_noise=add_noise, filter_name=filter_name)
+        image_epsf = self.get_psf_image(ngrid=ngrid, filter_name=filter_name)
+        if noise is not None:
+            image_epsf.addNoise(noise)
         ###
         fig = plt.figure(figsize=(8, 8), dpi=100)
         ax = fig.add_subplot(1,1,1)
@@ -422,7 +411,7 @@ class GalSimGalaxyModel(object):
         im = ax.imshow(image_epsf.array,
             cmap=plt.get_cmap('pink'), origin='lower',
             interpolation='none',
-            extent=[0, ngx*self.pixel_scale, 0, ngy*self.pixel_scale])
+            extent=[0, ngx*self.pixel_scale_arcsec, 0, ngy*self.pixel_scale_arcsec])
         ax.set_xlabel(r"Detector $x$-axis (arcsec.)")
         ax.set_ylabel(r"Detector $y$-axis (arcsec.)")
         if title is not None:
@@ -433,7 +422,7 @@ class GalSimGalaxyModel(object):
         return None
 
     def get_moments(self, add_noise=True):
-        results = self.get_image(add_noise=add_noise).FindAdaptiveMom()
+        results = self.get_image().FindAdaptiveMom()
         print 'HSM reports that the image has observed shape and size:'
         print '    e1 = %.3f, e2 = %.3f, sigma = %.3f (pixels)' % (results.observed_shape.e1,
                     results.observed_shape.e2, results.moments_sigma)
@@ -876,16 +865,22 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
 
     # LSST
     print("\n----- LSST -----")
-    lsst = GalSimGalaxyModel(
-        telescope_name="LSST",
-        pixel_scale_arcsec=telescopes.k_telescopes['LSST']['pixel_scale'],
-        noise=telescopes.lsst_noise(82357),
-        galaxy_model=galaxy_model,
-        primary_diam_meters=8.4,
-        filter_names=telescopes.k_lsst_filter_names,
-        filter_wavelength_scale=1.0,
-        atmosphere=True,
-        achromatic_galaxy=achromatic_galaxy)
+    lsst = GalSimGalaxyModel(galaxy_model="Spergel",
+        telescope_model="LSST",
+        psf_model="Model",
+        active_parameters=[])
+
+    lsst.set_param_by_name('redshift', 1.0)
+    lsst.set_param_by_name('nu', 0.3)
+    lsst.set_param_by_name('hlr', 1.0)
+    lsst.set_param_by_name('e', 0.26)
+    lsst.set_param_by_name('beta', 0.5236)
+    lsst.set_param_by_name('mag_sed1', 28.5)
+    lsst.set_param_by_name('dx', 0.7)
+    lsst.set_param_by_name('dy', -0.3)
+    lsst.set_param_by_name('psf_fwhm', 0.6)
+
+    lsst_noise = telescopes.lsst_noise(random_seed=15983217)
 
     # Save the image
     lsst.save_image("../data/TestData/test_lsst_image" + file_lab + ".fits",
@@ -893,55 +888,24 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
         out_image=galsim.Image(ngrid_lsst, ngrid_lsst))
     lsst.plot_image("../data/TestData/test_lsst_image" + file_lab + ".png",
         ngrid=ngrid_lsst,
-        filter_name=filter_name_ground, title="LSST " + filter_name_ground)
+        filter_name=filter_name_ground, title="LSST " + filter_name_ground,
+        noise=lsst_noise)
     # Save the corresponding PSF
     lsst.save_psf("../data/TestData/test_lsst_psf" + file_lab + ".fits",
-        ngrid=ngrid_lsst/4, filter_name=filter_name_ground)
+        ngrid=ngrid_lsst/2, filter_name=filter_name_ground)
     lsst.plot_psf("../data/TestData/test_lsst_psf" + file_lab + ".png",
-        ngrid=ngrid_lsst/4, title="LSST " + filter_name_ground,
-        filter_name=filter_name_ground)
+        ngrid=ngrid_lsst/2, title="LSST " + filter_name_ground,
+        filter_name=filter_name_ground,
+        noise=None)
 
-    # WFIRST
-    print("\n----- WFIRST -----")
-    wfirst = GalSimGalaxyModel(
-        telescope_name="WFIRST",
-        pixel_scale_arcsec=telescopes.k_telescopes['WFIRST']['pixel_scale'],
-        noise=telescopes.wfirst_noise(82357),
-        galaxy_model=galaxy_model,
-        primary_diam_meters=galsim.wfirst.diameter,
-        filter_names=telescopes.k_wfirst_filter_names,
-        filter_wavelength_scale=1.0, #1.0e3, # convert from micrometers to nanometers
-        atmosphere=False,
-        achromatic_galaxy=achromatic_galaxy)
+    lsst_data = lsst.get_image(out_image=galsim.Image(ngrid_lsst, ngrid_lsst), 
+                               filter_name=filter_name_ground)
+    lsst_data.addNoise(lsst_noise)
 
-    if not achromatic_galaxy:
-        print("LSST AB magnitude:   {:5.4f}".format(lsst.get_magnitude(filter_name_ground)))
-        print("LSST flux:   {:5.4f}".format(lsst.get_flux(filter_name_ground)))
-
-        print("WFIRST AB magnitude: {:5.4f}".format(wfirst.get_magnitude(filter_name_space)))
-        print("WFIRST flux: {:5.4f}".format(wfirst.get_flux(filter_name_space)))
-
-    ngrid_wfirst = np.ceil(ngrid_lsst * lsst.pixel_scale / wfirst.pixel_scale) #128
-
-    # Save the image
-    wfirst.save_image("../data/TestData/test_wfirst_image" + file_lab + ".fits",
-        filter_name=filter_name_space, out_image=galsim.Image(ngrid_wfirst, ngrid_wfirst))
-    wfirst.plot_image("../data/TestData/test_wfirst_image" + file_lab + ".png", ngrid=ngrid_wfirst,
-        filter_name=filter_name_space, title="WFIRST " + filter_name_space)
-    # Save the corresponding PSF
-    wfirst.save_psf("../data/TestData/test_wfirst_psf" + file_lab + ".fits",
-        ngrid=ngrid_wfirst/4, filter_name=filter_name_space)
-    wfirst.plot_psf("../data/TestData/test_wfirst_psf" + file_lab + ".png",
-        ngrid=ngrid_wfirst/4, title="WFIRST " + filter_name_space,
-        filter_name=filter_name_space)
-
-    lsst_data = lsst.get_image(galsim.Image(ngrid_lsst, ngrid_lsst), add_noise=True,
-        filter_name=filter_name_ground).array
-    # wfirst_data = wfirst.get_image(galsim.Image(ngrid_wfirst, ngrid_wfirst), add_noise=True,
-        # filter_name=filter_name_space).array
+    print "noise rms: {:12.10g}".format(np.sqrt(lsst_noise.getVariance()))
 
     # -------------------------------------------------------------------------
-    ### Save a file with joint image data for input to the Roaster
+    ### Save a file with image data for input to the Roaster
     segfile = os.path.join(os.path.dirname(__file__),
         '../data/TestData/test_image_data' + file_lab + '.h5')
     print("Writing {}".format(segfile))
@@ -955,35 +919,23 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
     dummy_background = 0.0
 
     ### Ground data
-    seg.save_images([lsst_data], [lsst.noise.getVariance()], [dummy_mask],
+    seg.save_images([lsst_data.array], [lsst_noise.getVariance()], [dummy_mask],
         [dummy_background], segment_index=seg_ndx,
         telescope='lsst',
         filter_name=filter_name_ground)
+    tel = telescopes.k_telescopes["LSST"]
     seg.save_tel_metadata(telescope='lsst',
-        primary_diam=lsst.primary_diam_meters,
-        pixel_scale_arcsec=lsst.pixel_scale,
-        atmosphere=lsst.atmosphere)
-    seg.save_psf_images([lsst.get_psf_image(filter_name_ground).array],
+        primary_diam=tel['primary_diam_meters'],
+        pixel_scale_arcsec=tel['pixel_scale'],
+        atmosphere=tel['atmosphere'])
+    seg.save_psf_images([lsst.get_psf_image(filter_name_ground, ngrid=64).array],
         segment_index=seg_ndx,
         telescope='lsst',
         filter_name=filter_name_ground)
-    save_bandpasses_to_segment(seg, lsst, telescopes.k_lsst_filter_names, "LSST")
+    # save_bandpasses_to_segment(seg, lsst, telescopes.k_lsst_filter_names, "LSST")
 
-    # ### Space data
-    # seg.save_images([wfirst_data], [wfirst.noise.getVariance()], [dummy_mask],
-    #     [dummy_background], segment_index=seg_ndx,
-    #     telescope='wfirst',
-    #     filter_name=filter_name_space)
-    # seg.save_tel_metadata(telescope='wfirst',
-    #     primary_diam=wfirst.primary_diam_meters,
-    #     pixel_scale_arcsec=wfirst.pixel_scale,
-    #     atmosphere=wfirst.atmosphere)
-    # seg.save_psf_images([wfirst.get_psf_image(filter_name_space).array], segment_index=seg_ndx,
-    #     telescope='wfirst',
-    #     filter_name=filter_name_space)
-    # save_bandpasses_to_segment(seg, wfirst, telescopes.k_wfirst_filter_names, "WFIRST", scale=1)
+    return None
 
-    # -------------------------------------------------------------------------
 
 def make_blended_test_image(num_sources=3, random_seed=75256611, 
                             galaxy_model="Spergel", achromatic_galaxy=True):
@@ -1035,7 +987,7 @@ def make_blended_test_image(num_sources=3, random_seed=75256611,
 
         # src_model.set_params(p)
 
-        gal_image = src_model.get_image(sub_image, filter_name=filter_name)
+        gal_image = src_model.get_image(out_image=sub_image, filter_name=filter_name)
 
         ix = int(math.floor(x_gal[isrcs]+0.5))
         iy = int(math.floor(y_gal[isrcs]+0.5))

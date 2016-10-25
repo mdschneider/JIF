@@ -499,7 +499,7 @@ class Roaster(object):
             lnp = -np.inf
         return lnp
 
-    def _get_model_image(self, iepochs, add_noise=False):
+    def _get_model_image(self, iepochs):
         """
         Create a galsim.Image from the source model(s) for epcoh iepochs
         """
@@ -513,7 +513,7 @@ class Roaster(object):
             # print "Roaster model parameters:", self.src_models[isrcs][iepochs].params            
             sub_image = galsim.Image(nx, ny, init_value=0.)
             model = self.src_models[isrcs][iepochs].get_image(out_image=sub_image,
-                filter_name=self.filter_names[iepochs], add_noise=add_noise)
+                filter_name=self.filter_names[iepochs])
             ix = nx/2
             iy = ny/2
             # print isrcs, ix, iy, nx, ny
@@ -970,7 +970,7 @@ def save_model_image(args, roaster):
     """
     epoch_num = 0 # FIXME: loop over this index
 
-    model_image = roaster._get_model_image(iepochs=epoch_num, add_noise=False)
+    model_image = roaster._get_model_image(iepochs=epoch_num)
 
     dat = roaster.pixel_data[epoch_num]
     mdat = model_image.array
@@ -1108,8 +1108,8 @@ def InitRoaster(args):
 
     ### Set galaxy priors
     if args.galaxy_model_type == "Spergel":
-        lnprior_omega = DefaultPriorSpergel()
-        # lnprior_omega = EmptyPrior()
+        # lnprior_omega = DefaultPriorSpergel()
+        lnprior_omega = EmptyPrior()
     elif args.galaxy_model_type == "BulgeDisk":
         lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
     else:

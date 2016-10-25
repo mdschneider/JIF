@@ -97,9 +97,9 @@ k_galparams_defaults = {
     "Spergel": [(1.,                    # redshift
                  0.3,                   # nu
                  1.0,                   # hlr
-                 0.1,                   # e
-                 np.pi/6,               # beta
-                 26.,                   # mag_sed1
+                 0.26,                  # e
+                 0.5236,                # beta
+                 28.5,                  # mag_sed1
                  k_mag_param_minval,    # mag_sed2
                  k_mag_param_minval,    # mag_sed3
                  k_mag_param_minval,    # mag_sed4
