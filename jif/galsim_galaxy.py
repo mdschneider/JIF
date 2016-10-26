@@ -74,13 +74,15 @@ class GalSimGalaxyModel(object):
                  galaxy_model="Spergel",
                  telescope_model="LSST",
                  psf_model='Model',
-                 active_parameters=['e', 'beta']):
+                 active_parameters=['e', 'beta'],
+                 filter_name='r'):
         assert galaxy_model in ['star', 'Spergel', 'Sersic', 'BulgeDisk']
         assert telescope_model in telescopes.k_telescopes.keys()
         self.galaxy_model = galaxy_model
         self.telescope_model = telescope_model
         self.psf_model = psf_model
         self.active_parameters = active_parameters
+        self.filter_name = filter_name
 
         self._init_gs_params()
         self._init_telescope()
@@ -89,13 +91,7 @@ class GalSimGalaxyModel(object):
         return None
 
     def _init_gs_params(self):
-        self.gsparams = galsim.GSParams(
-            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
-            maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
-            xvalue_accuracy=1.e-1,   # approximations in real space aim to be this accurate
-            kvalue_accuracy=1.e-1,   # approximations in fourier space aim to be this accurate
-            shoot_accuracy=1.e-1,    # approximations in photon shooting aim to be this accurate
-            minimum_fft_size=16)     # minimum size of ffts
+        self.gsparams = jifparams.k_default_gsparams
         return None
 
     def _init_telescope(self):
@@ -129,8 +125,10 @@ class GalSimGalaxyModel(object):
         else:
             self.psf_model_type = 'PSFModel class'
             if not isinstance(self.psf_model, pm.PSFModel):
+                lam_over_diam = telescopes.tel_lam_over_diam(self.telescope_model, self.filter_name)
                 self.psf_model = pm.PSFModel(active_parameters=self.psf_paramnames,
                                              gsparams=self.gsparams,
+                                             lam_over_diam=lam_over_diam,
                                              telescope=self.telescope_model,
                                              achromatic=True)
             else:
@@ -255,7 +253,7 @@ class GalSimGalaxyModel(object):
             valid_params *= self.psf_model.validate_params()
         return valid_params
 
-    def get_psf(self, filter_name='r'):
+    def get_psf(self):
         """
         Get the PSF as a `GSObject` for use in GalSim image rendering or
         convolutions
@@ -274,9 +272,10 @@ class GalSimGalaxyModel(object):
             raise AttributeError("Invalid PSF model type name")
         return psf
 
-    def get_image(self, filter_name='r', out_image=None):
+    def get_image(self, out_image=None):
         if self.galaxy_model == "star":
-            return self.get_psf_image(filter_name=filter_name, out_image=out_image, gain=self.gain)
+            return self.get_psf_image(filter_name=self.filter_name, 
+                out_image=out_image, gain=self.gain)
 
         elif self.galaxy_model in ["Spergel", "Sersic"]:
             if self.galaxy_model == "Spergel":
@@ -326,7 +325,7 @@ class GalSimGalaxyModel(object):
             raise AttributeError("Unimplemented galaxy model")
         # print "GG gal flux: {:12.10g}".format(gal.getFlux())
         # print "GG PSF HLR: {:12.10g}".format(self.get_psf(filter_name).calculateHLR())
-        final = galsim.Convolve([gal, self.get_psf(filter_name)])
+        final = galsim.Convolve([gal, self.get_psf()])
         # print "GG final flux: {:12.10g}".format(final.getFlux())
         # print "GG hlr: {:12.10g}".format(final.calculateHLR())
         # wcs = galsim.PixelScale(self.pixel_scale)'
@@ -343,12 +342,12 @@ class GalSimGalaxyModel(object):
             image = None
         return image
 
-    def get_psf_image(self, filter_name='r', ngrid=None, out_image=None):
-        psf = self.get_psf(filter_name)
+    def get_psf_image(self, ngrid=None, out_image=None):
+        psf = self.get_psf()
         if self.psf_model_type == 'InterpolatedImage':
             image = psf
         elif self.psf_model_type == 'PSFModel class':
-            image = self.psf_model.get_psf_image(filter_name=filter_name, out_image=out_image,
+            image = self.psf_model.get_psf_image(out_image=out_image,
                                                  ngrid=ngrid, 
                                                  pixel_scale_arcsec=self.pixel_scale_arcsec,
                                                  gain=self.gain, 
@@ -357,24 +356,58 @@ class GalSimGalaxyModel(object):
             raise AttributeError("Invalid PSF model type")
         return image
 
-    def save_image(self, file_name, out_image=None, filter_name='r'):
-        image = self.get_image(filter_name=filter_name, out_image=out_image)
+    def save_footprint(self, outfile, noise=None):
+        """
+        Write image and metadata to the JIF HDF5 'Footprints' file format
+        """
+        seg = footprints.Footprints(outfile)
+        seg_ndx = 0
+        
+        src_catalog = self.params
+        seg.save_source_catalog(src_catalog, segment_index=seg_ndx)
+
+        dummy_mask = 1.0
+        dummy_background = 0.0
+
+        im = self.get_image()
+
+        noise_var = 1.e-9
+        if noise is not None:
+            im.addNoise(noise)
+            noise_var = noise.getVariance()
+
+        seg.save_images([im.array], [noise_var], [dummy_mask], [dummy_background],
+            segment_index=seg_ndx, telescope=self.telescope_model,
+            filter_name=self.filter_name)
+        tel = telescopes.k_telescopes[self.telescope_model]
+        seg.save_tel_metadata(telescope=self.telescope_model.lower(),
+            primary_diam=tel['primary_diam_meters'],
+            pixel_scale_arcsec=tel['pixel_scale'],
+            atmosphere=tel['atmosphere'])
+        seg.save_psf_images([self.get_psf_image(ngrid=64).array],
+            segment_index=seg_ndx,
+            telescope=self.telescope_model.lower(),
+            filter_name=self.filter_name)
+        return None
+
+    def save_image(self, file_name, out_image=None):
+        image = self.get_image(out_image=out_image)
         image.write(file_name)
         return None
 
-    def save_psf(self, file_name, ngrid=None, filter_name='r'):
-        image_epsf = self.get_psf_image(filter_name, ngrid)
+    def save_psf(self, file_name, ngrid=None):
+        image_epsf = self.get_psf_image(ngrid)
         image_epsf.write(file_name)
         return None
 
-    def plot_image(self, file_name, ngrid=None, filter_name='r', title=None, noise=None):
+    def plot_image(self, file_name, ngrid=None, title=None, noise=None):
         import matplotlib.pyplot as plt
         if ngrid is not None:
             out_image = galsim.Image(ngrid, ngrid)
         else:
             out_image = None
 
-        im = self.get_image(out_image=out_image, filter_name=filter_name)
+        im = self.get_image(out_image=out_image)
         if noise is not None:
             im.addNoise(noise)
         print "Image rms: ", np.sqrt(np.var(im.array.ravel()))
@@ -394,14 +427,14 @@ class GalSimGalaxyModel(object):
         fig.savefig(file_name)
         return None
 
-    def plot_psf(self, file_name, ngrid=None, title=None, filter_name='r', noise=None):
+    def plot_psf(self, file_name, ngrid=None, title=None, noise=None):
         import matplotlib.pyplot as plt
-        psf = self.get_psf(filter_name)
+        psf = self.get_psf()
         if ngrid is None:
             ngrid = 32
         # image_epsf = psf.drawImage(image=None,
         #     scale=self.pixel_scale, nx=ngrid, ny=ngrid)
-        image_epsf = self.get_psf_image(ngrid=ngrid, filter_name=filter_name)
+        image_epsf = self.get_psf_image(ngrid=ngrid)
         if noise is not None:
             image_epsf.addNoise(noise)
         ###
@@ -850,7 +883,18 @@ def save_bandpasses_to_segment(seg, gg, filter_names, telescope_name="LSST", sca
     return None
 
 
-def make_test_images(filter_name_ground='r', filter_name_space='F184',
+def make_test_image():
+    gg = GalSimGalaxyModel()
+    noise = telescopes.lsst_noise(random_seed=589798326)
+    ###
+    segfile = os.path.join(os.path.dirname(__file__),
+        '../data/TestData/test_image_data.h5')
+    print("Writing {}".format(segfile))
+    gg.save_footprint(segfile, noise=noise)
+    return None
+
+
+def make_lsst_images(filter_name_ground='r', filter_name_space='F184',
                      file_lab='', galaxy_model="Spergel",
                      achromatic_galaxy=False):
     """
@@ -907,7 +951,7 @@ def make_test_images(filter_name_ground='r', filter_name_space='F184',
     # -------------------------------------------------------------------------
     ### Save a file with image data for input to the Roaster
     segfile = os.path.join(os.path.dirname(__file__),
-        '../data/TestData/test_image_data' + file_lab + '.h5')
+        '../data/TestData/test_lsst_data' + file_lab + '.h5')
     print("Writing {}".format(segfile))
     seg = footprints.Footprints(segfile)
 
@@ -1012,5 +1056,5 @@ def make_blended_test_image(num_sources=3, random_seed=75256611,
 
 
 if __name__ == "__main__":
-    make_test_images(achromatic_galaxy=True)
+    make_test_image()
     # make_blended_test_image(num_sources=2)

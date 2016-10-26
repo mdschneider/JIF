@@ -6,6 +6,15 @@ parameters.py
 Image model parameters as numpy ndarrays
 """
 import numpy as np
+import galsim
+
+k_default_gsparams = galsim.GSParams(
+            folding_threshold=1.e-1, # maximum fractional flux that may be folded around edge of FFT
+            maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
+            xvalue_accuracy=1.e-1,   # approximations in real space aim to be this accurate
+            kvalue_accuracy=1.e-1,   # approximations in fourier space aim to be this accurate
+            shoot_accuracy=1.e-1,    # approximations in photon shooting aim to be this accurate
+            minimum_fft_size=16)     # minimum size of ffts
 
 ### These SEDs do not go to long enough wavelengths for WFIRST bands
 # k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']

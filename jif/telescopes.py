@@ -81,6 +81,11 @@ k_sdss_filter_names = 'ugriz'
 k_sdss_filter_central_wavelengths = {'u':360., 'g':500., 'r':620., 'i':750.,
                                      'z':880.}
 
+def tel_lam_over_diam(tel_name="LSST", filter_name='r'):
+    tel_model = k_telescopes[tel_name]
+    return (tel_model["filter_central_wavelengths"][filter_name] * 1e-9 /
+            tel_model["primary_diam_meters"]) * 180*3600/np.pi
+
 ### TESTING
 # k_wfirst_filter_names = k_lsst_filter_names
 # k_wfirst_filter_central_wavelengths = k_lsst_filter_central_wavelengths

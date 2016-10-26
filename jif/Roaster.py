@@ -258,9 +258,7 @@ class Roaster(object):
                             have_bandpasses = False
                             self.filters = None
 
-                        tel_model = jiftel.k_telescopes[tel]
-                        lam_over_diam = (tel_model["filter_central_wavelengths"][filter_name] * 1e-9 /
-                                         tel_model["primary_diam_meters"]) * 180*3600/np.pi
+                        lam_over_diam = jiftel.tel_lam_over_diam(tel, filter_name)
                         print "lam_over_diam: {:5.4g} (arcseconds)".format(lam_over_diam)
 
                         h = 'Footprints/seg{:d}/{}/{}'.format(segment, tel.lower(), filter_name)
@@ -286,7 +284,7 @@ class Roaster(object):
                                     telescope=self.telescope,
                                     achromatic=self.achromatic_galaxy,
                                     lam_over_diam=lam_over_diam,
-                                    gsparams=None))
+                                    gsparams=jifparams.k_default_gsparams))
                             elif use_PSFModel:
                                 psf_types.append('PSFModel class')
                                 psfs.append(pm.PSFModel(
@@ -294,7 +292,7 @@ class Roaster(object):
                                     telescope=self.telescope,
                                     achromatic=self.achromatic_galaxy,
                                     lam_over_diam=lam_over_diam,
-                                    gsparams=None))
+                                    gsparams=jifparams.k_default_gsparams))
                             else:
                                 psf_types.append(seg.attrs['psf_type'])
                                 psfs.append(galsim.Image(seg['psf'][...]))
@@ -333,29 +331,25 @@ class Roaster(object):
             if self.debug:
                 print "nx, ny, i:", self.nx[i], self.ny[i], i
                 print "tel_name:", tel_names[i]
-                print "pixel_scale (arcsec):", pixel_scales[i]
-                print "primary_diam (m):", primary_diams[i]
-                print "atmosphere:", atmospheres[i]
 
         logging.debug("<Roaster> num_epochs: {:d}, num_sources: {:d}".format(
             self.num_epochs, self.num_sources))
         print "Active parameters: ", self.model_paramnames
 
-        self._init_galaxy_models(nimages, tel_names, pixel_scales,
-                                 primary_diams, atmospheres, psfs)
+        self._init_galaxy_models(nimages, tel_names, psfs)
         logging.debug("<Roaster> Finished loading data")
         if self.debug:
             print "\npixel data shapes:", [dat.shape for dat in self.pixel_data]
         return None
 
-    def _init_galaxy_models(self, nimages, tel_names, pixel_scales, 
-                            primary_diams, atmospheres, psfs):
+    def _init_galaxy_models(self, nimages, tel_names, psfs):
         self.src_models = []
         self.src_models = [[galsim_galaxy.GalSimGalaxyModel(
                                 telescope_model=tel_names[idat],
                                 galaxy_model=self.galaxy_model_type,
                                 psf_model=psfs[idat],
-                                active_parameters=self.model_paramnames)
+                                active_parameters=self.model_paramnames,
+                                filter_name=self.filter_names[idat])
                             for idat in xrange(nimages)]
                            for isrcs in xrange(self.num_sources)]
         ### Count galaxy 'active' parameters plus distinct PSF parameters for all epochs.
@@ -512,13 +506,12 @@ class Roaster(object):
         for isrcs in xrange(self.num_sources):
             # print "Roaster model parameters:", self.src_models[isrcs][iepochs].params            
             sub_image = galsim.Image(nx, ny, init_value=0.)
-            model = self.src_models[isrcs][iepochs].get_image(out_image=sub_image,
-                filter_name=self.filter_names[iepochs])
+            model = self.src_models[isrcs][iepochs].get_image(out_image=sub_image)
             ix = nx/2
             iy = ny/2
             # print isrcs, ix, iy, nx, ny
-            sub_bounds = galsim.BoundsI(int(ix-0.5*nx), int(ix+0.5*nx-1),
-                                        int(iy-0.5*ny), int(iy+0.5*ny-1))
+            sub_bounds = galsim.BoundsI(int(ix-0.5*nx+1), int(ix+0.5*nx),
+                                        int(iy-0.5*ny+1), int(iy+0.5*ny))
             sub_image.setOrigin(galsim.PositionI(sub_bounds.xmin,
                                                  sub_bounds.ymin))
 
@@ -1127,7 +1120,7 @@ def InitRoaster(args):
                       filters_to_load=args.filters,
                       achromatic_galaxy=args.achromatic)
     roaster.Load(args.infiles[0], segment=args.segment_number,
-                 epoch_num=epoch_num, use_PSFModel=False)
+                 epoch_num=epoch_num, use_PSFModel=True)
     if args.init_param_file is not None:
         roaster.initialize_param_values(args.init_param_file)
     return roaster, args
