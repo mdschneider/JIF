@@ -568,7 +568,7 @@ class Roaster(object):
 
                     delta = (self.pixel_data[iepochs] - model_image.array)
                     lnlike += (-0.5 * np.sum(delta ** 2) /
-                        self.pix_noise_var[iepochs])
+                        (self.pix_noise_var[iepochs] + 1.e-9))
         else:
             lnlike = -np.inf
         return lnlike

@@ -42,6 +42,16 @@ class RoasterInspector(object):
     def __init__(self, args):
         print "<RoasterInspector> Loading segment {:d}".format(args.segment_number)
         self.args = args
+
+        self._load_roaster_file(args)
+        self._load_roaster_input_data()
+
+        outdir = os.path.dirname(args.infile)[0]
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        return None
+
+    def _load_roaster_file(self, args):
         f = h5py.File(args.infile, 'r')
         g = f['Samples/seg{:d}'.format(args.segment_number)]
         self.infile = args.infile
@@ -74,13 +84,10 @@ class RoasterInspector(object):
         self.nburn = g.attrs['nburn']
         f.close()
 
-        outdir = os.path.dirname(args.infile)[0]
-        if not os.path.exists(outdir):
-            os.makedirs(outdir)
-
         ### The lists input from HDF5 can lose the commas between entries.
         ### This seems to fix it:
         self.model_paramnames = [m for m in self.model_paramnames]
+        return None
 
     def __str__(self):
         return ("<RoasterInspector>\n" + "Input file: %s" % self.args.infile)
@@ -123,16 +130,16 @@ class RoasterInspector(object):
         return opt_params
 
     def _load_roaster_input_data(self):
-        args = Roaster.ConfigFileParser(self.args.roaster_config)
+        self.cfg = Roaster.ConfigFileParser(self.args.roaster_config)
 
         ### Force the segment_number to match that of the Roaster output file,
         ### even if the config file has a different value. This can happen if 
         ### the segment_number in the config file was overridden at the Roaster
         ### command line.
-        args.segment_number = self.segment_number
+        self.cfg.segment_number = self.segment_number
 
-        if args.epoch_num >= 0:
-            epoch_num = args.epoch_num
+        if self.cfg.epoch_num >= 0:
+            epoch_num = self.cfg.epoch_num
         else:
             epoch_num = None
 
@@ -145,19 +152,20 @@ class RoasterInspector(object):
         ### The following puts data in self.roaster.pixel_data
         # self.roaster.Load(self.roaster_infile, segment=self.segment_number,
         #                   epoch_num=self.epoch_num)
-        self.roaster = Roaster.Roaster(debug=args.debug, 
-            data_format=args.data_format,
+        self.roaster = Roaster.Roaster(debug=self.cfg.debug, 
+            data_format=self.cfg.data_format,
             # lnprior_omega=lnprior_omega,
             # lnprior_Pi=lnprior_Pi,
-            galaxy_model_type=args.galaxy_model_type,
-            model_paramnames=args.model_params,
-            telescope=args.telescope,
-            filters_to_load=args.filters,
-            achromatic_galaxy=args.achromatic)
-        self.roaster.Load(args.infiles[0], segment=args.segment_number,
+            galaxy_model_type=self.cfg.galaxy_model_type,
+            model_paramnames=self.cfg.model_params,
+            telescope=self.cfg.telescope,
+            filters_to_load=self.cfg.filters,
+            achromatic_galaxy=self.cfg.achromatic)
+        self.roaster.Load(self.cfg.infiles[0], segment=self.cfg.segment_number,
                           epoch_num=epoch_num)
-        if args.init_param_file is not None:
-            self.roaster.initialize_param_values(args.init_param_file)
+        if self.cfg.init_param_file is not None:
+            self.roaster.initialize_param_values(self.cfg.init_param_file)
+        self.params_ref = self.roaster.get_params()
 
         print "Length of Roaster pixel data list: {:d}".format(
             len(self.roaster.pixel_data))
@@ -177,7 +185,7 @@ class RoasterInspector(object):
         # Triangle plot
         # try:
         fig = corner.corner(np.vstack(self.data[-self.args.keeplast:,:, 0:n]),
-                              labels=self.paramnames, truths=self.args.truths)
+                              labels=self.paramnames, truths=self.params_ref)
         outfile = (self._outfile_head() +
             "_roaster_inspector_triangle.png")
         print "Saving {}".format(outfile)
@@ -213,7 +221,6 @@ class RoasterInspector(object):
         """
         Plot panels of pixel data, model, and residuals
         """
-        self._load_roaster_input_data()
         for idat, dat in enumerate(self.roaster.pixel_data):
             fig = plt.figure(figsize=(10, 10/1.618))
 
@@ -242,7 +249,7 @@ class RoasterInspector(object):
 
             ### model + noise
             noise_var = self.roaster._get_noise_var(idat)
-            print "noise variance: ", noise_var
+            print "noise variance: {:12.10g}".format(noise_var)
             ax = fig.add_subplot(2, 2, 3)
             ax.set_title("Model + Noise")
             noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
@@ -305,10 +312,10 @@ def main():
     parser.add_argument("--segment_number", type=int, default=0,
                         help="Index of the segment to load")
 
-    parser.add_argument("--truths", type=float,
-                        help="true values of hyperparameters: "+
-                             "{Omega_m, sigma_8, ...}",
-                        nargs='+')
+    # parser.add_argument("--truths", type=float,
+    #                     help="true values of hyperparameters: "+
+    #                          "{Omega_m, sigma_8, ...}",
+    #                     nargs='+')
 
     parser.add_argument("--keeplast", type=int, default=0,
                         help="Keep last N samples.")

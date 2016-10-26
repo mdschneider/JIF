@@ -335,7 +335,7 @@ class GalSimGalaxyModel(object):
 
         try:
             image = final.drawImage(image=out_image, scale=self.pixel_scale_arcsec,
-                gain=self.gain, add_to_image=False, method='fft')
+                gain=self.gain, add_to_image=False) #, method='fft')
         except RuntimeError:
             print "Trying to make an image that's too big."
             print self.get_params()
@@ -356,7 +356,7 @@ class GalSimGalaxyModel(object):
             raise AttributeError("Invalid PSF model type")
         return image
 
-    def save_footprint(self, outfile, noise=None):
+    def save_footprint(self, outfile, out_image=None, noise=None):
         """
         Write image and metadata to the JIF HDF5 'Footprints' file format
         """
@@ -369,14 +369,23 @@ class GalSimGalaxyModel(object):
         dummy_mask = 1.0
         dummy_background = 0.0
 
-        im = self.get_image()
+        im = self.get_image(out_image=out_image)
 
         noise_var = 1.e-9
         if noise is not None:
-            im.addNoise(noise)
-            noise_var = noise.getVariance()
+            if isinstance(noise, galsim.BaseNoise):
+                im.addNoise(noise)
+                pix_dat = im.array
+                noise_var = noise.getVariance()
+            elif isinstance(noise, np.ndarray):
+                assert noise.shape[0] == im.array.shape[0]
+                assert noise.shape[1] == im.array.shape[1]
+                pix_dat = im.array + noise
+                noise_var = float(np.var(noise.ravel()))
+            else:
+                raise TypeError("Invalid noise input: must be galsim Noise instance or ndarray")
 
-        seg.save_images([im.array], [noise_var], [dummy_mask], [dummy_background],
+        seg.save_images([pix_dat], [noise_var], [dummy_mask], [dummy_background],
             segment_index=seg_ndx, telescope=self.telescope_model,
             filter_name=self.filter_name)
         tel = telescopes.k_telescopes[self.telescope_model]
@@ -885,7 +894,7 @@ def save_bandpasses_to_segment(seg, gg, filter_names, telescope_name="LSST", sca
 
 def make_test_image():
     gg = GalSimGalaxyModel()
-    noise = telescopes.lsst_noise(random_seed=589798326)
+    noise = telescopes.lsst_noise(random_seed=58979832601)
     ###
     segfile = os.path.join(os.path.dirname(__file__),
         '../data/TestData/test_image_data.h5')
