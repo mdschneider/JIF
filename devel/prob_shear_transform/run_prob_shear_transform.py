@@ -197,7 +197,7 @@ def main():
 
     logging.debug('Shear probability transform test started')
 
-    shear = [0.0, 0.0]
+    shear = [0.0, 0.05]
 
     topdir = 'output'
 

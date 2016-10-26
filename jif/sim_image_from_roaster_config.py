@@ -38,30 +38,25 @@ def init_galaxy_models(args, roaster):
     tel_names = [args.telescope]
     filter_name = args.filters[0]
     #
-    tel_dict = jif.telescopes.k_telescopes[args.telescope]
-    pixel_scales = [tel_dict["pixel_scale"]]
-    primary_diams = [tel_dict["primary_diam_meters"]]
-    atmospheres = [tel_dict["atmosphere"]]
-    lam_over_diam = (tel_dict["filter_central_wavelengths"][filter_name] * 1e-9 /
-                     tel_dict["primary_diam_meters"]) * 180*3600/np.pi
+    pixel_scale = jif.telescopes.k_telescopes[args.telescope]['pixel_scale']
+    lam_over_diam = jif.telescopes.tel_lam_over_diam(args.telescope, filter_name)
 
     psfs = [jif.PSFModel(telescope=args.telescope, achromatic=args.achromatic,
                          active_parameters=[],
                          lam_over_diam=lam_over_diam, 
                          gsparams=None)]
 
-    roaster._init_galaxy_models(nimages, tel_names, pixel_scales, primary_diams,
-                                atmospheres, psfs)
+    roaster._init_galaxy_models(nimages, tel_names, psfs)
 
     ### Set grid size to a constant angular extent
     stamp_size_arcsec = 20.0
-    roaster.nx = [int(np.floor(stamp_size_arcsec / p)) for p in pixel_scales]
+    roaster.nx = [int(np.floor(stamp_size_arcsec / pixel_scale))]
     roaster.ny = copy.copy(roaster.nx)
     return roaster
 
 
 def save_model_image(args, roaster):
-    model_image = roaster._get_model_image(iepochs=0, add_noise=False)
+    model_image = roaster._get_model_image(iepochs=0)
 
     if args.telescope.lower() == "lsst":
         noise_model = jif.telescopes.lsst_noise(args.seed)
@@ -99,9 +94,7 @@ def save_model_image(args, roaster):
     ### ========================================================================
     ### Save a PNG plot of the PSF using matplotlib
     ### ========================================================================
-    psf_image = roaster.src_models[0][0].get_psf_image(
-        filter_name=args.filters[0],
-        ngrid=64, gain=1.0, add_noise=False)
+    psf_image = roaster.src_models[0][0].get_psf_image(ngrid=64)
     print "PSF HLR: {:12.10g}".format(psf_image.calculateHLR())
 
     outfile = args.outfile + "_psf_image.png"
