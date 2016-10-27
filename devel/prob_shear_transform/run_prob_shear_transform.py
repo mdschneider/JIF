@@ -52,6 +52,7 @@ def make_param_config(cfg_name, params, shear):
     Config.add_section('parameters')
     Config.set('parameters', 'redshift', 1.0)
     Config.set('parameters', 'nu', params[0])
+    # Config.set('parameters', 'nu', -0.6)
     Config.set('parameters', 'hlr', params[1])
     Config.set('parameters', 'e', params[2])
     Config.set('parameters', 'beta', params[3])
@@ -85,8 +86,8 @@ def make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file,
 
     Config.add_section('model')
     Config.set('model', 'galaxy_model_type', 'Spergel')
-    # Config.set('model', 'model_params', 'nu hlr e beta mag_sed1 dx dy')
-    Config.set('model', 'model_params', 'e beta')
+    Config.set('model', 'model_params', 'nu hlr e beta mag_sed1 dx dy')
+    # Config.set('model', 'model_params', 'e beta')
     Config.set('model', 'num_sources', 1)
     Config.set('model', 'achromatic', True)
 
@@ -226,6 +227,8 @@ def main():
     logging.debug('Shear probability transform test started')
 
     shear = [0.1, 0.0]
+    e_ndx = 2
+    beta_ndx = 3
 
     topdir = 'output'
 
@@ -287,11 +290,11 @@ def main():
 
     ## 4. Unshear the Roaster output parameter samples from step 3.
     dat_wsh, lnp_wsh = load_roaster_samples(roaster_file_wshear)
-    dat_wsh = unshear_roaster_samples(dat_wsh, shear)
+    dat_wsh = unshear_roaster_samples(dat_wsh, shear, e_ndx=e_ndx, beta_ndx=beta_ndx)
 
     ## 5. Compare galaxy parameter marginal densities from steps 1 & 4
     dat_nosh, lnp_nosh = load_roaster_samples(roaster_file_noshear)
-    make_pdf_plots(dat_nosh, dat_wsh)
+    make_pdf_plots(dat_nosh, dat_wsh, e_ndx=e_ndx, beta_ndx=beta_ndx)
 
     logging.debug('Shear probability transform test finished')
     return 0

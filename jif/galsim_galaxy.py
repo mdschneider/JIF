@@ -295,23 +295,19 @@ class GalSimGalaxyModel(object):
             # print "GG gal HLR: {:12.10g}".format(gal.calculateHLR())
 
         elif self.galaxy_model == "BulgeDisk":
-            mono_bulge = galsim.Spergel(nu=self.params[0].nu_bulge,
+            bulge = galsim.Spergel(nu=self.params[0].nu_bulge,
                 half_light_radius=self.params[0].hlr_bulge,
                 flux=1.0,
                 gsparams=self.gsparams)
-            SED_bulge = self.get_SED(gal_comp='bulge')
-            bulge = galsim.Chromatic(mono_bulge, SED_bulge)
             bulge_shape = galsim.Shear(g=self.params[0].e_bulge,
                 beta=self.params[0].beta_bulge*galsim.radians)
             bulge = bulge.shear(bulge_shape)
             bulge = bulge.shift(self.params[0].dx_bulge, self.params[0].dy_bulge)
 
-            mono_disk = galsim.Spergel(nu=self.params[0].nu_disk,
+            disk = galsim.Spergel(nu=self.params[0].nu_disk,
                 half_light_radius=self.params[0].hlr_disk,
                 flux=1.0,
                 gsparams=self.gsparams)
-            SED_disk = self.get_SED(gal_comp='disk')
-            disk = galsim.Chromatic(mono_disk, SED_disk)
             disk_shape = galsim.Shear(g=self.params[0].e_disk,
                 beta=self.params[0].beta_disk*galsim.radians)
             disk = disk.shear(disk_shape)
@@ -319,7 +315,6 @@ class GalSimGalaxyModel(object):
 
             # gal = self.params[0].bulge_frac * bulge + (1 - self.params[0].bulge_frac) * disk
             gal = bulge + disk
-            gal = gal.shift(dx, dy)
 
         else:
             raise AttributeError("Unimplemented galaxy model")
