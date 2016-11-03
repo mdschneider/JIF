@@ -16,6 +16,7 @@ import copy
 import ConfigParser
 import h5py
 import numpy as np
+import numpy as nparams
 import matplotlib.pyplot as plt
 from statsmodels.nonparametric.kde import kdensity
 
@@ -35,10 +36,10 @@ logging.basicConfig(level=logging.DEBUG,
 
 
 def make_configs(cfg_name, cfg_params_name, image_file, roaster_file, params, shear, 
-                 nsamples=100):
+                 galaxy_model="Spergel", nsamples=100):
     make_param_config(cfg_params_name, params, shear)
     make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file, 
-                        nsamples)
+                        galaxy_model, nsamples)
     return None
 
 
@@ -65,7 +66,7 @@ def make_param_config(cfg_name, params, shear):
 
 
 def make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file, 
-                        nsamples=100):
+                        galaxy_model="Spergel", nsamples=100):
     logging.info("Making {}".format(cfg_name))
     cfgfile = open(cfg_name, 'w')
 
@@ -85,7 +86,7 @@ def make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file,
     Config.set('data', 'epoch_num', -1)
 
     Config.add_section('model')
-    Config.set('model', 'galaxy_model_type', 'Spergel')
+    Config.set('model', 'galaxy_model_type', galaxy_model)
     Config.set('model', 'model_params', 'nu hlr e beta mag_sed1 dx dy')
     # Config.set('model', 'model_params', 'e beta')
     Config.set('model', 'num_sources', 1)
@@ -222,15 +223,38 @@ def main():
     parser.add_argument('--nsamples', type=int, default=500,
         help="Number of MCMC samples (after burnin) [Default: 500]")
 
+    parser.add_argument('--gal_model', type=str, default='Spergel',
+        help="Galaxy model name for the simulated data (not for Reaper)")
+
     args = parser.parse_args()
 
     logging.debug('Shear probability transform test started')
 
     shear = [0.1, 0.0]
     e_ndx = 2
-    beta_ndx = 3
+    beta_ndx = 3    
 
     topdir = 'output'
+
+    if args.gal_model == "Spergel":
+        active_parameters = ['nu', 'hlr', 'e', 'beta', 'mag_sed1']
+
+        params_noshear = [0.3, 1.2, 0.26, 0.5236, 28.5]
+        params_wshear = copy.copy(params_noshear)
+        params_wshear[2:4] = shear_params(params_noshear[2:4], shear)
+        print "params w/o shear:", params_noshear
+        print "params w/  shear:", params_wshear
+    elif args.gal_model == "BulgeDisk":
+        active_parameters = ['e_bulge', 'beta_bulge', 'e_disk', 'beta_disk']
+
+        params_noshear = [0.1, 0.0, 0.3, 0.5236]
+        params_wshear = copy.copy(params_noshear)
+        params_wshear[0:2] = shear_params(params_noshear[0:2], shear)
+        params_wshear[2:4] = shear_params(params_noshear[2:4], shear)
+        print "params w/o shear:", params_noshear
+        print "params w/  shear:", params_wshear  
+    else:
+        raise KeyError("Unsupported galaxy model")
 
     roaster_cfg_name_noshear = os.path.join(topdir, 'roaster_config_noshear.cfg')
     params_cfg_name_noshear = os.path.join(topdir, 'roaster_params_noshear.cfg')
@@ -242,17 +266,12 @@ def main():
     image_file_wshear = os.path.join(topdir, 'roaster_wshear_model_image.h5')
     roaster_file_wshear = os.path.join(topdir, 'roaster_wshear')
 
-    gg = jif.GalSimGalaxyModel(galaxy_model="Spergel", telescope_model="LSST",
+    gg = jif.GalSimGalaxyModel(galaxy_model=args.gal_model,
+        telescope_model="LSST",
         psf_model="Model",
-        active_parameters=['nu', 'hlr', 'e', 'beta', 'mag_sed1'])
+        active_parameters=active_parameters)
     noise_realization = get_noise_realization(gg)
     nx, ny = noise_realization.shape
-
-    params_noshear = [0.3, 1.2, 0.26, 0.5236, 28.5]
-    params_wshear = copy.copy(params_noshear)
-    params_wshear[2:4] = shear_params(params_noshear[2:4], shear)
-    print "params w/o shear:", params_noshear
-    print "params w/  shear:", params_wshear
 
     ## 0. Generate the test image (without shear)
     make_configs(roaster_cfg_name_noshear, params_cfg_name_noshear,
