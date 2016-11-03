@@ -299,6 +299,8 @@ class GalSimGalaxyModel(object):
                 half_light_radius=self.params[0].hlr_bulge,
                 flux=1.0,
                 gsparams=self.gsparams)
+            flux = jifparams.flux_from_AB_mag(self.params[0].mag_sed1_bulge)
+            bulge = bulge.withFlux(flux)
             bulge_shape = galsim.Shear(g=self.params[0].e_bulge,
                 beta=self.params[0].beta_bulge*galsim.radians)
             bulge = bulge.shear(bulge_shape)
@@ -308,6 +310,8 @@ class GalSimGalaxyModel(object):
                 half_light_radius=self.params[0].hlr_disk,
                 flux=1.0,
                 gsparams=self.gsparams)
+            flux = jifparams.flux_from_AB_mag(self.params[0].mag_sed1_disk)
+            disk = disk.withFlux(flux)
             disk_shape = galsim.Shear(g=self.params[0].e_disk,
                 beta=self.params[0].beta_disk*galsim.radians)
             disk = disk.shear(disk_shape)

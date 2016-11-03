@@ -113,14 +113,14 @@ def make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file,
     return None
 
 
-def get_noise_realization(gg):
+def get_noise_realization(gg, nx=80, ny=80):
     """
     @brief      Get a realization of the noise in each pixel of the model image
     @param      gg    an instance of GalSimGalaxyModel
     @return     The noise realization.
     """
-    im = gg.get_image()
-    nx, ny = im.array.shape
+    # im = gg.get_image()
+    # nx, ny = im.array.shape
     noise = jif.telescopes.lsst_noise(random_seed=590025467011)
     im = galsim.Image(nx, ny, scale=gg.pixel_scale_arcsec, init_value=0.)
     im.addNoise(noise)
@@ -230,9 +230,32 @@ def main():
 
     logging.debug('Shear probability transform test started')
 
-    shear = [0.1, 0.0]
+    shear = [0.0, 0.0]
+
+    ##
+    ## Roaster parameters (for fitting the fake data)
+    ##
     e_ndx = 2
     beta_ndx = 3    
+
+    ##
+    ## GalSimGalaxyModel parameters (for generating the fake data)
+    ##
+    galaxy_model_gg = "BulgeDisk"
+    #
+    if galaxy_model_gg == "Spergel":
+        active_parameters_gg = ['nu', 'hlr', 'e', 'beta', 'mag_sed1']
+        params_noshear_gg = [0.3, 1.2, 0.26, 0.5236, 28.5]
+        params_wshear_gg = copy.copy(params_noshear_gg)
+        params_wshear_gg[2:4] = shear_params(params_noshear_gg[2:4], shear)
+    elif galaxy_model_gg == "BulgeDisk":
+        active_parameters_gg = ['e_bulge', 'beta_bulge', 'e_disk', 'beta_disk']
+        params_noshear_gg = [0.05, 0.0, 0.3, 0.5236]
+        params_wshear_gg = copy.copy(params_noshear_gg)
+        params_wshear_gg[0:2] = shear_params(params_noshear_gg[0:2], shear)
+        params_wshear_gg[2:4] = shear_params(params_noshear_gg[2:4], shear)
+    else:
+        raise KeyError("Unsupported galaxy model type")
 
     topdir = 'output'
 
@@ -276,9 +299,9 @@ def main():
     ## 0. Generate the test image (without shear)
     make_configs(roaster_cfg_name_noshear, params_cfg_name_noshear,
                  image_file_noshear, roaster_file_noshear,
-                 params=params_noshear, shear=[0., 0.], nsamples=args.nsamples)
-    # jif.sim_image_from_roaster_config.main(config_file=roaster_cfg_name_noshear)
-    gg.set_params(params_noshear)
+                 params=params_noshear_roaster, shear=[0., 0.], 
+                 nsamples=args.nsamples)
+    gg.set_params(params_noshear_gg)
     out_image = galsim.Image(nx, ny, init_value=0.)
     gg.save_footprint(image_file_noshear, out_image=out_image, noise=noise_realization)
 
@@ -293,9 +316,9 @@ def main():
     ## 2. Shear the image
     make_configs(roaster_cfg_name_wshear, params_cfg_name_wshear,
                  image_file_wshear, roaster_file_wshear,
-                 params=params_wshear, shear=shear, nsamples=args.nsamples)
-    # jif.sim_image_from_roaster_config.main(config_file=roaster_cfg_name_wshear)
-    gg.set_params(params_wshear)
+                 params=params_wshear_roaster, shear=shear, 
+                 nsamples=args.nsamples)
+    gg.set_params(params_wshear_gg)
     out_image = galsim.Image(nx, ny, init_value=0.)
     gg.save_footprint(image_file_wshear, out_image=out_image, noise=noise_realization)
 

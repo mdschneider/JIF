@@ -124,12 +124,12 @@ k_galparams_defaults = {
                    1.8,                 # hlr_disk
                    0.3,                 # e_disk
                    np.pi/4,             # beta_disk
-                   22.,                 # mag_sed1_bulge
+                   28.,                 # mag_sed1_bulge
                    k_mag_param_minval,  # mag_sed2_bulge
                    k_mag_param_minval,  # mag_sed3_bulge
                    k_mag_param_minval,  # mag_sed4_bulge
-                   k_mag_param_minval,  # mag_sed1_disk
-                   22.,                 # mag_sed2_disk
+                   27.,                 # mag_sed1_disk
+                   k_mag_param_minval,  # mag_sed2_disk
                    k_mag_param_minval,  # mag_sed3_disk
                    k_mag_param_minval,  # mag_sed4_disk
                    0.,                  # dx_bulge
