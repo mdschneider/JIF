@@ -10,6 +10,7 @@ import argparse
 import sys
 import os.path
 import numpy as np
+import copy
 #import pandas as pd
 #import matplotlib.pyplot as plt
 
@@ -39,6 +40,14 @@ k_g3_primary_diameters = {"ground": 8.2, "space": 2.4}
 ### Guess that GREAT3 used LSST 'r' band to render images
 k_filter_name = 'r'
 k_filter_central_wavelengths = {'r':620.}
+
+## Original GREAT3 types:
+# k_input_cat_type = [('x', '>i8'), ('y', '>i8'), ('ID', '>i8')]
+## 2016 GREAT3 simulation scripts:
+k_input_cat_type = [('obj_num', '>i8'), ('x', '<f8'), ('y', '<f8'), 
+                    ('dx', '<f8'), ('dy', '<f8'), ('psf_e1', '<f8'), 
+                    ('psf_e2', '<f8'), ('psf_fwhm', '<f8'), ('g1', '<f8'), 
+                    ('g2', '<f8'), ('gal_e1', '<f8'), ('gal_e2', '<f8')]
 
 
 def get_background_and_noise_var(data, clip_n_sigma=3, clip_converg_tol=0.1,
@@ -105,6 +114,7 @@ def get_background_and_noise_var(data, clip_n_sigma=3, clip_converg_tol=0.1,
 
 def create_segments(subfield_index=0, experiment="control",
     observation_type="ground", shear_type="constant",
+    data_path="./", catfile_head="galaxy_catalog",
     n_gals=10000, verbose=False):
     """
     Load pixel data and PSFs for all epochs for a given galaxy
@@ -115,8 +125,7 @@ def create_segments(subfield_index=0, experiment="control",
     ### Reconstruct the GREAT3 image input file path and name
     # indir = os.path.join(os.path.abspath(os.path.dirname(__file__)),
     #     "../data/great3", experiment, observation_type, shear_type)
-    indir = os.path.join("/Volumes/Promise Pegasus/JIF/data/great3",
-                         experiment, observation_type, shear_type)
+    indir = os.path.join(data_path, experiment, observation_type, shear_type)
 
     ### Collect input image filenames for all epochs.
     ### FIXME: Get correct 'experiment' names here
@@ -136,9 +145,13 @@ def create_segments(subfield_index=0, experiment="control",
 
     ### Load the galaxy catalog for this subfield
     f = fits.open(os.path.join(indir,
-        "galaxy_catalog-{:03d}.fits".format(subfield_index)))
-    gal_cat = np.core.records.array(np.asarray(f[1].data),
-        dtype=[('x', '>i8'), ('y', '>i8'), ('ID', '>i8')])
+        catfile_head + "-{:03d}-{:d}.fits".format(subfield_index, epoch_index)))
+    # print np.asarray(f[1].data).shape
+    # assert len(f[1].data[0]) == len(k_input_cat_type), "Wrong length for catalog types"    
+    # gal_cat = np.core.records.array(np.asarray(f[1].data), 
+    #                                 dtype=k_input_cat_type)
+    # gal_cat = np.rec.array(np.asarray(f[1].data), dtype=k_input_cat_type)
+    gal_cat = copy.copy(f[1].data)
     f.close()
 
     ### Specify the output filename for the Segments
@@ -218,7 +231,9 @@ def create_segments(subfield_index=0, experiment="control",
             segment_index=igal, telescope=telescope_name)
         seg.save_psf_images(psfs, segment_index=igal, telescope=telescope_name,
             filter_name=filter_name, model_names=None)
-        seg.save_source_catalog(np.reshape(gal_cat[igal], (1,)),
+        # seg.save_source_catalog(np.reshape(gal_cat[igal], (1,)),
+        #     segment_index=igal)
+        seg.save_source_catalog(np.asarray(gal_cat[igal]),
             segment_index=igal)
 
     ### It's not strictly necessary to instantiate a GalSimGalaxyModel object
@@ -254,6 +269,14 @@ def main():
     parser.add_argument('--shear_type', type=str, default="constant",
                         help="GREAT shear type [Default: constant]")
 
+    parser.add_argument('--data_path', type=str, default="./",
+                        help="Path to the directory with input images " +
+                             "[Default: ./]")
+
+    parser.add_argument('--catfile_head', type=str, default="galaxy_catalog",
+                        help="File name head for the input galaxy catalog " +
+                             "[Default: galaxy_catalog]")
+
     parser.add_argument('--n_gals', type=int, default=10,
                         help="How many galaxies to process from a sub-field? " +
                              "[Default: 10]")
@@ -270,6 +293,8 @@ def main():
                     experiment=args.experiment,
                     observation_type=args.observation_type,
                     shear_type=args.shear_type,
+                    data_path=args.data_path,
+                    catfile_head=args.catfile_head,
                     n_gals=args.n_gals,
                     verbose=args.verbose)
 
