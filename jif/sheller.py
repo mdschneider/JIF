@@ -152,6 +152,7 @@ def create_segments(subfield_index=0, experiment="control",
     #                                 dtype=k_input_cat_type)
     # gal_cat = np.rec.array(np.asarray(f[1].data), dtype=k_input_cat_type)
     gal_cat = copy.copy(f[1].data)
+    n_cat_cols = len(gal_cat[0])
     f.close()
 
     ### Specify the output filename for the Segments
@@ -194,7 +195,7 @@ def create_segments(subfield_index=0, experiment="control",
     ### Save all images to the segment file, but with distinct 'segment_index'
     ### values.
     n_gals_image_file = n_gals
-    ngals_per_dim = 100 ### The image is a 100 x 100 grid of galaxies
+    ngals_per_dim = 20 ### The image is a 20 x 20 grid of galaxies
     for igal in xrange(n_gals_image_file):
         if verbose and np.mod(igal, 2) == 0:
             print "Galaxy {:d} / {:d}".format(igal+1, n_gals_image_file)
@@ -233,7 +234,7 @@ def create_segments(subfield_index=0, experiment="control",
             filter_name=filter_name, model_names=None)
         # seg.save_source_catalog(np.reshape(gal_cat[igal], (1,)),
         #     segment_index=igal)
-        seg.save_source_catalog(np.asarray(gal_cat[igal]),
+        seg.save_source_catalog(np.asarray(gal_cat[igal]).reshape((1,n_cat_cols)),
             segment_index=igal)
 
     ### It's not strictly necessary to instantiate a GalSimGalaxyModel object

@@ -278,6 +278,7 @@ class Roaster(object):
                             self.pix_noise_var.append(seg.attrs['variance'])
                             ###
                             if self.sample_psf:
+                                logging.debug("Sampling in PSF parameters - using PSFModel class")
                                 psf_types.append('PSFModel class')
                                 psfs.append(pm.PSFModel(
                                     active_parameters=self.psf_model_paramnames,
@@ -286,6 +287,8 @@ class Roaster(object):
                                     lam_over_diam=lam_over_diam,
                                     gsparams=jifparams.k_default_gsparams))
                             elif use_PSFModel:
+                                print "use_PSFModel:", use_PSFModel
+                                logging.debug("Forcing use of PSFModel class")
                                 psf_types.append('PSFModel class')
                                 psfs.append(pm.PSFModel(
                                     active_parameters=[],
@@ -294,6 +297,7 @@ class Roaster(object):
                                     lam_over_diam=lam_over_diam,
                                     gsparams=jifparams.k_default_gsparams))
                             else:
+                                logging.debug("Setting PSF type from footprints file: {}".format(seg.attrs['psf_type']))
                                 psf_types.append(seg.attrs['psf_type'])
                                 psfs.append(galsim.Image(seg['psf'][...]))
                             ###
@@ -411,7 +415,7 @@ class Roaster(object):
 
         For use in MCMC sampling.
         """
-        valid_params = True
+        valid_params = 1
         for isrcs in xrange(self.num_sources):
             imin = isrcs * self.n_params
             imax = (isrcs + 1) * self.n_params
@@ -429,7 +433,9 @@ class Roaster(object):
 
                 self.src_models[isrcs][iepochs].set_params(p_set_iepoch)
                 valid_params *= self.src_models[isrcs][iepochs].validate_params()
-        return valid_params
+            # if valid_params:
+            #     assert (p[1] >= 0.0 and p[1] <= np.pi), "(2) beta out of range"
+        return bool(valid_params)
 
     def set_param_by_name(self, paramname, value):
         """
@@ -542,6 +548,14 @@ class Roaster(object):
         valid_params = self.set_params(omega)
 
         if valid_params:
+            # if omega[1] < 0.0 or omega[1] > np.pi:
+            #     print "Valid params:", omega
+
+            beta = self.src_models[0][0].get_param_by_name('beta')
+            beta2 = self.get_params()[1]
+            if beta < 0. or beta > np.pi:
+                print "Bad beta:", beta
+
             lnlike = 0.0
             for iepochs in xrange(self.num_epochs):
                 model_image = self._get_model_image(iepochs)
@@ -715,6 +729,14 @@ def run_emcee_sampler(omega_interim, args, roaster, use_MPI=False):
             print "\tStep {:d} / {:d}, lnp: {:5.4g}".format(i+1, args.nsamples,
                 np.mean(pp))
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+        for omega in pp:
+            roaster.src_models[0][0].set_params(omega)
+            vp = roaster.src_models[0][0].validate_params()
+            beta = omega[1]
+            if beta < 0. or beta > np.pi:
+                print roaster.src_models[0][0].get_params()
+                print vp, omega
+            # assert (omega[1] <= np.pi and omega[1] >= 0.), "(1) beta out of range"
         if not args.quiet:
             print i, np.mean(lnp)
             print np.mean(pp, axis=0)
@@ -1054,7 +1076,10 @@ class ConfigFileParser(object):
             self.filters = str.split(filters, ' ')
 
         achromatic = config.get("model", "achromatic")
-        self.achromatic = achromatic == 'True'
+        self.achromatic = (achromatic == 'True')
+
+        use_psf_model = config.get("model", "use_psf_model", default=False)
+        self.use_psf_model = (use_psf_model == 'True')
 
         epoch_num = config.get("data", "epoch_num", default=-1)
         self.epoch_num = int(epoch_num)
@@ -1101,8 +1126,8 @@ def InitRoaster(args):
 
     ### Set galaxy priors
     if args.galaxy_model_type == "Spergel":
-        # lnprior_omega = DefaultPriorSpergel()
-        lnprior_omega = EmptyPrior()
+        lnprior_omega = DefaultPriorSpergel()
+        # lnprior_omega = EmptyPrior()
     elif args.galaxy_model_type == "BulgeDisk":
         lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
     else:
@@ -1120,7 +1145,7 @@ def InitRoaster(args):
                       filters_to_load=args.filters,
                       achromatic_galaxy=args.achromatic)
     roaster.Load(args.infiles[0], segment=args.segment_number,
-                 epoch_num=epoch_num, use_PSFModel=True)
+                 epoch_num=epoch_num, use_PSFModel=args.use_psf_model)
     if args.init_param_file is not None:
         roaster.initialize_param_values(args.init_param_file)
     return roaster, args
@@ -1182,6 +1207,9 @@ def main():
     parser.add_argument("--output_model", action="store_true",
                         help="Just save the initial model image to file. "+
                              "Don't sample")
+
+    parser.add_argument("--use_psf_model", action="store_true",
+                        help="Force use of a parametric PSF model")
 
     parser.add_argument("--seed", type=int, default=None,
                         help="Seed for pseudo-random number generator")

@@ -155,8 +155,8 @@ class GalSimGalaxyModel(object):
                 raise ValueError("Cannot set PSF parameter when PSF is an InterpolatedImage")
         else:
             self.params[paramname][0] = value
-            if 'beta' in paramname:
-                self.params[paramname][0] = np.mod(value, np.pi)
+            # if 'beta' in paramname:
+            #     self.params[paramname][0] = np.mod(value, np.pi)
         return None
 
     def get_param_by_name(self, paramname):
@@ -198,8 +198,8 @@ class GalSimGalaxyModel(object):
             #     self.params[pname][0] = p[ip]
             # else:
             #     self.params[pname][0] = p[ip]
-            if 'beta' in pname:
-                self.params[pname][0] = np.mod(p[ip], np.pi)
+            # if 'beta' in pname:
+            #     self.params[pname][0] = np.mod(p[ip], np.pi)
         if self.psf_model_type == "PSFModel class":
             ### Assumes the PSF parameters are appended to the galaxy parameters
             self.psf_model.set_params(p[len(self.active_parameters_galaxy):])
@@ -218,10 +218,10 @@ class GalSimGalaxyModel(object):
             psf_active_params = self.psf_model.get_params()
             if len(psf_active_params) > 0:
                 p = np.append(p, self.psf_model.get_params())
-        ### Transform parameters for sampling
-        for ip, pname in enumerate(self.active_parameters):
-            if 'beta' in pname:
-                p[ip] = np.mod(p[ip], np.pi)
+        # ### Transform parameters for sampling
+        # for ip, pname in enumerate(self.active_parameters):
+        #     if 'beta' in pname:
+        #         p[ip] = np.mod(p[ip], np.pi)
         return p
 
     def get_psf_params(self):
@@ -243,15 +243,18 @@ class GalSimGalaxyModel(object):
                  parameters
         """
         def inbounds(p, b):
-            return p >= b[0] and p<= b[1]
+            return (p >= b[0] and p <= b[1])
 
-        valid_params = True
+        valid_params = 1
         for pname, dtype in self.params.dtype.descr:
             if not inbounds(self.params[pname][0], jifparams.k_param_bounds[pname]):
-                valid_params *= False
+                valid_params *= 0
         if self.psf_model_type == "PSFModel class":
             valid_params *= self.psf_model.validate_params()
-        return valid_params
+
+        # if self.params['beta'][0] < 0.:
+        #     print "neg beta, valid: ", bool(valid_params)
+        return bool(valid_params)
 
     def get_psf(self):
         """

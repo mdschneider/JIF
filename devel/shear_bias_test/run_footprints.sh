@@ -15,13 +15,14 @@ endif
 
 ## Path to the input images.
 ## Assume we're working within JIF/devel/shear_bias_test/
+## Assume JIF and MagicBeans are installed in the same top-level directory.
 set datadir=../../../MagicBeans/devel/shear_bias_test_167/
 
 ## Have 20 x 20 galaxies in each 'field'.
 ## See MagicBeans/devel/shear_bias_test_167/mbi_no_shape_noise.yaml
 set n_gals=400
 
-foreach subfield_index (`seq 0 50`)
+foreach subfield_index (`seq 0 49`)
 	# echo "Creating footprint file for CGC-like field "$subfield_index
 	jif_sheller --subfield_index $subfield_index --data_path $datadir \
 	--catfile_head "epoch_catalog" \
@@ -30,7 +31,10 @@ end
 
 ## labels for proper exit or error
 done:
-    growlnotify -n Script -m "Finished shear_bias_test/run_footprints"
+    # growlnotify -n Script -m "Finished shear_bias_test/run_footprints"
+    echo " "
+    echo "Finished shear_bias_test/run_footprints"
+    echo " "
     exit 0
 error:
     exit 1
