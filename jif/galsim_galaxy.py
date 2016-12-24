@@ -74,7 +74,7 @@ class GalSimGalaxyModel(object):
                  galaxy_model="Spergel",
                  telescope_model="LSST",
                  psf_model='Model',
-                 active_parameters=['e', 'beta'],
+                 active_parameters=['e1', 'e2'],
                  filter_name='r'):
         assert galaxy_model in ['star', 'Spergel', 'Sersic', 'BulgeDisk']
         assert telescope_model in telescopes.k_telescopes.keys()
@@ -291,8 +291,10 @@ class GalSimGalaxyModel(object):
                     flux=1.0, gsparams=self.gsparams)
             flux = jifparams.flux_from_AB_mag(self.params[0].mag_sed1)
             gal = gal.withFlux(flux)
-            gal_shape = galsim.Shear(g=self.params[0].e,
-                beta=self.params[0].beta*galsim.radians)
+            e = np.hypot(self.params[0].e1, self.params[0].e2)
+            beta = 0.5 * np.arctan2(self.params[0].e2, self.params[0].e1)
+            gal_shape = galsim.Shear(g=e,
+                beta=beta*galsim.radians)
             gal = gal.shear(gal_shape)
             gal = gal.shift(self.params[0].dx, self.params[0].dy)
             # print "GG gal HLR: {:12.10g}".format(gal.calculateHLR())
@@ -304,8 +306,10 @@ class GalSimGalaxyModel(object):
                 gsparams=self.gsparams)
             flux = jifparams.flux_from_AB_mag(self.params[0].mag_sed1_bulge)
             bulge = bulge.withFlux(flux)
-            bulge_shape = galsim.Shear(g=self.params[0].e_bulge,
-                beta=self.params[0].beta_bulge*galsim.radians)
+            e_disk = np.hypot(self.params[0].e1_bulge, self.params[0].e2_bulge)
+            beta_disk = 0.5 * np.arctan2(self.params[0].e2_bulge, 
+                                         self.params[0].e1_bulge)            
+            bulge_shape = galsim.Shear(g=e_bulge, beta=beta_bulge*galsim.radians)
             bulge = bulge.shear(bulge_shape)
             bulge = bulge.shift(self.params[0].dx_bulge, self.params[0].dy_bulge)
 
@@ -315,8 +319,10 @@ class GalSimGalaxyModel(object):
                 gsparams=self.gsparams)
             flux = jifparams.flux_from_AB_mag(self.params[0].mag_sed1_disk)
             disk = disk.withFlux(flux)
-            disk_shape = galsim.Shear(g=self.params[0].e_disk,
-                beta=self.params[0].beta_disk*galsim.radians)
+            e_disk = np.hypot(self.params[0].e1_disk, self.params[0].e2_disk)
+            beta_disk = 0.5 * np.arctan2(self.params[0].e2_disk, 
+                                         self.params[0].e1_disk)
+            disk_shape = galsim.Shear(g=e_disk, beta=beta_disk*galsim.radians)
             disk = disk.shear(disk_shape)
             disk = disk.shift(self.params[0].dx_disk, self.params[0].dy_disk)
 

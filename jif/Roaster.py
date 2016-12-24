@@ -551,10 +551,10 @@ class Roaster(object):
             # if omega[1] < 0.0 or omega[1] > np.pi:
             #     print "Valid params:", omega
 
-            beta = self.src_models[0][0].get_param_by_name('beta')
-            beta2 = self.get_params()[1]
-            if beta < 0. or beta > np.pi:
-                print "Bad beta:", beta
+            # beta = self.src_models[0][0].get_param_by_name('beta')
+            # beta2 = self.get_params()[1]
+            # if beta < 0. or beta > np.pi:
+            #     print "Bad beta:", beta
 
             lnlike = 0.0
             for iepochs in xrange(self.num_epochs):
@@ -938,7 +938,7 @@ class DefaultPriorSpergel(object):
         lnp += self._lnprior_mag(omega[0].mag_sed3)
         lnp += self._lnprior_mag(omega[0].mag_sed4)
         ### Ellipticity magnitude
-        e = omega[0].e
+        e = np.hypot(omega[0].e1, omega[0].e2)
         lnp += (self.e_beta_a-1.)*np.log(e) + (self.e_beta_b-1.)*np.log(1.-e)
         ### Centroid (x,y) perturbations
         dx = omega[0].dx

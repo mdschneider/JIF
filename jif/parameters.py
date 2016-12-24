@@ -29,15 +29,15 @@ k_star_SED_names = ['NGC_0695_spec', 'NGC_4125_spec', 'NGC_4552_spec', 'CGCG_049
 k_mag_param_minval = 99.
 
 
-k_spergel_paramnames = ['nu', 'hlr', 'e', 'beta']
+k_spergel_paramnames = ['nu', 'hlr', 'e1', 'e2']
 
 ### Numpy composite object types for the model parameters for galaxy images under different
 ### modeling assumptions.
 k_galparams_type_sersic = [('redshift', '<f8'),
                            ('n', '<f8'),
                            ('hlr', '<f8'),
-                           ('e', '<f8'),
-                           ('beta', '<f8')]
+                           ('e1', '<f8'),
+                           ('e2', '<f8')]
 k_galparams_type_sersic += [('mag_sed{:d}'.format(i+1), '<f8')
                             for i in xrange(len(k_SED_names))]
 k_galparams_type_sersic += [('dx', '<f8'), ('dy', '<f8')] ### In sky coordinates
@@ -100,14 +100,14 @@ k_galparams_types = {
 
 ### The galaxy models are initialized with these values:
 k_galparams_defaults = {
-    "Sersic": [(1., 3.4, 1.0, 0.1, np.pi/4, 22., k_mag_param_minval,
+    "Sersic": [(1., 3.4, 1.0, 0.1, 0.0, 22., k_mag_param_minval,
         k_mag_param_minval, k_mag_param_minval, 0., 0.)],
     # -----------------------------------------------------
     "Spergel": [(1.,                    # redshift
                  0.3,                   # nu
                  1.2,                   # hlr
-                 0.26,                  # e
-                 0.5236,                # beta
+                 0.26,                  # e1
+                 0.0,                   # e2
                  28.5,                  # mag_sed1
                  k_mag_param_minval,    # mag_sed2
                  k_mag_param_minval,    # mag_sed3
@@ -118,12 +118,12 @@ k_galparams_defaults = {
     "BulgeDisk": [(1.,                  # redshift
                    0.5,                 # nu_bulge
                    0.6,                 # hlr_bulge
-                   0.05,                # e_bulge
-                   0.0,                 # beta_bulge
+                   0.05,                # e1_bulge
+                   0.0,                 # e2_bulge
                    -0.6,                # nu_disk
                    1.8,                 # hlr_disk
-                   0.3,                 # e_disk
-                   np.pi/4,             # beta_disk
+                   0.3,                 # e1_disk
+                   0.0,                 # e2_disk
                    28.,                 # mag_sed1_bulge
                    k_mag_param_minval,  # mag_sed2_bulge
                    k_mag_param_minval,  # mag_sed3_bulge
@@ -145,8 +145,8 @@ k_param_bounds = {
   "redshift": (0.0, 6.0),
   "nu": (-0.8, 0.8),
   "hlr": (0.01, 10.0),
-  "e": (0.0001, 0.9), ### Max |e| < 1 to avoid numerical instabilities
-  "beta": (0.0, np.pi),
+  "e1": (-0.9, 0.9), ### Max |e_i| < 1 to avoid numerical instabilities
+  "e2": (-0.9, 0.9), ### Max |e_i| < 1 to avoid numerical instabilities
   "mag_sed1": (10.0, k_mag_param_minval),
   "mag_sed2": (10.0, k_mag_param_minval),
   "mag_sed3": (10.0, k_mag_param_minval),
@@ -160,8 +160,8 @@ k_param_vars = {
   "redshift": 1.0,
   "nu": 0.05**2,
   "hlr": 0.015**2,
-  "e": 0.04**2,
-  "beta": 0.07**2,
+  "e1": 0.04**2,
+  "e2": 0.04**2,
   "mag_sed1": 0.04**2,
   "mag_sed2": 0.04**2,
   "mag_sed3": 0.04**2,
