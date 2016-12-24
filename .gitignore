@@ -77,3 +77,4 @@ devel/sed_atlas/123
 output/psf_bias
 *-checkpoint.ipynb
 devel/blend_fit_test
+update_config.py

@@ -906,7 +906,7 @@ class DefaultPriorSpergel(object):
         self.hlr_shape = 2.
         self.hlr_scale = 0.15
         ### Gaussian distribution in log flux
-        self.mag_mean = 20.0
+        self.mag_mean = 40.0
         self.mag_var = 7.0
         ### Beta distribution in ellipticity magnitude
         self.e_beta_a = 1.5
