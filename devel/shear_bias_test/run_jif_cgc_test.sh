@@ -24,7 +24,8 @@ endif
 ##
 ## Set some top-level parameters
 ##
-set workdir=/Users/mdschnei/work/MagicBeans/devel/shear_bias_test_167
+set user=`whoami`
+set workdir=/Users/${user}/work/MagicBeans/devel/shear_bias_test_167/v2
 
 set config_file=roaster_cgc.cfg
 set field=$1

@@ -16,7 +16,7 @@ endif
 ## Path to the input images.
 ## Assume we're working within JIF/devel/shear_bias_test/
 ## Assume JIF and MagicBeans are installed in the same top-level directory.
-set datadir=../../../MagicBeans/devel/shear_bias_test_167/
+set datadir=../../../MagicBeans/devel/shear_bias_test_167/v2
 
 ## Have 20 x 20 galaxies in each 'field'.
 ## See MagicBeans/devel/shear_bias_test_167/mbi_no_shape_noise.yaml
