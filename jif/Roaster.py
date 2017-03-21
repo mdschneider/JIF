@@ -101,7 +101,7 @@ class Roaster(object):
                  telescope=None,
                  filters_to_load=None,
                  debug=False,
-                 model_paramnames=['hlr', 'e', 'beta'],
+                 model_paramnames=['hlr', 'e1', 'e2'],
                  achromatic_galaxy=False):
         if lnprior_omega is None:
             self.lnprior_omega = EmptyPrior()
@@ -732,11 +732,11 @@ def run_emcee_sampler(omega_interim, args, roaster, use_MPI=False):
         for omega in pp:
             roaster.src_models[0][0].set_params(omega)
             vp = roaster.src_models[0][0].validate_params()
-            beta = omega[1]
-            if beta < 0. or beta > np.pi:
-                print roaster.src_models[0][0].get_params()
-                print vp, omega
-            # assert (omega[1] <= np.pi and omega[1] >= 0.), "(1) beta out of range"
+            # beta = omega[1]
+            # if beta < 0. or beta > np.pi:
+            #     print roaster.src_models[0][0].get_params()
+            #     print vp, omega
+            # # assert (omega[1] <= np.pi and omega[1] >= 0.), "(1) beta out of range"
         if not args.quiet:
             print i, np.mean(lnp)
             print np.mean(pp, axis=0)
@@ -1062,7 +1062,7 @@ class ConfigFileParser(object):
         self.galaxy_model_type = config.get("model", "galaxy_model_type", 
                                             default="Spergel")
 
-        model_params = config.get("model", "model_params", default='e beta')
+        model_params = config.get("model", "model_params", default='e1 e2')
         self.model_params = str.split(model_params, ' ')
 
         self.num_sources = int(config.get("model", "num_sources", default=1))
@@ -1181,7 +1181,7 @@ def main():
                              "(Default: 'jif_segment')")
 
     parser.add_argument("--model_params", type=str, nargs='+',
-                        default=['nu', 'hlr', 'e', 'beta', 'mag_sed1', 'dx', 
+                        default=['nu', 'hlr', 'e1', 'e2', 'mag_sed1', 'dx', 
                                  'dy', 'psf_fwhm'],
                         help="Names of the galaxy model parameters for sampling.")
 
