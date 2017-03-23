@@ -14,6 +14,7 @@ import sys
 import os.path
 import string
 import copy
+import yaml
 import numpy as np
 from scipy.optimize import minimize as sp_minimize
 from scipy.optimize import basinhopping
@@ -70,14 +71,6 @@ class Roaster(object):
 
     @param lnprior_omega      Prior class for the galaxy model parameters
     @param lnprior_Pi         Prior class for the PSF model parameters
-    @param data_format        Format for the input data file.
-    @param galaxy_model_type  Type of parametric galaxy model - see
-                              galsim_galaxy types.
-                              ['Sersic', 'Spergel', 'BulgeDisk' (default), 
-                               'star']
-                              If 'star' is specified, then any PSF model 
-                              sampling is turned off. This takes precedence over
-                              any other PSF sampling arguments or                 settings.
     @param telescope          Select only this telescope observations from the
                               input, if provided.
                               If not provided, then get data for all available
@@ -88,21 +81,15 @@ class Roaster(object):
                               filters (for each telescope).
     @param debug              Save debugging outputs (including model images
                               per step?)
-    @param model_paramnames   Names of the galaxy model parameters to sample in.
-                              These must match names in a galsim_galaxy model
-                              and/or a psf_model.
-    @param achromatic_galaxy  Use an achromatic galaxy model (or, by default use
-                              chromatic GalSim features)
     """
-    def __init__(self, lnprior_omega=None,
+    def __init__(self,
+                 config_file_name,
+                 lnprior_omega=None,
                  lnprior_Pi=None,
-                 data_format='test_galsim_galaxy',
-                 galaxy_model_type='Spergel',
-                 telescope=None,
-                 filters_to_load=None,
-                 debug=False,
-                 model_paramnames=['hlr', 'e1', 'e2'],
-                 achromatic_galaxy=False):
+                 debug=False
+                 ):
+        self.config = yaml.load(open(config_file_name))
+
         if lnprior_omega is None:
             self.lnprior_omega = EmptyPrior()
         else:
@@ -111,13 +98,14 @@ class Roaster(object):
             self.lnprior_Pi = pm.FlatPriorPSF()
         else:
             self.lnprior_Pi = lnprior_Pi
-        self.data_format = data_format
-        self.galaxy_model_type = galaxy_model_type
-        self.telescope = telescope
-        self.filters_to_load = filters_to_load
         self.debug = debug
-        self.model_paramnames = model_paramnames
-        self.achromatic_galaxy = achromatic_galaxy
+
+        self.telescope = self.config['data']['telescope']
+        self.filters_to_load = self.config['data']['filters']        
+        self.model_paramnames = self.config['model']['model_params'].split(" ")
+        self.achromatic_galaxy = self.config['model']['achromatic']
+        self.num_sources = self.config['model']['num_sources']
+
         ### Check if any of the active parameters are for a PSF model.
         ### If so, we will sample in the PSF and need to setup accordingly
         ### when the Load() function is called.
@@ -127,26 +115,16 @@ class Roaster(object):
         #     if not np.all(['psf' in p for p in model_paramnames]):
         #         raise ValueError("All parameters must have 'psf' label for 'star' model_type")
         # else:
-        if np.any(['psf' in p for p in model_paramnames]):
+        if np.any(['psf' in p for p in self.model_paramnames]):
             self.sample_psf = True
             self.psf_model_paramnames = jifparams.select_psf_paramnames(
-                model_paramnames)
+                self.model_paramnames)
         ### The complimentary set of parameters are those for the galaxy model(s)
         self.galaxy_model_paramnames = jifparams.select_galaxy_paramnames(
-            model_paramnames)
-
+            self.model_paramnames)
 
         ### Count the number of calls to self.lnlike
         self.istep = 0
-
-    def _get_branch_name(self, i):
-        branches = ['ground', 'space']
-        # define the parent branch (i.e. telescope)
-        if self.epoch is None:
-            branch = branches[i]
-        else:
-            branch = branches[self.epoch]
-        return branch
 
     def Load(self, infile, segment=None, epoch_num=None, use_PSFModel=False):
         """
@@ -198,7 +176,8 @@ class Roaster(object):
 
         logging.info("<Roaster> Loading image data")
         try:
-            if self.data_format == "jif_segment" or self.data_format == "test_galsim_galaxy":
+            if (self.config['data']['data_format'] == "jif_segment" or
+                self.config['data']['data_format'] == "test_galsim_galaxy"):
                 f = h5py.File(infile, 'r')
                 if self.telescope is None:
                     self.num_telescopes = len(f['telescopes'])
@@ -211,9 +190,9 @@ class Roaster(object):
                     print("Telescope names: {}".format(telescopes))
                 if segment == None:
                     segment = 0
-                self.num_sources = f['Footprints/seg{:d}'.format(segment)].attrs['num_sources']
-                if self.debug:
-                    print("Num. sources: {:d}".format(self.num_sources))
+                # self.num_sources = f['Footprints/seg{:d}'.format(segment)].attrs['num_sources']
+                # if self.debug:
+                #     print("Num. sources: {:d}".format(self.num_sources))
 
                 instruments = telescopes
 
@@ -297,7 +276,8 @@ class Roaster(object):
                                     lam_over_diam=lam_over_diam,
                                     gsparams=jifparams.k_default_gsparams))
                             else:
-                                logging.debug("Setting PSF type from footprints file: {}".format(seg.attrs['psf_type']))
+                                logging.debug("Setting PSF type from footprints file: {}".format(
+                                    seg.attrs['psf_type']))
                                 psf_types.append(seg.attrs['psf_type'])
                                 psfs.append(galsim.Image(seg['psf'][...]))
                             ###
@@ -316,7 +296,8 @@ class Roaster(object):
                 #     logging.info("<Roaster> Must specify a segment number as an integer")
                 # print "Have data for instruments:", instruments
         except KeyError:
-            print "Error parsing the input file -- Perhaps it's in a deprecated format? Try rerunning footprint extraction."
+            print ("Error parsing the input file -- Perhaps it's in a deprecated format? " + 
+                   "Try rerunning footprint extraction.")
             sys.exit(1)
 
         if have_bandpasses:
@@ -350,7 +331,7 @@ class Roaster(object):
         self.src_models = []
         self.src_models = [[galsim_galaxy.GalSimGalaxyModel(
                                 telescope_model=tel_names[idat],
-                                galaxy_model=self.galaxy_model_type,
+                                galaxy_model=self.config['model']['galaxy_model_type'],
                                 psf_model=psfs[idat],
                                 active_parameters=self.model_paramnames,
                                 filter_name=self.filter_names[idat])
@@ -361,6 +342,44 @@ class Roaster(object):
         self.n_gal_params = self.src_models[0][0].n_params - self.n_psf_params
         self.n_params = self.n_gal_params + self.num_epochs * self.n_psf_params
         return None
+
+    def render_model_images(self, nimages, nx, ny, tel_names, psfs,
+                            noise_var=1.e-10):
+        """
+        Render model images from the internal model state
+
+        This routine is useful for testing by generating fake data with the 
+        same methods as used to fit the data.
+        """
+        ## Validate arguments
+        assert len(nx) == nimages
+        assert len(ny) == nimages
+        assert len(tel_names) == nimages
+        assert len(psfs) == nimages
+        ## Map arguments to member variables that are otherwise initialized in 
+        ## the Load() method.
+        self.num_epochs = nimages
+        self.nx = nx
+        self.ny = ny
+        self.filter_names = [self.config['data']['filters']]
+        ## Initialize GalsimGalaxyModel instances 
+        self._init_galaxy_models(nimages, tel_names, psfs)
+        ## Set the image model parameters from the input configuration files
+        self.initialize_param_values(self.config['init']['init_param_file'])
+
+        ## Render image models using the method that gets called in the Roaster
+        ## likelihood method
+        images = [self._get_model_image(iepochs=iepoch) 
+                  for iepoch in xrange(nimages)]
+        ## Add fake noise 
+        noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
+        for im in images:
+            im.addNoise(noise)
+        ## Assign this fake image data to member variables so we can proceed 
+        ## with running Roaster as if we'd loaded actual data from file.
+        self.pixel_data = [copy.deepcopy(im.array) for im in images]
+        self.pix_noise_var = [copy.deepcopy(noise_var) for i in xrange(len(images))]
+        return images
 
     def initialize_param_values(self, param_file_name):
         """
@@ -582,13 +601,13 @@ class Roaster(object):
 
                     delta = (self.pixel_data[iepochs] - model_image.array)
                     lnlike += (-0.5 * np.sum(delta ** 2) /
-                        (self.pix_noise_var[iepochs] + 1.e-9))
+                        (self.pix_noise_var[iepochs] + 1.e-18))
         else:
             lnlike = -np.inf
         return lnlike
 
     def __call__(self, omega, *args, **kwargs):
-        return self.lnlike(omega, *args, **kwargs) + self.lnprior(omega)
+        return self.lnlike(omega, *args, **kwargs) #+ self.lnprior(omega)
 
 # ---------------------------------------------------------------------------------------
 # MCMC routines
@@ -655,8 +674,10 @@ def optimize_params(omega_interim, roaster, quiet=False):
         omega_interim = res.x
     return omega_interim, res.success
     # -----------------------------
-    # minimizer_kwargs = dict(method="L-BFGS-B", bounds=jifparams.get_bounds(paramnames), options={'disp': False})
-    # res = basinhopping(neg_lnp, omega_interim, niter=100, minimizer_kwargs=minimizer_kwargs)
+    # minimizer_kwargs = dict(method="L-BFGS-B", 
+    # bounds=jifparams.get_bounds(paramnames), options={'disp': False})
+    # res = basinhopping(neg_lnp, omega_interim, niter=100, 
+    # minimizer_kwargs=minimizer_kwargs)
     # # print "Optimization result: \n", res
     # print "Optimization result:", res.x
     # return res.x, True
@@ -917,7 +938,8 @@ class DefaultPriorSpergel(object):
     def _lnprior_nu(self, nu):
         d1 = (nu - self.nu_mean_1)
         d2 = (nu - self.nu_mean_2)
-        return -0.5 * (d1*d1/self.nu_var_1 + d2*d2/self.nu_var_2)
+        # return -0.5 * (d1*d1/self.nu_var_1 + d2*d2/self.nu_var_2)
+        return 0.0
 
     def _lnprior_hlr(self, hlr):
         return (self.hlr_shape-1.)*np.log(hlr) - (hlr / self.hlr_scale)

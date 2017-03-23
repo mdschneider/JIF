@@ -7,6 +7,8 @@ We observe biases between the mean or mode of marginal posteriors from Roaster a
 
 Our expectation is that the mean of Roaster marginal posteriors should match the input parameter value to arbitrary precision as the SNR becomes large (and perhaps assuming a sufficiently large stamp size).
 
+An obvious explanation to quantify or rule out is that different noise realizations give different biases in the posterior. We can investigate this by simulating many different noise realizations. For a univariate model (i.e., just varying the 'nu' parameter we do not need to run MCMC - just plot the likelihood or posteriors vs 'nu').
+
 
 ## Simulation study plan
 

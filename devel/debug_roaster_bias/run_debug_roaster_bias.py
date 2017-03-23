@@ -124,7 +124,7 @@ def get_noise_realization(gg, nx=80, ny=80, seed=590025467011):
     noise = jif.telescopes.lsst_noise(random_seed=seed)
     im = galsim.Image(nx, ny, scale=gg.pixel_scale_arcsec, init_value=0.)
     im.addNoise(noise)
-    return im.array
+    return im.array, noise.getVariance()
 
 
 def run_roaster(cfg_name):
@@ -216,6 +216,39 @@ class InspectorArgs(object):
         self.keeplast = 0
 
 
+def run_meyers_test(nu, nx=64, ny=64, noise_var=3e-7, flux=1.0):
+    """
+    Duplicate the test by J. Meyers here:
+
+    https://github.com/jmeyers314/silver-waffle/blob/master/Spergel%20Probability.ipynb
+    """
+    HLR = 1.0
+    PSF = galsim.Kolmogorov(fwhm=0.6)
+    scale = 0.2
+    noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
+
+    def make_data(nu_val):
+        gal = galsim.Spergel(nu_val, half_light_radius=HLR)
+        gal = gal.withFlux(flux)
+        obj = galsim.Convolve(PSF, gal)
+        img = obj.drawImage(nx=nx, ny=ny, scale=scale)
+        img.addNoise(noise)
+        return img
+
+    img = make_data(nu_val=0.5)
+
+    def lnlike1(nu1):
+        gal = galsim.Spergel(nu1, half_light_radius=HLR)
+        obj = galsim.Convolve(PSF, gal)
+        model = obj.drawImage(nx=nx, ny=ny, scale=scale)
+        return -0.5*np.sum((model.array-img.array)**2/noise_var)
+
+    def lnlikelihood(x):
+        return [lnlike1(nu1) for nu1 in x]
+
+    return lnlikelihood(nu)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Run Roaster posterior bias tests.')
@@ -248,7 +281,7 @@ def main():
 
     if args.gal_model == "Spergel":
         active_parameters = ['nu', 'hlr', 'e1', 'e2', 'mag_sed1']
-        params = [0.5, 1.0, 0.01, 0.01, 28.5]
+        params = [0.5, 1.0, 0.0, 0.0, 27.5]
         print "params:", params
     elif args.gal_model == "BulgeDisk":
         active_parameters = ['e1_bulge', 'e2_bulge', 'e1_disk', 'e2_disk']
@@ -257,19 +290,8 @@ def main():
     else:
         raise KeyError("Unsupported galaxy model")
 
-    gg = jif.GalSimGalaxyModel(galaxy_model=args.gal_model,
-        telescope_model="LSST",
-        psf_model="Model",
-        active_parameters=active_parameters)
-    noise_realization = get_noise_realization(gg, nx=80, ny=80, seed=args.seed)
-    nx, ny = noise_realization.shape
-
     ## 0. Generate the test image 
-    image_file = os.path.join(topdir, 'roaster_model_image.h5')
-
-    gg.set_params(params)
-    out_image = galsim.Image(nx, ny, init_value=0.)
-    gg.save_footprint(image_file, out_image=out_image, noise=noise_realization)
+    image_file = os.path.join(topdir, 'roaster_model_image.h5')        
 
     ## 1. Run Roaster on the image with only 'nu' as an active parameter
     roaster_cfg_name = os.path.join(topdir, 'ap1', 'roaster_config.cfg')
@@ -284,13 +306,62 @@ def main():
                  active_parameters='nu',
                  galaxy_model=args.gal_model,
                  nsamples=args.nsamples)
-    ## 
-    run_roaster(roaster_cfg_name)
 
-    iargs = InspectorArgs(roaster_file, roaster_cfg_name)
-    inspector = jif.RoasterInspector(iargs)
-    inspector.plot()
-    inspector.plot_data_and_model()
+
+    seed = args.seed
+    fig = plt.figure(figsize=(8, 8/1.618))
+    nu = np.linspace(0.2, 0.8, 160)
+    nu_ml = 0.0
+    nu_ml_jm = 0.0
+    niter = 50
+    for i_noise in xrange(niter):
+        gg = jif.GalSimGalaxyModel(galaxy_model=args.gal_model,
+            telescope_model="LSST",
+            psf_model="Model",
+            active_parameters=active_parameters)
+
+        noise_realization, noise_var = get_noise_realization(gg, nx=80, ny=80, seed=seed)
+        nx, ny = noise_realization.shape
+
+        gg.set_params(params)
+        out_image = galsim.Image(nx, ny, init_value=0.)
+        gg.save_footprint(image_file, out_image=out_image, noise=noise_realization)
+
+        ## Plot univariate Roaster posterior as a function of 'nu'
+        cfg = jif.RoasterModule.ConfigFileParser(roaster_cfg_name)
+        rstr, rstr_args = jif.RoasterModule.InitRoaster(cfg)
+        # jif.RoasterModule.save_model_image(rstr_args, rstr)
+
+        lnp = np.array([rstr([nu_i]) for nu_i in nu])
+        plt.plot(nu, np.exp(lnp - np.max(lnp)), color="#348ABD", alpha=0.2)
+
+        nu_ml += nu[np.argmax(lnp)]
+
+        # flux = jif.parameters.flux_from_AB_mag(gg.params[0].mag_sed1)
+        noise_var = 6e-8
+        flux = 1.0
+        lnp_jm = run_meyers_test(nu, nx=nx, ny=ny, noise_var=noise_var, flux=flux)
+        plt.plot(nu, np.exp(lnp_jm - np.max(lnp_jm)), color="#7A68A6", alpha=0.2)
+        nu_ml_jm += nu[np.argmax(lnp_jm)]
+
+        seed += 1
+    nu_ml /= niter
+    nu_ml_jm /= niter
+    plt.axvline(0.5, color='grey')
+    plt.axvline(nu_ml, color='#348ABD', linestyle='dashed')
+    plt.axvline(nu_ml_jm, color='#7A68A6', linestyle='dashed')
+    plt.xlabel(r"$\nu$")
+    plt.ylabel(r"Pr($\nu$)")
+    plt.savefig("nu_posterior.png")
+
+
+    # ## 
+    # run_roaster(roaster_cfg_name)
+
+    # iargs = InspectorArgs(roaster_file, roaster_cfg_name)
+    # inspector = jif.RoasterInspector(iargs)
+    # inspector.plot()
+    # inspector.plot_data_and_model()
 
     # ## 2. Run Roaster on the image with all parameters active
     # roaster_cfg_name = os.path.join(topdir, 'ap5', 'roaster_config.cfg')
