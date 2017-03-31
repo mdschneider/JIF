@@ -6,6 +6,7 @@ import copy
 
 import h5py
 import numpy as np
+import yaml
 import matplotlib.pyplot as plt
 import corner
 
@@ -43,6 +44,8 @@ class RoasterInspector(object):
         print "<RoasterInspector> Loading segment {:d}".format(args.segment_number)
         self.args = args
 
+        self.config = yaml.load(open(args.roaster_config))
+
         self._load_roaster_file(args)
         self._load_roaster_input_data()
 
@@ -57,36 +60,19 @@ class RoasterInspector(object):
         self.infile = args.infile
         self.roaster_infile = g.attrs['infile']
         self.segment_number = g.attrs['segment_number']
-        epoch_num = g.attrs['epoch_num']
-        if epoch_num >= 0:
-            self.epoch_num = epoch_num
-        else:
-            self.epoch_num = None
-        self.galaxy_model_type = g.attrs['galaxy_model_type']
-        self.filters_to_load = g.attrs['filters_to_load']
-        if isinstance(self.filters_to_load, str):
-            if self.filters_to_load == 'None':
-                self.filters_to_load = None
-            else:
-                self.filters_to_load = [self.filters_to_load]
-        self.telescope = g.attrs['telescope']
-        if self.telescope == 'None':
-            self.telescope = None
-        self.model_paramnames = g.attrs['model_paramnames']
-        self.achromatic_galaxy = g.attrs['achromatic_galaxy']
+
+        self.epoch_num = self.config["data"]["epoch_num"]
+        if self.epoch_num < 0:
+                self.epoch_num = None
+
         self.paramnames = g['post'].attrs['paramnames']
         if len(self.paramnames.shape) > 1:
             self.paramnames = np.array(self.paramnames).ravel()
-        #     self.paramnames = self.paramnames[0]
+
         self.nparams = len(self.paramnames)
         self.data = g['post'][...]
         self.logprob = g['logprobs'][...]
-        self.nburn = g.attrs['nburn']
         f.close()
-
-        ### The lists input from HDF5 can lose the commas between entries.
-        ### This seems to fix it:
-        self.model_paramnames = [m for m in self.model_paramnames]
         return None
 
     def __str__(self):
@@ -102,8 +88,8 @@ class RoasterInspector(object):
         print "Segment number:", self.segment_number
         # print "Segment number: {:d}".format(self.segment_number)
         print "data: ", self.data.shape
-        print "galaxy model: {}".format(self.galaxy_model_type)
-        print "filter subset: ", self.filters_to_load
+        print "galaxy model: {}".format(self.config["model"]["galaxy_model_type"])
+        # print "filter subset: ", self.filters_to_load
         print "paramnames:", self.paramnames.shape, "\n", self.paramnames
         # print self.data
         # print self.logprob
@@ -130,41 +116,14 @@ class RoasterInspector(object):
         return opt_params
 
     def _load_roaster_input_data(self):
-        self.cfg = Roaster.ConfigFileParser(self.args.roaster_config)
+        self.roaster = Roaster.Roaster(config=self.config)
 
-        ### Force the segment_number to match that of the Roaster output file,
-        ### even if the config file has a different value. This can happen if 
-        ### the segment_number in the config file was overridden at the Roaster
-        ### command line.
-        self.cfg.segment_number = self.segment_number
+        self.roaster.Load(self.config["infiles"]["infile_1"],
+                          segment=self.args.segment_number,
+                          epoch_num=self.epoch_num,
+                          use_PSFModel=self.config["model"]["use_psf_model"])
+        self.roaster.initialize_param_values(self.config["init"]["init_param_file"])
 
-        if self.cfg.epoch_num >= 0:
-            epoch_num = self.cfg.epoch_num
-        else:
-            epoch_num = None
-
-        # self.roaster = Roaster.Roaster(galaxy_model_type=self.galaxy_model_type,
-        #     telescope=self.telescope,
-        #     model_paramnames=self.model_paramnames,
-        #     filters_to_load=self.filters_to_load,
-        #     debug=False,
-        #     achromatic_galaxy=self.achromatic_galaxy)
-        ### The following puts data in self.roaster.pixel_data
-        # self.roaster.Load(self.roaster_infile, segment=self.segment_number,
-        #                   epoch_num=self.epoch_num)
-        self.roaster = Roaster.Roaster(debug=self.cfg.debug, 
-            data_format=self.cfg.data_format,
-            # lnprior_omega=lnprior_omega,
-            # lnprior_Pi=lnprior_Pi,
-            galaxy_model_type=self.cfg.galaxy_model_type,
-            model_paramnames=self.cfg.model_params,
-            telescope=self.cfg.telescope,
-            filters_to_load=self.cfg.filters,
-            achromatic_galaxy=self.cfg.achromatic)
-        self.roaster.Load(self.cfg.infiles[0], segment=self.cfg.segment_number,
-                          epoch_num=epoch_num)
-        if self.cfg.init_param_file is not None:
-            self.roaster.initialize_param_values(self.cfg.init_param_file)
         self.params_ref = self.roaster.get_params()
 
         print "Length of Roaster pixel data list: {:d}".format(
@@ -310,18 +269,11 @@ def main():
                         help="Name of Roaster config file")
 
     parser.add_argument("--segment_number", type=int, default=0,
-                        help="Index of the segment to load")
-
-    # parser.add_argument("--truths", type=float,
-    #                     help="true values of hyperparameters: "+
-    #                          "{Omega_m, sigma_8, ...}",
-    #                     nargs='+')
+                        help="Index of the segment to load. Override any " + 
+                             "value in the supplied Roaster config file.")
 
     parser.add_argument("--keeplast", type=int, default=0,
                         help="Keep last N samples.")
-
-    # parser.add_argument("--outprefix", default='../output/roasting/', type=str,
-    #                     help="Prefix to apply to output figures.")
 
     args = parser.parse_args()
 

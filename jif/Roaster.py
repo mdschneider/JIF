@@ -69,35 +69,26 @@ class Roaster(object):
     image that is fed to the likelihood function for a single epoch or
     instrument.
 
-    @param lnprior_omega      Prior class for the galaxy model parameters
-    @param lnprior_Pi         Prior class for the PSF model parameters
-    @param telescope          Select only this telescope observations from the
-                              input, if provided.
-                              If not provided, then get data for all available
-                              telescopes.
-    @param filters_to_load    Select only data for these named filters from the
-                              input, if provided.
-                              If not provided, then get data for all available
-                              filters (for each telescope).
+    @param config             Either the name of a YAML file to load or the 
+                              output of a previously loaded YAML file with 
+                              Roaster settings
     @param debug              Save debugging outputs (including model images
                               per step?)
     """
     def __init__(self,
-                 config_file_name,
-                 lnprior_omega=None,
-                 lnprior_Pi=None,
+                 config,
                  debug=False
                  ):
-        self.config = yaml.load(open(config_file_name))
+        if isinstance(config, str):
+            self.config = yaml.load(open(config))
+        else:
+            self.config = config
 
-        if lnprior_omega is None:
-            self.lnprior_omega = EmptyPrior()
-        else:
-            self.lnprior_omega = lnprior_omega
-        if lnprior_Pi is None:
-            self.lnprior_Pi = pm.FlatPriorPSF()
-        else:
-            self.lnprior_Pi = lnprior_Pi
+        np.random.seed(self.config["init"]["seed"])
+
+        self.lnprior_omega = globals()[self.config["priors"]["galaxy_prior_type"]]()
+        self.lnprior_Pi = getattr(pm, self.config["priors"]["psf_prior_type"])()
+
         self.debug = debug
 
         self.telescope = self.config['data']['telescope']
@@ -125,6 +116,7 @@ class Roaster(object):
 
         ### Count the number of calls to self.lnlike
         self.istep = 0
+        return None
 
     def Load(self, infile, segment=None, epoch_num=None, use_PSFModel=False):
         """
@@ -153,12 +145,15 @@ class Roaster(object):
                             load all available epochs for each available telescope and filter.
                             Requires specification of a single telescope and filter_to_load at
                             instantiation of the Roaster instance.
-        @param use_PSFModel Force the use of a PSFModel class instance to model PSFs even if not
-                            sampling any PSF model parameters
+        @param use_PSFModel Force the use of a PSFModel class instance to model
+                            PSFs even if not sampling any PSF model parameters
         """
         # global self.pixel_data
         # global self.pix_noise_var
         # global self.src_models
+         
+        self.infile = infile
+        self.epoch_num = epoch_num
 
         ### Reset the global data lists in case Roaster had been used before
         self.pixel_data = []
@@ -718,8 +713,11 @@ def run_emcee_sampler(omega_interim, args, roaster, use_MPI=False):
     logging.debug("Using emcee sampler")
     nvars = len(omega_interim)
 
-    # p0 = walker_ball(omega_interim, 0.01, args.nwalkers)
-    p0 = emcee.utils.sample_ball(omega_interim, np.ones_like(omega_interim) * 0.01, args.nwalkers)
+    nsamples = roaster.config["sampling"]["nsamples"]
+    nwalkers = roaster.config["sampling"]["nwalkers"]
+
+    # p0 = walker_ball(omega_interim, 0.01, nwalkers)
+    p0 = emcee.utils.sample_ball(omega_interim, np.ones_like(omega_interim) * 0.01, nwalkers)
 
     if use_MPI:
         pool = MPIPool(loadbalance=True)
@@ -731,13 +729,13 @@ def run_emcee_sampler(omega_interim, args, roaster, use_MPI=False):
 
     # logging.debug("Initializing parameters for MCMC to yield finite posterior values")
     # while not all([np.isfinite(roaster(p)) for p in p0]):
-    #     p0 = walker_ball(omega_interim, 0.02, args.nwalkers)
-    sampler = emcee.EnsembleSampler(args.nwalkers,
+    #     p0 = walker_ball(omega_interim, 0.02, nwalkers)
+    sampler = emcee.EnsembleSampler(nwalkers,
                                     nvars,
                                     roaster,
-                                    threads=args.nthreads,
+                                    threads=roaster.config["sampling"]["nthreads"],
                                     pool=pool)
-    nburn = max([1,args.nburn])
+    nburn = max([1, roaster.config["sampling"]["nburn"]])
     logging.info("Burning with {:d} steps".format(nburn))
     pp, lnp, rstate = sampler.run_mcmc(p0, nburn)
     sampler.reset()
@@ -745,9 +743,9 @@ def run_emcee_sampler(omega_interim, args, roaster, use_MPI=False):
     lnps = []
     lnpriors = []
     logging.info("Sampling")
-    for i in range(args.nsamples):
+    for i in range(nsamples):
         if np.mod(i+1, 20) == 0:
-            print "\tStep {:d} / {:d}, lnp: {:5.4g}".format(i+1, args.nsamples,
+            print "\tStep {:d} / {:d}, lnp: {:5.4g}".format(i+1, nsamples,
                 np.mean(pp))
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         for omega in pp:
@@ -809,7 +807,7 @@ def run_SIRS_sampler(omega_interim, args, roaster):
     return pps, lnps
 
 
-def do_sampling(args, roaster, return_samples=False, sampler='emcee'):
+def do_sampling(args, roaster, return_samples=False):
     """
     Execute the MCMC chain to fit galaxy (and PSF) model parameters to a segment
 
@@ -824,6 +822,7 @@ def do_sampling(args, roaster, return_samples=False, sampler='emcee'):
     ## Optimization needs fixing - turn off for now [2016-10-22] 
     opt_success = True
 
+    sampler = roaster.config["sampling"]["sampler"]
     if sampler == 'emcee':
         ### Double the burn-in period if optimization failed
         if not opt_success:
@@ -842,21 +841,37 @@ def do_sampling(args, roaster, return_samples=False, sampler='emcee'):
 
 
 def write_results(args, pps, lnps, roaster):
-    if args.telescope is None:
+    """
+    Save an HDF5 file with posterior samples from Roaster
+
+    Output file format:
+
+                    Samples
+                       |
+                       |   
+                seg{segment_number}
+                (attributes: 'infile', 'segment_number')
+                /                   \
+               /                     \
+            post                      logprobs
+            (attributes: paramnames)
+
+    """
+    if roaster.telescope is not None:
+        telescope = roaster.telescope
+    else:
+        telescope = 'None'
+
+    if telescope is None:
         tel_lab = ""
     else:
-        tel_lab = "_{}".format(args.telescope)
+        tel_lab = "_{}".format(telescope)
     outdir = os.path.dirname(args.outfile)
     if not os.path.exists(outdir):
         os.makedirs(outdir)
     outfile = args.outfile + tel_lab + ".h5"
     logging.info("Writing MCMC results to %s" % outfile)
     f = h5py.File(outfile, 'w')
-
-    if roaster.telescope is not None:
-        telescope = roaster.telescope
-    else:
-        telescope = 'None'
 
     ### Store outputs in an HDF5 (sub-)group so we don't always 
     ### need a separate HDF5 file for every segment.
@@ -865,20 +880,20 @@ def write_results(args, pps, lnps, roaster):
 
     ### Save attributes so we can later instantiate Roaster with the same
     ### settings.
-    g.attrs['infile'] = args.infiles[0]
+    g.attrs['infile'] = roaster.infile
     if isinstance(args.segment_number, int):
         g.attrs['segment_number'] = args.segment_number
     else:
         g.attrs['segment_number'] = 'all'
-    g.attrs['epoch_num'] = args.epoch_num
-    g.attrs['galaxy_model_type'] = roaster.galaxy_model_type
-    if roaster.filters_to_load is not None:
-        g.attrs['filters_to_load'] = roaster.filters_to_load
-    else:
-        g.attrs['filters_to_load'] = 'None'
-    g.attrs['telescope'] = telescope
-    g.attrs['model_paramnames'] = roaster.model_paramnames
-    g.attrs['achromatic_galaxy'] = roaster.achromatic_galaxy
+    # g.attrs['epoch_num'] = roaster.epoch_num
+    # g.attrs['galaxy_model_type'] = roaster.galaxy_model_type
+    # if roaster.filters_to_load is not None:
+    #     g.attrs['filters_to_load'] = roaster.filters_to_load
+    # else:
+    #     g.attrs['filters_to_load'] = 'None'
+    # g.attrs['telescope'] = telescope
+    # g.attrs['model_paramnames'] = roaster.model_paramnames
+    # g.attrs['achromatic_galaxy'] = roaster.achromatic_galaxy
 
     ### Collect the galaxy model parameter names, appending source indices if 
     ### needed.
@@ -905,7 +920,7 @@ def write_results(args, pps, lnps, roaster):
     if "logprobs" in g:
         del g["logprobs"]
     logprobs = g.create_dataset("logprobs", data=np.vstack(lnps))
-    g.attrs["nburn"] = args.nburn
+    # g.attrs["nburn"] = args.nburn
     f.close()
     return None
 
@@ -1059,117 +1074,128 @@ def save_model_image(args, roaster):
     return np.sqrt(np.var(resid.ravel()) / roaster.pix_noise_var[epoch_num])
 
 # ------------------------------------------------------------------------------
-class ConfigFileParser(object):
-    """
-    Parse a configuration file for this script 
-    """
-    def __init__(self, config_file_name):
-        self.config_file = config_file_name
+# class ConfigFileParser(object):
+#     """
+#     Parse a configuration file for this script 
+#     """
+#     def __init__(self, config_file_name):
+#         self.config_file = config_file_name
 
-        config = jifconf.DefConfigParser()
-        config.read(config_file_name)
+#         config = jifconf.DefConfigParser()
+#         config.read(config_file_name)
 
-        infiles = config.items("infiles")
-        print "infiles:"
-        for key, infile in infiles:
-            print infile
-        self.infiles = [infile for key, infile in infiles]
+#         infiles = config.items("infiles")
+#         print "infiles:"
+#         for key, infile in infiles:
+#             print infile
+#         self.infiles = [infile for key, infile in infiles]
 
-        segment_number = config.get("data", "segment_number")
-        self.segment_number = int(segment_number)
+#         segment_number = config.get("data", "segment_number")
+#         self.segment_number = int(segment_number)
 
-        self.outfile = config.get("metadata", "outfile",
-                                  default="../output/roasting/roaster_out")
+#         self.outfile = config.get("metadata", "outfile",
+#                                   default="../output/roasting/roaster_out")
 
-        self.galaxy_model_type = config.get("model", "galaxy_model_type", 
-                                            default="Spergel")
+#         self.galaxy_model_type = config.get("model", "galaxy_model_type", 
+#                                             default="Spergel")
 
-        model_params = config.get("model", "model_params", default='e1 e2')
-        self.model_params = str.split(model_params, ' ')
+#         model_params = config.get("model", "model_params", default='e1 e2')
+#         self.model_params = str.split(model_params, ' ')
 
-        self.num_sources = int(config.get("model", "num_sources", default=1))
+#         self.num_sources = int(config.get("model", "num_sources", default=1))
 
-        self.telescope = config.get("data", "telescope")
+#         self.telescope = config.get("data", "telescope")
 
-        self.data_format = config.get("data", "data_format")
+#         self.data_format = config.get("data", "data_format")
 
-        filters = config.get("data", "filters")
-        if filters is not None:
-            self.filters = str.split(filters, ' ')
+#         filters = config.get("data", "filters")
+#         if filters is not None:
+#             self.filters = str.split(filters, ' ')
 
-        achromatic = config.get("model", "achromatic")
-        self.achromatic = (achromatic == 'True')
+#         achromatic = config.get("model", "achromatic")
+#         self.achromatic = (achromatic == 'True')
 
-        use_psf_model = config.get("model", "use_psf_model", default=False)
-        self.use_psf_model = (use_psf_model == 'True')
+#         use_psf_model = config.get("model", "use_psf_model", default=False)
+#         self.use_psf_model = (use_psf_model == 'True')
 
-        epoch_num = config.get("data", "epoch_num", default=-1)
-        self.epoch_num = int(epoch_num)
+#         epoch_num = config.get("data", "epoch_num", default=-1)
+#         self.epoch_num = int(epoch_num)
 
-        self.init_param_file = config.get("init", "init_param_file")
+#         self.init_param_file = config.get("init", "init_param_file")
 
-        output_model = config.get("run", "output_model", default="False")
-        self.output_model = (output_model == "True")
+#         output_model = config.get("run", "output_model", default="False")
+#         self.output_model = (output_model == "True")
 
-        self.seed = config.get("init", "seed")
-        if self.seed is not None:
-            self.seed = int(self.seed)
+#         self.seed = config.get("init", "seed")
+#         if self.seed is not None:
+#             self.seed = int(self.seed)
 
-        self.sampler = config.get("sampling", "sampler", default='emcee')
+#         self.sampler = config.get("sampling", "sampler", default='emcee')
 
-        self.nsamples = int(config.get("sampling", "nsamples", default=100))
-        self.nwalkers = int(config.get("sampling", "nwalkers", default=32))
-        self.nburn = int(config.get("sampling", "nburn", default=50))
-        self.nthreads = int(config.get("sampling", "nthreads", default=1))
+#         self.nsamples = int(config.get("sampling", "nsamples", default=100))
+#         self.nwalkers = int(config.get("sampling", "nwalkers", default=32))
+#         self.nburn = int(config.get("sampling", "nburn", default=50))
+#         self.nthreads = int(config.get("sampling", "nthreads", default=1))
 
-        quiet = config.get("run", "quiet")
-        self.quiet = (quiet == "True")
-        debug = config.get("run", "debug")
-        self.debug = (debug == "True")
+#         quiet = config.get("run", "quiet")
+#         self.quiet = (quiet == "True")
+#         debug = config.get("run", "debug")
+#         self.debug = (debug == "True")
 
-        return None
+#         return None
 
 
 # ------------------------------------------------------------------------------
 def InitRoaster(args):
-    args.outfile += '_seg{:d}'.format(args.segment_number)
+    """
+    Initialize Roaster object, load data, and setup model.
 
-    np.random.seed(args.seed)
+    Use sensible defaults.
 
+    The args parameter must be a dict containing:
+
+        config_file         Name of the Roaster YAML config file
+        debug               Print debugging info?
+
+    Optional components:
+        
+        segment_number      Index of the segment (i.e., 'footprint') to load 
+                            from the input image file.
+    """
     logging.debug('--- Roaster started')
 
-    if args.segment_number is None:
-        args.segment_number = 0
+    config = yaml.load(open(args.config_file))
 
-    if args.epoch_num >= 0:
-        epoch_num = args.epoch_num
+    roaster = Roaster(config=config,
+                      debug=args.debug)
+
+    ##
+    ## Load image data
+    ##
+    if args.segment_number is not None:
+        segment_number = args.segment_number
     else:
+        segment_number = config["data"]["segment_number"]
+    args.segment_number = segment_number
+    epoch_num = config["data"]["epoch_num"]
+    if epoch_num < 0:
         epoch_num = None
 
-    ### Set galaxy priors
-    if args.galaxy_model_type == "Spergel":
-        lnprior_omega = DefaultPriorSpergel()
-        # lnprior_omega = EmptyPrior()
-    elif args.galaxy_model_type == "BulgeDisk":
-        lnprior_omega = DefaultPriorBulgeDisk(z_mean=1.0)
-    else:
-        lnprior_omega = EmptyPrior()
+    roaster.Load(config["infiles"]["infile_1"], 
+                 segment=segment_number,
+                 epoch_num=epoch_num,
+                 use_PSFModel=config["model"]["use_psf_model"])
 
-    ### Set PSF priors
-    lnprior_Pi = pm.DefaultPriorPSF()
+    ##
+    ## Initialize values of model parameters
+    ##
+    roaster.initialize_param_values(config["init"]["init_param_file"])
 
-    roaster = Roaster(debug=args.debug, data_format=args.data_format,
-                      lnprior_omega=lnprior_omega,
-                      lnprior_Pi=lnprior_Pi,
-                      galaxy_model_type=args.galaxy_model_type,
-                      model_paramnames=args.model_params,
-                      telescope=args.telescope,
-                      filters_to_load=args.filters,
-                      achromatic_galaxy=args.achromatic)
-    roaster.Load(args.infiles[0], segment=args.segment_number,
-                 epoch_num=epoch_num, use_PSFModel=args.use_psf_model)
-    if args.init_param_file is not None:
-        roaster.initialize_param_values(args.init_param_file)
+    ##
+    ## Set the output file name for Roaster based on the loaded segment
+    ##
+    args.outfile = config["metadata"]["outfile"] + '_seg{:d}'.format(segment_number)
+
     return roaster, args
 
 
@@ -1178,79 +1204,16 @@ def main():
     parser = argparse.ArgumentParser(
         description='Draw interim samples of source model parameters via MCMC.')
 
-    parser.add_argument("--infiles", type=str,
-                        help="input image files to roast", nargs='+')
-
-    parser.add_argument('--config_file', type=str, default=None,
+    parser.add_argument('config_file', type=str,
                         help="Name of a configuration file listing inputs." +
-                             "If specified, ignore other command line flags." +
-                             "(Default: None)")
-
-    parser.add_argument("--segment_number", type=int, default=None,
-                        help="Index of the segment to load")
-
-    parser.add_argument("-o", "--outfile",
-                        default="../output/roasting/roaster_out",
-                        help="output HDF5 to record posterior samples and "+
-                             "loglikes. (Default: `roaster_out`)")
-
-    parser.add_argument("--galaxy_model_type", type=str, default="Spergel",
-                        help="Type of parametric galaxy model "+
-                             "(Default: 'Spergel')")
-
-    parser.add_argument("--data_format", type=str, default="jif_segment",
-                        help="Format of the input image data file " +
-                             "(Default: 'jif_segment')")
-
-    parser.add_argument("--model_params", type=str, nargs='+',
-                        default=['nu', 'hlr', 'e1', 'e2', 'mag_sed1', 'dx', 
-                                 'dy', 'psf_fwhm'],
-                        help="Names of the galaxy model parameters for sampling.")
-
-    parser.add_argument("--telescope", type=str, default=None,
-                        help="Select only a single telescope from the input data file " + 
-                             "(Default: None - get all telescopes data)")
-
-    parser.add_argument("--filters", type=str, nargs='+',
-                        help="Names of a subset of filters to load from the input data file " + 
-                             "(Default: None - use data in all available filters)")
-
-    parser.add_argument("--achromatic", action="store_true",
-                        help="Use an achromatic galaxy or star model")
-
-    parser.add_argument("--epoch_num", type=int, default=-1,
-                        help="Index of single epoch to fit. If not supplied, "+
-                             "then fit all epochs.")
-
-    parser.add_argument("--init_param_file", type=str, default=None,
-                        help="Name of a config file with parameter values to "+
-                             "initialize the chain")
+                             "If specified, ignore other command line flags.")
 
     parser.add_argument("--output_model", action="store_true",
                         help="Just save the initial model image to file. "+
                              "Don't sample")
 
-    parser.add_argument("--use_psf_model", action="store_true",
-                        help="Force use of a parametric PSF model")
-
-    parser.add_argument("--seed", type=int, default=None,
-                        help="Seed for pseudo-random number generator")
-
-    parser.add_argument("--sampler", type=str, default='emcee',
-                        help="Type of MC sampler to use (Default: 'emcee')")
-
-    parser.add_argument("--nsamples", default=100, type=int,
-                        help="Number of samples for each emcee walker "+
-                             "(Default: 100)")
-
-    parser.add_argument("--nwalkers", default=32, type=int,
-                        help="Number of emcee walkers (Default: 16)")
-
-    parser.add_argument("--nburn", default=50, type=int,
-                        help="Number of burn-in steps (Default: 50)")
-
-    parser.add_argument("--nthreads", default=1, type=int,
-                        help="Number of threads to use (Default: 1)")
+    parser.add_argument("--segment_number", type=int, default=None,
+                        help="Override the segment number to load with this value")
 
     parser.add_argument("--quiet", action="store_true")
 
@@ -1258,27 +1221,13 @@ def main():
 
     args = parser.parse_args()
 
-    ### Parse some parameters that can override those in the config_file, if present
-    segment_number = args.segment_number
-    outfile = args.outfile
-
-    ###
-    ### Get the parameters for input/output from configuration file or argument list
-    ###
-    if isinstance(args.config_file, str):
-        logging.info('Reading from configuration file {}'.format(args.config_file))
-        args = ConfigFileParser(args.config_file)
-        if segment_number is not None:
-            args.segment_number = segment_number
-    elif not isinstance(args.infiles, list):
-        raise ValueError("Must specify either 'config_file' or 'infiles' argument")
+    print "Config file:", args.config_file
 
     roaster, args = InitRoaster(args)
 
-    import pprint
-    pp = pprint.PrettyPrinter(indent=4)
-
     if not args.quiet:
+        import pprint
+        pp = pprint.PrettyPrinter(indent=4)
         print("\nsource model 0:")
         pp.pprint(roaster.src_models[0][0].__dict__)
 
@@ -1288,7 +1237,7 @@ def main():
             print "\n======== WARNING: large model residual ==========="
         print "Residual r.m.s. for initial model: {:12.10g}\n".format(resid_rms)
     else:
-        do_sampling(args, roaster, sampler=args.sampler)
+        do_sampling(args, roaster, return_samples=False)
 
     logging.debug('--- Roaster finished')
     return 0

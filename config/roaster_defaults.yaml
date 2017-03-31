@@ -59,6 +59,17 @@ model :
   achromatic : True
 
 #
+# Control the model parameter prior distributions
+#
+priors :
+  # Form of the prior on galaxy model parameters, omega
+  # Choices include: 'EmptyPrior', 'DefaultsPriorSpergel', 'DefaultPriorBulgeDisk'
+  galaxy_prior_type : EmptyPrior
+  # Form of the prior on PSF model parameters, Pi
+  # Choices include: 'FlatPriorPSF', 'DefaultPriorPSF'
+  psf_prior_type : FlatPriorPSF
+
+#
 # Control the intial state of the Roaster instance
 #
 init :

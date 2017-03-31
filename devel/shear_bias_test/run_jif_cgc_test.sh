@@ -27,25 +27,38 @@ endif
 set user=`whoami`
 set workdir=/Users/${user}/work/MagicBeans/devel/shear_bias_test_167/v2
 
-set config_file=roaster_cgc.cfg
+# set config_file=roaster_cgc.cfg
+set config_file=roaster_cgc.yaml
 set field=$1
 
 ##
 ## Modify the config file fed to Roaster for the currently selected field
 ##
 rm -rf update_config.py
+# cat >>update_config.py <<EOF
+# #!/usr/bin/env python
+# import ConfigParser
+
+# Config = ConfigParser.ConfigParser()
+# Config.read("${config_file}")
+# print Config.sections()
+# Config.set('infiles', 'infile_1', '${workdir}/control/ground/constant/segments/seg_${field}.h5')
+# Config.set('metadata', 'outfile', '${workdir}/reaper/JIF/${field}/roaster_${field}')
+
+# with open('${config_file}', 'wb') as configfile:
+#     Config.write(configfile)
+# EOF
+
 cat >>update_config.py <<EOF
 #!/usr/bin/env python
-import ConfigParser
+import yaml
 
-Config = ConfigParser.ConfigParser()
-Config.read("${config_file}")
-print Config.sections()
-Config.set('infiles', 'infile_1', '${workdir}/control/ground/constant/segments/seg_${field}.h5')
-Config.set('metadata', 'outfile', '${workdir}/reaper/JIF/${field}/roaster_${field}')
+config = yaml.load(open("${config_file}"))
+config['infiles']['infile_1'] = '${workdir}/control/ground/constant/segments/seg_${field}.h5'
+config['metadata']['outfile'] = '${workdir}/reaper/JIF/${field}/roaster_${field}'
 
-with open('${config_file}', 'wb') as configfile:
-    Config.write(configfile)
+with open("${config_file}", "w") as f:
+    yaml.dump(config, f, indent=4, default_flow_style=False)
 EOF
 
 python update_config.py
@@ -58,7 +71,7 @@ foreach segnum (`seq 0 399`)
 	echo "================================================="
 	echo "Fitting segment number "$segnum
 	echo "================================================="
-	jif_roaster --config_file $config_file --segment_number $segnum || goto error
+	jif_roaster $config_file --segment_number $segnum --quiet || goto error
 
 	echo " "
 	echo "================================================="
