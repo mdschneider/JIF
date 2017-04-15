@@ -49,7 +49,7 @@ model :
   # Names of the source model parameters to sample in.
   # Must be consistent with the 'galaxy_model_type'.
   # model_params : nu hlr e beta mag_sed1 dx dy psf_fwhm
-  model_params : nu
+  model_params : nu hlr mag_sed1
   # How many sources in the single footprint?
   num_sources : 1
   # Use an achromatic galaxy or star model?

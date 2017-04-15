@@ -57,6 +57,20 @@ model :
   # This means no rendering of SEDs through passbands or chromatic aberrations.
   # Also, it makes the 'mag' parameters less relateable to realistic values.
   achromatic : True
+  # Force use of a parametric PSF model?
+  # Otherwise, determine PSF type (model or image) from input footprints file.
+  use_psf_model : True
+
+#
+# Control the model parameter prior distributions
+#
+priors :
+  # Form of the prior on galaxy model parameters, omega
+  # Choices include: 'EmptyPrior', 'DefaultsPriorSpergel', 'DefaultPriorBulgeDisk'
+  galaxy_prior_type : EmptyPrior
+  # Form of the prior on PSF model parameters, Pi
+  # Choices include: 'FlatPriorPSF', 'DefaultPriorPSF'
+  psf_prior_type : FlatPriorPSF
 
 #
 # Control the intial state of the Roaster instance
