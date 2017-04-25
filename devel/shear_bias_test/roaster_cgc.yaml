@@ -5,12 +5,12 @@ data:
     segment_number: 0
     telescope: LSST
 infiles:
-    infile_1: /Users/schneider42/work/MagicBeans/devel/shear_bias_test_167/v2/control/ground/constant/segments/seg_000.h5
+    infile_1: /Users/schneider42/work/MagicBeans/devel/shear_bias_test_167/v2/control/ground/constant/segments/seg_049.h5
 init:
     init_param_file: roaster_cgc_params.cfg
     seed: 9216526
 metadata:
-    outfile: /Users/schneider42/work/MagicBeans/devel/shear_bias_test_167/v2/reaper/JIF/000/roaster_000
+    outfile: /Users/schneider42/work/MagicBeans/devel/shear_bias_test_167/v2/reaper/JIF/049/roaster_049
 model:
     achromatic: true
     galaxy_model_type: Spergel
