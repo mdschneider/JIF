@@ -16,6 +16,7 @@ k_default_gsparams = galsim.GSParams(
             shoot_accuracy=1.e-1,    # approximations in photon shooting aim to be this accurate
             minimum_fft_size=16)     # minimum size of ffts
 
+
 ### These SEDs do not go to long enough wavelengths for WFIRST bands
 # k_SED_names = ['CWW_E_ext', 'CWW_Sbc_ext', 'CWW_Scd_ext', 'CWW_Im_ext']
 ### From the Brown et al. (2014) atlas:
@@ -243,6 +244,17 @@ def flux_from_AB_mag(mag, exposure_time_s=15, gain=2.1,
     flux *= gain * exposure_time_s * bandpass_over_wavelength / h
     flux *= 4*np.pi/(pixel_scale_arcsec / (180*60*60))
     return flux
+
+
+def AB_mag_from_flux(flux, exposure_time_s=16, gain=2.1,
+                     bandpass_over_wavelength=2.,
+                     pixel_scale_arcsec=0.2):
+    h = 6.62606957e-27 # Planck's constant in erg seconds
+    flux /= 4*np.pi/(pixel_scale_arcsec / (180*60*60))
+    flux /= gain * exposure_time_s * bandpass_over_wavelength / h
+    mag_AB = 48.6
+    mag = -2.5 * np.log10(flux) - mag_AB
+    return mag
 
 
 def wrap_ellipticity_phase(phase):

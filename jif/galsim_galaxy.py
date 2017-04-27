@@ -289,12 +289,9 @@ class GalSimGalaxyModel(object):
                 gal = galsim.Sersic(n=self.params[0].n,
                     half_light_radius=self.params[0].hlr,
                     flux=1.0, gsparams=self.gsparams)
-            flux = jifparams.flux_from_AB_mag(self.params[0].mag_sed1)
-            gal = gal.withFlux(flux)
-            e = np.hypot(self.params[0].e1, self.params[0].e2)
-            beta = 0.5 * np.arctan2(self.params[0].e2, self.params[0].e1)
-            gal_shape = galsim.Shear(g=e,
-                beta=beta*galsim.radians)
+            # flux = jifparams.flux_from_AB_mag(self.params[0].mag_sed1)
+            # gal = gal.withFlux(flux)
+            gal_shape = galsim.Shear(e1=self.params[0].e1, e2=self.params[0].e2)
             gal = gal.shear(gal_shape)
             gal = gal.shift(self.params[0].dx, self.params[0].dy)
             # print "GG gal HLR: {:12.10g}".format(gal.calculateHLR())
