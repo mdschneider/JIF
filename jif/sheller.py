@@ -227,7 +227,7 @@ def create_segments(subfield_index=0, experiment="control",
             psfs.append(np.asarray(s[0].data[0:ng, 0:ng], dtype=np.float64))
             s.close()
 
-        # print "noise_vars:", noise_vars
+        print "noise_vars:", noise_vars
         seg.save_images(images, noise_vars, [dummy_mask], backgrounds,
             segment_index=igal, telescope=telescope_name)
         seg.save_psf_images(psfs, segment_index=igal, telescope=telescope_name,
