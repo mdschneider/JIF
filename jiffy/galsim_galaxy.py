@@ -44,8 +44,11 @@ class GalsimGalaxyModel(object):
         gal = galsim.Spergel(self.params[0].nu,
                              half_light_radius=self.params[0].hlr,
                              flux=self.params[0].flux)
+        gal = gal.shear(galsim.Shear(g1=self.params[0].e1,
+                                     g2=self.params[0].e2))
+        # mu = 1. / (1. - (self.params[0].e1**2 + self.params[0].e2**2))
+        # gal = gal.lens(g1=self.params[0].e1, g2=self.params[0].e2, mu=mu)
         gal = gal.shift(self.params[0].dx, self.params[0].dy)
-        gal = gal.shear(galsim.Shear(e1=self.params[0].e1, e2=self.params[0].e2))
         obj = galsim.Convolve(self.psf, gal)
         model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
                               gain=gain)

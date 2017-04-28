@@ -41,25 +41,25 @@ stamp:
     # ellipticity components. Turn off the Ring type to validate the statistical model.
     # type: Basic
 
-    shear :
-        type : G1G2
-        g1 : 0.0
-        g2 : 0.0
+    # shear :
+    #     type : G1G2
+    #     g1 : 0.0
+    #     g2 : 0.05
 
-    # # The shear was chosen randomly within an annulus with 0.01 < |g| < 0.1.
-    # shear:
-    #     type: GBeta
-    #     # Change the shear every image, not every object.
-    #     index_key : image_num
-    #     g:
-    #         # The probability distribution is linear in |g|: P(g) ~ g. So equal probability per
-    #         # area within the annulus.  (RandomDistribution automatically renormalizes to have
-    #         # the total integrated probability equal to 1.0.)
-    #         type: RandomDistribution
-    #         function: x
-    #         x_min: 0.01
-    #         x_max: 0.1
-    #     beta: { type: Random }
+    # The shear was chosen randomly within an annulus with 0.01 < |g| < 0.1.
+    shear:
+        type: GBeta
+        # Change the shear every image, not every object.
+        index_key : image_num
+        g:
+            # The probability distribution is linear in |g|: P(g) ~ g. So equal probability per
+            # area within the annulus.  (RandomDistribution automatically renormalizes to have
+            # the total integrated probability equal to 1.0.)
+            type: RandomDistribution
+            function: x
+            x_min: 0.01
+            x_max: 0.1
+        beta: { type: Random }
 
 image:
     type: Tiled
@@ -82,10 +82,10 @@ image:
     # Offset (in pixels)
     offset:
         type: XY
-        # x: { type: Random, min: -1.0, max: 1.0 }
-        # y: { type: Random, min: -1.0, max: 1.0 }
-        x: { type: Random, min: -0, max: 0 }
-        y: { type: Random, min: -0, max: 0 }
+        x: { type: Random, min: -1.0, max: 1.0 }
+        y: { type: Random, min: -1.0, max: 1.0 }
+        # x: { type: Random, min: -0, max: 0 }
+        # y: { type: Random, min: -0, max: 0 }
 
 
     # This means the code will parallelize the creation of a single output file,
