@@ -40,7 +40,7 @@ class TestRoaster(unittest.TestCase):
         """
         rstr = roaster.Roaster()
         rstr.make_data()
-        self.assertAlmostEqual(rstr.data.array.var(), 8.02857e-07)
+        self.assertAlmostEqual(rstr.data.var(), 8.02857e-07)
 
     def test_shear_bias(self):
         """

@@ -18,18 +18,17 @@ class GalsimGalaxyModel(object):
         self.n_params = len(self.active_parameters)
 
         self.params = np.array([(0.5, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0)],
-                                            dtype=[('nu', '<f8'),
-                                                   ('hlr', '<f8'),
-                                                   ('e1', '<f8'),
-                                                   ('e2', '<f8'),
-                                                   ('flux', '<f8'),
-                                                   ('dx', '<f8'),
-                                                   ('dy', '<f8')])
+                               dtype=[('nu', '<f8'),
+                                      ('hlr', '<f8'),
+                                      ('e1', '<f8'),
+                                      ('e2', '<f8'),
+                                      ('flux', '<f8'),
+                                      ('dx', '<f8'),
+                                      ('dy', '<f8')])
         self.params = self.params.view(np.recarray)
 
         # TESTING: hard-code some stuff for now
         self.psf = galsim.Kolmogorov(fwhm=0.6)
-        self.gain = 1.0
         return None
 
     def set_params(self, params):
@@ -38,16 +37,16 @@ class GalsimGalaxyModel(object):
             self.params[pname][0] = params[ip]
         return None
 
-    def get_image(self, ngrid_x, ngrid_y, scale=0.2):
+    def get_image(self, ngrid_x, ngrid_y, scale=0.2, gain=1.0):
         """
         Render a GalSim Image() object from the internal model
         """
         gal = galsim.Spergel(self.params[0].nu,
                              half_light_radius=self.params[0].hlr,
                              flux=self.params[0].flux)
-        gal = gal.shear(galsim.Shear(e1=self.params[0].e1, e2=self.params[0].e2))
         gal = gal.shift(self.params[0].dx, self.params[0].dy)
+        gal = gal.shear(galsim.Shear(e1=self.params[0].e1, e2=self.params[0].e2))
         obj = galsim.Convolve(self.psf, gal)
         model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
-                              gain=self.gain)
+                              gain=gain)
         return model

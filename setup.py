@@ -7,7 +7,7 @@ setup(name='jif',
       author='Michael D. Schneider, William A. Dawson',
       author_email='mdschneider@me.com',
       license='MIT',
-      packages=['jif'],
+      packages=['jif', 'jiffy'],
       package_data={'jif': ['input/*.dat', 'input/*.sed']},
       ### The python scripts in this package can be designated as distinct command-line executables
       ### here. Be careful about potential name clashes.

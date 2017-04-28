@@ -30,9 +30,10 @@ class Roaster(object):
         """
         Make fake data from the current stored galaxy model
         """
-        self.data = self._get_model_image()
+        image = self._get_model_image()
         noise = galsim.GaussianNoise(sigma=np.sqrt(self.noise_var))
-        self.data.addNoise(noise)
+        image.addNoise(noise)
+        self.data = image.array
         return None
 
     def lnlike(self, params):
@@ -41,7 +42,7 @@ class Roaster(object):
         """
         self.src_models[0].set_params(params)
         model = self.src_models[0].get_image(self.ngrid_x, self.ngrid_y)
-        delta = (model.array - self.data.array)**2
+        delta = (model.array - self.data)**2
         lnnorm = (- 0.5 * self.ngrid_x * self.ngrid_y *
                   np.sqrt(self.noise_var * 2 * np.pi))
         return -0.5*np.sum(delta / self.noise_var) + lnnorm

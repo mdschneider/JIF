@@ -17,7 +17,6 @@ class TestGalSimGalaxyModel(unittest.TestCase):
         self.assertAlmostEqual(gg.params[0].dy, 0.0)
         self.assertAlmostEqual(gg.psf.fwhm, 0.6)
         self.assertAlmostEqual(gg.psf.flux, 1.0)
-        self.assertAlmostEqual(gg.gain, 1.0)
 
     def test_set_params(self):
         gg = galsim_galaxy.GalsimGalaxyModel()
