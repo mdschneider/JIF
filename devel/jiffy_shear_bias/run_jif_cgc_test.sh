@@ -25,7 +25,7 @@ endif
 ## Set some top-level parameters
 ##
 set user=`whoami`
-set workdir=./
+set workdir=.
 
 set config_file=jiffy.yaml
 set field=$1
@@ -41,7 +41,7 @@ import yaml
 
 config = yaml.load(open("${config_file}"))
 config['io']['infile'] = '${workdir}/control/ground/constant/segments/seg_${field}.h5'
-config['io']['roaster_outfile'] = '${workdir}/reaper/jif/${field}/roaster_${field}.h5'
+config['io']['roaster_outfile'] = '${workdir}/reaper/jif/${field}/roaster_${field}'
 
 with open("${config_file}", "w") as f:
     yaml.dump(config, f, indent=4, default_flow_style=False)

@@ -1,9 +1,9 @@
 init:
     init_param_file: jiffy_params.cfg
 io:
-    infile: .//control/ground/constant/segments/seg_000.h5
+    infile: ./control/ground/constant/segments/seg_000.h5
     outfile: .//reaper/JIF/000/roaster_000
-    roaster_outfile: .//reaper/JIF/000/roaster_000
+    roaster_outfile: ./reaper/jif/000/roaster_000
 model:
     model_params: nu hlr e1 e2 flux dx dy
 sampling:

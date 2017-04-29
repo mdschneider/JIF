@@ -200,7 +200,7 @@ def write_results(args, pps, lnps, rstr):
     """
     import os
     import h5py
-    outfile = rstr.config["io"]["roaster_outfile"]
+    outfile = rstr.config["io"]["roaster_outfile"] + '_seg{:d}.h5'.format(args.footprint_number)
     outdir = os.path.dirname(outfile)
     if not os.path.exists(outdir):
         os.makedirs(outdir)
