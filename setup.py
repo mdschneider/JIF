@@ -14,6 +14,8 @@ setup(name='jif',
       entry_points = {
       	'console_scripts': ['jif_sheller=jif.sheller:main',
                                 'jif_roaster=jif.Roaster:main',
-      				  'jif_roaster_inspector=jif.RoasterInspector:main'],
+      				  'jif_roaster_inspector=jif.RoasterInspector:main',
+                                'jiffy_roaster=jiffy.roaster:main',
+                                'jiffy_roaster_inspector=jiffy.roaster_inspector:main'],
       },
       zip_safe=False)
