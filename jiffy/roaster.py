@@ -207,22 +207,23 @@ def write_results(args, pps, lnps, rstr):
 
     hfile = h5py.File(outfile, 'w')
 
-    ### Store outputs in an HDF5 (sub-)group so we don't always 
+    ### Store outputs in an HDF5 (sub-)group so we don't always
     ### need a separate HDF5 file for every segment.
-    group_name='Samples/footprint{:d}'.format(args.footprint_number)
+    group_name = 'Samples/footprint{:d}'.format(args.footprint_number)
     grp = hfile.create_group(group_name)
 
-    paramnames = rstr.config["model"]["model_params"].split()   
+    paramnames = rstr.config["model"]["model_params"].split()
 
     ## Write the MCMC samples and log probabilities
     if "post" in grp:
         del grp["post"]
-    post = grp.create_dataset("post", data=np.transpose(np.dstack(pps), [2,0,1]))
+    post = grp.create_dataset("post",
+                              data=np.transpose(np.dstack(pps), [2, 0, 1]))
     # pnames = np.array(rstr.src_models[0][0].paramnames)
     post.attrs['paramnames'] = paramnames
     if "logprobs" in grp:
         del grp["logprobs"]
-    logprobs = grp.create_dataset("logprobs", data=np.vstack(lnps))
+    _ = grp.create_dataset("logprobs", data=np.vstack(lnps))
     hfile.close()
     return None
 
@@ -234,7 +235,7 @@ def main():
     parser.add_argument('--config_file', type=str,
                         default="../config/jiffy.yaml",
                         help="Name of a configuration file listing inputs." +
-                             "If specified, ignore other command line flags.")
+                        "If specified, ignore other command line flags.")
 
     parser.add_argument("--footprint_number", type=int, default=0,
                         help="The footprint number to load from input")
