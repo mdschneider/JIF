@@ -31,6 +31,9 @@ class GalsimGalaxyModel(object):
         self.psf = galsim.Kolmogorov(fwhm=0.6)
         return None
 
+    def get_params(self):
+      return self.params[self.active_parameters].view('<f8').copy()
+
     def set_params(self, params):
         assert len(params) >= self.n_params
         for ip, pname in enumerate(self.active_parameters):
@@ -53,3 +56,25 @@ class GalsimGalaxyModel(object):
         model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
                               gain=gain)
         return model
+
+
+if __name__ == '__main__':
+  """
+  Make a default test footprint file
+  """
+  import footprints
+
+  gg = GalsimGalaxyModel()
+  img = gg.get_image(64, 64)
+  noise_var = 1.e-8
+  noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
+  img.addNoise(noise)
+
+  dummy_mask = 1.0
+  dummy_background = 0.0
+
+  ftpnt = footprints.Footprints("../data/TestData/jiffy_gg_image.h5")
+
+  ftpnt.save_images([img.array], [noise_var], [dummy_mask], [dummy_background],
+                    segment_index=0, telescope="LSST", filter_name='r')
+  ftpnt.save_tel_metadata()

@@ -27,7 +27,7 @@ class TestRoaster(unittest.TestCase):
     def test_init(self):
         """ Check that all values in the Roaster init method are unchanged
         """
-        rstr = roaster.Roaster()
+        rstr = roaster.Roaster("test.yaml")
         self.assertEquals(len(rstr.src_models), 1)
         self.assertEquals(rstr.src_models[0].__class__.__name__, "GalsimGalaxyModel")
         self.assertEquals(rstr.ngrid_x, 64)
@@ -38,7 +38,7 @@ class TestRoaster(unittest.TestCase):
         """ Check that the Roaster make_data() method yields constant summary
         statisticss
         """
-        rstr = roaster.Roaster()
+        rstr = roaster.Roaster("test.yaml")
         rstr.make_data()
         self.assertAlmostEqual(rstr.data.var(), 8.02857e-07)
 
@@ -51,7 +51,7 @@ class TestRoaster(unittest.TestCase):
         """
         from scipy.stats import linregress
 
-        rstr = roaster.Roaster()
+        rstr = roaster.Roaster("test.yaml")
         rstr.make_data()
 
         g_true = np.linspace(-0.3, 0.3, 60)
