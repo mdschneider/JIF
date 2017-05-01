@@ -12,7 +12,7 @@ endif
 ## Path to the input images.
 ## Assume we're working within JIF/devel/jiffy_shear_bias/
 ## Assume JIF and MagicBeans are installed in the same top-level directory.
-set datadir=./
+set datadir=./midsnr/
 
 ## Have 2 x 2 galaxies in each 'field'.
 ## See mbi_no_shape_noise.yaml

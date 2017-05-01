@@ -131,7 +131,7 @@ def main():
             plt.plot(xl, slope*xl + intercept, '--')
             # ax.plot(x, y, '.')
             ax.errorbar(x, y, yerr=g_sd[:,i], fmt='.', markersize=10)
-            plt.xlim(-0.06, 0.06)
+            plt.xlim(-0.1, 0.1)
         
         plt.xlabel(r"True $g$")
         plt.tight_layout()

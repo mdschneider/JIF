@@ -1,5 +1,5 @@
 init:
-    init_param_file: jiffy_params.cfg
+    init_param_file: jiffy_params_bt1.cfg
 io:
     infile: ./control/ground/constant/segments/seg_049.h5
     outfile: .//reaper/JIF/000/roaster_000

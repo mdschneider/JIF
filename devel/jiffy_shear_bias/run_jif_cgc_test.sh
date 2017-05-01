@@ -25,9 +25,11 @@ endif
 ## Set some top-level parameters
 ##
 set user=`whoami`
-set workdir=.
+set workdir=./
+# set workdir=./midsnr
 
 set config_file=jiffy.yaml
+# set config_file=jiffy_midsnr.yaml
 set field=$1
 
 ##
@@ -54,6 +56,8 @@ python update_config.py
 ##
 foreach segnum (`seq 0 3`)
 	# Edit parameter file to contain true (sheared) ellipticities
+
+	python update_roaster_params.py --field $field --gal $segnum || goto error
 
 	echo " "
 	echo "================================================="
