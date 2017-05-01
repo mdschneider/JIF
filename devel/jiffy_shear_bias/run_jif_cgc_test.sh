@@ -52,7 +52,7 @@ python update_config.py
 ##
 ## Run Roaster and Roasting Inspector for each footprint in the selected field
 ##
-foreach segnum (`seq 0 399`)
+foreach segnum (`seq 0 3`)
 	# Edit parameter file to contain true (sheared) ellipticities
 
 	echo " "

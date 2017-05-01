@@ -1,7 +1,7 @@
 
 io :
   infile : ../data/TestData/jiffy_gg_image.h5
-  roaster_outfile : ../output/TestData/jiffy_roaster_out.h5
+  roaster_outfile : ../output/TestData/jiffy_roaster_out
 
 model :
   model_params : nu hlr e1 e2 flux dx dy

@@ -5,7 +5,7 @@ io:
     outfile: .//reaper/JIF/000/roaster_000
     roaster_outfile: ./reaper/jif/049/roaster_049
 model:
-    model_params: e1 e2 dx dy
+    model_params: e1 e2
 sampling:
     nburn: 200
     nsamples: 1000
