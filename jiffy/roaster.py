@@ -38,6 +38,9 @@ class Roaster(object):
     def get_params(self):
         return self.src_models[0].get_params()
 
+    def set_params(self, params):
+        return self.src_models[0].set_params(params)
+
     def set_param_by_name(self, paramname, value):
         """
         Set a galaxy or PSF model parameter by name
@@ -83,6 +86,10 @@ class Roaster(object):
             self.set_param_by_name(paramname, fval)
         return None
 
+    def get_model_image(self):
+        return self.src_models[0].get_image(self.ngrid_x, self.ngrid_y,
+                                            scale=self.scale, gain=self.gain)
+
     def lnprior(self, params):
         """
         Evaluate the log-prior of the model parameters
@@ -93,13 +100,15 @@ class Roaster(object):
         """
         Evaluate the log-likelihood of the pixel data in a footprint
         """
-        self.src_models[0].set_params(params)
-        model = self.src_models[0].get_image(self.ngrid_x, self.ngrid_y,
-                                             scale=self.scale, gain=self.gain)
-        delta = (model.array - self.data)**2
-        lnnorm = (- 0.5 * self.ngrid_x * self.ngrid_y *
-                  np.sqrt(self.noise_var * 2 * np.pi))
-        return -0.5*np.sum(delta / self.noise_var) + lnnorm
+        res = -np.inf
+        valid_params = self.src_models[0].set_params(params)
+        if valid_params:
+            model = self.get_model_image()
+            delta = (model.array - self.data)**2
+            lnnorm = (- 0.5 * self.ngrid_x * self.ngrid_y *
+                      np.sqrt(self.noise_var * 2 * np.pi))
+            res = -0.5*np.sum(delta / self.noise_var) + lnnorm
+        return res
 
     def __call__(self, params):
         return self.lnlike(params)

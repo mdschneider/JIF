@@ -101,10 +101,16 @@ class RoasterInspector(object):
         return opt_params
 
     def _load_roaster_input_data(self):
+        import footprints
+
         self.roaster = roaster.Roaster(self.config)
         self.roaster.initialize_param_values(self.config["init"]["init_param_file"])
         self.params_ref = self.roaster.get_params()
-    #     self.roaster = Roaster.Roaster(config=self.config)
+
+        dat, noise_var, scale, gain = footprints.load_image(self.config["io"]["infile"],
+                                                            segment=self.args.footprint_number)
+
+        self.roaster.import_data(dat, float(noise_var), scale=scale, gain=gain)
 
     #     self.roaster.Load(self.config["infiles"]["infile_1"],
     #                       segment=self.args.segment_number,
@@ -168,55 +174,55 @@ class RoasterInspector(object):
         """
         Plot panels of pixel data, model, and residuals
         """
-        for idat, dat in enumerate(self.roaster.pixel_data):
-            fig = plt.figure(figsize=(10, 10/1.618))
+        dat = self.roaster.data
 
-            vmin = dat.min()
-            vmax = dat.max()
+        fig = plt.figure(figsize=(10, 10/1.618))
 
-            ### pixel data
-            ax = fig.add_subplot(2, 2, 1)
-            ax.set_title("Image")
-            cax = ax.imshow(dat, interpolation='none',
-                            cmap=plt.cm.pink, vmin=vmin, vmax=vmax)
-            cbar = fig.colorbar(cax)
+        vmin = dat.min()
+        vmax = dat.max()
 
-            ### model
-            ax = fig.add_subplot(2, 2, 2)
-            ax.set_title("Opt Model")
-            opt_params = self._get_opt_params()
-            valid_params = self.roaster.set_params(opt_params)
-            model_image = self.roaster._get_model_image(idat)
-            cax = ax.imshow(model_image.array, interpolation='none',
-                            cmap=plt.cm.pink, vmin=vmin, vmax=vmax)
-            cbar = fig.colorbar(cax)
+        ### pixel data
+        ax = fig.add_subplot(2, 2, 1)
+        ax.set_title("Image")
+        cax = ax.imshow(dat, interpolation='none',
+                        cmap=plt.cm.pink, vmin=vmin, vmax=vmax)
+        cbar = fig.colorbar(cax)
 
-            resid = dat - model_image.array
-            noisy_image = copy.deepcopy(model_image)
+        ### model
+        ax = fig.add_subplot(2, 2, 2)
+        ax.set_title("Opt Model")
+        opt_params = self._get_opt_params()
+        valid_params = self.roaster.set_params(opt_params)
+        model_image = self.roaster.get_model_image()
+        cax = ax.imshow(model_image.array, interpolation='none',
+                        cmap=plt.cm.pink, vmin=vmin, vmax=vmax)
+        cbar = fig.colorbar(cax)
 
-            ### model + noise
-            noise_var = self.roaster._get_noise_var(idat)
-            print "noise variance: {:12.10g}".format(noise_var)
-            ax = fig.add_subplot(2, 2, 3)
-            ax.set_title("Model + Noise")
-            noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
-            noisy_image.addNoise(noise)
-            cax = ax.imshow(noisy_image.array, interpolation='none',
-                            cmap=plt.cm.pink, vmin=vmin, vmax=vmax)
-            cbar = fig.colorbar(cax)
+        resid = dat - model_image.array
+        noisy_image = copy.deepcopy(model_image)
 
-            ### residual (chi)
-            ax = fig.add_subplot(2, 2, 4)
-            ax.set_title("Residual")
-            cax = ax.imshow(resid, interpolation='none',
-                            cmap=plt.cm.BrBG)
-            cbar = fig.colorbar(cax)
+        ### model + noise
+        noise_var = self.roaster.noise_var
+        print "noise variance: {:12.10g}".format(noise_var)
+        ax = fig.add_subplot(2, 2, 3)
+        ax.set_title("Model + Noise")
+        noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
+        noisy_image.addNoise(noise)
+        cax = ax.imshow(noisy_image.array, interpolation='none',
+                        cmap=plt.cm.pink, vmin=vmin, vmax=vmax)
+        cbar = fig.colorbar(cax)
 
-            plt.tight_layout()
-            outfile = (self._outfile_head() +
-                '_data_and_model_epoch{:d}.png'.format(idat))
-            print "Saving {}".format(outfile)
-            fig.savefig(outfile)
+        ### residual (chi)
+        ax = fig.add_subplot(2, 2, 4)
+        ax.set_title("Residual")
+        cax = ax.imshow(resid, interpolation='none',
+                        cmap=plt.cm.BrBG)
+        cbar = fig.colorbar(cax)
+
+        plt.tight_layout()
+        outfile = (self._outfile_head() + '_data_and_model.png')
+        print "Saving {}".format(outfile)
+        fig.savefig(outfile)
         return None
 
     def plot_GR_statistic(self):
@@ -270,7 +276,7 @@ def main():
     inspector.report()
     # inspector.save_param_cov()
     inspector.plot()
-    # inspector.plot_data_and_model()
+    inspector.plot_data_and_model()
     inspector.plot_GR_statistic()
     return 0
 
