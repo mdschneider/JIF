@@ -19,9 +19,9 @@ import corner
 plt.style.use('ggplot')
 
 k_n_fields = 50
-k_truth_topdir = "control/ground/constant/"
-k_stooker_topdir = "midsnr/reaper/jif/"
-k_thresher_topdir = "thresher/cpp/"
+k_truth_topdir = "small_shapenoise/control/ground/constant/"
+k_stooker_topdir = "small_shapenoise/reaper/jif/"
+k_thresher_topdir = "small_shapenoise/thresher/cpp/"
 
 
 def get_stooker_field_shears(field_num, return_samples=False):

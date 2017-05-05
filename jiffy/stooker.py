@@ -67,9 +67,10 @@ def main():
 
         # ----- Load -----
         # Get 'seg' label from file name
-        seg_lab = int(filter(lambda x: 'seg' in x, infn.split("_"))[0][3])
+        seg_lab = filter(lambda x: 'seg' in x, os.path.splitext(infn)[0].split("_"))[0] # output: 'seg[D]'
+        seg_lab = seg_lab.split("g")[1]
 
-        samps, lnps, paramnames = load_roaster_samples(infn, seg_lab)
+        samps, lnps, paramnames = load_roaster_samples(infn, int(seg_lab))
 
         (nsteps, nwalkers, nparams) = samps.shape
         print "nsteps: {:d}, nwalkers: {:d}, nparams: {:d}".format(nsteps,

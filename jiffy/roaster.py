@@ -144,13 +144,15 @@ def do_sampling(args, rstr):
     nvars = len(omega_interim)
     nsamples = rstr.config["sampling"]["nsamples"]
     nwalkers = rstr.config["sampling"]["nwalkers"]
+    nthreads = rstr.config["sampling"]["nthreads"]
 
     p0 = emcee.utils.sample_ball(omega_interim, 
                                  np.ones_like(omega_interim) * 0.01, nwalkers)
 
     sampler = emcee.EnsembleSampler(nwalkers,
                                     nvars,
-                                    rstr)
+                                    rstr,
+                                    threads=nthreads)
 
     nburn = max([1, rstr.config["sampling"]["nburn"]])
     print "Burning with {:d} steps".format(nburn)
@@ -159,7 +161,7 @@ def do_sampling(args, rstr):
 
     pps = []
     lnps = []
-    lnpriors = []
+    # lnpriors = []
     print "Sampling"
     for istep in range(nsamples):
         if np.mod(istep + 1, 20) == 0:

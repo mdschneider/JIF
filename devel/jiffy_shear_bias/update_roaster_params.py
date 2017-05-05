@@ -3,7 +3,10 @@ import os
 import numpy as np
 from astropy.io import fits
 
-K_TOPDIR = "control/ground/constant"
+K_TOPDIR = "small_shapenoise/control/ground/constant"
+
+def apply_shear(e, g):
+    return (e + g) / (1.0 + g.conjugate() * e)
 
 def get_truths(ifield, igal):
     """
@@ -29,8 +32,10 @@ def get_truths(ifield, igal):
     e1int = tbdata.field('gal_e1')[igal]
     e2int = tbdata.field('gal_e2')[igal]
 
-    e1 = g1 + e1int
-    e2 = g2 + e2int
+    e_sh = apply_shear(e1int + 1j*e2int, g1 + 1j*g2)
+
+    e1 = e_sh.real
+    e2 = e_sh.imag
 
     truths = np.array([nu, hlr, e1, e2, flux, dx, dy])
     return truths
