@@ -25,11 +25,16 @@ endif
 ## Set some top-level parameters
 ##
 set user=`whoami`
-set workdir=./
+# set workdir=./
 # set workdir=./midsnr
+set workdir=./small_shapenoise
 
-set config_file=jiffy.yaml
+# set config_file=jiffy.yaml
 # set config_file=jiffy_midsnr.yaml
+set config_file=jiffy_small_shapenoise.yaml
+
+set params_file=jiffy_small_shapenoise_params.cfg
+
 set field=$1
 
 ##
@@ -54,10 +59,10 @@ python update_config.py
 ##
 ## Run Roaster and Roasting Inspector for each footprint in the selected field
 ##
-foreach segnum (`seq 0 3`)
+foreach segnum (`seq 0 24`)
 	# Edit parameter file to contain true (sheared) ellipticities
 
-	python update_roaster_params.py --field $field --gal $segnum || goto error
+	python update_roaster_params.py --field $field --gal $segnum --config_file $params_file || goto error
 
 	echo " "
 	echo "================================================="

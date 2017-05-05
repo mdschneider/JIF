@@ -195,7 +195,7 @@ def create_segments(subfield_index=0, experiment="control",
     ### Save all images to the segment file, but with distinct 'segment_index'
     ### values.
     n_gals_image_file = n_gals
-    ngals_per_dim = 2#0 ### The image is a 20 x 20 grid of galaxies
+    ngals_per_dim = int(np.sqrt(n_gals)) ### The image is a 20 x 20 grid of galaxies
     for igal in xrange(n_gals_image_file):
         if verbose and np.mod(igal, 2) == 0:
             print "Galaxy {:d} / {:d}".format(igal+1, n_gals_image_file)

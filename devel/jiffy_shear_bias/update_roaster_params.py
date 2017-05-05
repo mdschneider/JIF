@@ -19,12 +19,18 @@ def get_truths(ifield, igal):
     nu = 0.5
     hlr = 1.0
     flux = 1.0
-    e1 = tbdata.field('g1')[igal]
-    e2 = tbdata.field('g2')[igal]
+    g1 = tbdata.field('g1')[igal]
+    g2 = tbdata.field('g2')[igal]
     # Convert offsets in the truth catalog from pixels to arcseconds 
     # (which are the units expected by the galsim shift() method)
     dx = tbdata.field('dx')[igal] * scale
     dy = tbdata.field('dy')[igal] * scale
+
+    e1int = tbdata.field('gal_e1')[igal]
+    e2int = tbdata.field('gal_e2')[igal]
+
+    e1 = g1 + e1int
+    e2 = g2 + e2int
 
     truths = np.array([nu, hlr, e1, e2, flux, dx, dy])
     return truths

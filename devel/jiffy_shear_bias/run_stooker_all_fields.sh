@@ -6,7 +6,7 @@
 # outputs for input to Thresher.
 # 
 
-cd reaper/jif
+cd midsnr/reaper/jif
 foreach field (`seq 0 49`)
     set field_lab=`echo $field | awk '{printf "%03d\n", $0;}'`
     cd $field_lab

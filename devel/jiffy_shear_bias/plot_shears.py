@@ -20,7 +20,7 @@ plt.style.use('ggplot')
 
 k_n_fields = 50
 k_truth_topdir = "control/ground/constant/"
-k_stooker_topdir = "reaper/jif/"
+k_stooker_topdir = "midsnr/reaper/jif/"
 k_thresher_topdir = "thresher/cpp/"
 
 

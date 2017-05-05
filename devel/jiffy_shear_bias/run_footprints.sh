@@ -3,8 +3,8 @@
 # @file run_footprints.sh
 #
 ## Check usage
-if ($#argv != 0) then
-    echo "Usage: run_footprints.sh"
+if ($#argv != 1) then
+    echo "Usage: run_footprints.sh n_gals"
     echo "Create footprints files from CGC-like input FITS images"
     goto done
 endif
@@ -12,11 +12,12 @@ endif
 ## Path to the input images.
 ## Assume we're working within JIF/devel/jiffy_shear_bias/
 ## Assume JIF and MagicBeans are installed in the same top-level directory.
-set datadir=./midsnr/
+set datadir=./small_shapenoise/
 
 ## Have 2 x 2 galaxies in each 'field'.
 ## See mbi_no_shape_noise.yaml
-set n_gals=4
+set n_gals=$1
+echo "n_gals: "$n_gals
 
 foreach subfield_index (`seq 0 49`)
 	# echo "Creating footprint file for CGC-like field "$subfield_index

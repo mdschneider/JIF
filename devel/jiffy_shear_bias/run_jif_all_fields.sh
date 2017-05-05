@@ -5,7 +5,7 @@
 # Run JIF Roaster on all GREAT3-like 'fields'
 #
 
-foreach field (`seq 35 49`)
+foreach field (`seq 0 49`)
     set field_lab=`echo $field | awk '{printf "%03d\n", $0;}'`
     ./run_jif_cgc_test.sh $field_lab
 end
