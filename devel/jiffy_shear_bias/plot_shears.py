@@ -41,6 +41,26 @@ def get_stooker_field_shears(field_num, return_samples=False):
     f.close()
     return res
 
+def get_thresher_field_shears(field_num, nburn=1000, thin=2,
+                              return_samples=False):
+    """
+    Get the mean and std. dev. marginal shears from Thresher outputs
+    """
+    
+    infile = os.path.join(k_thresher_topdir, 
+        "thresher_{0:0>3}_galdist0.h5".format(field_num))
+    print "infile: ", infile    
+
+    f = h5py.File(infile, 'r')
+    shear = f['shear/shear'][nburn::thin, ...]
+    f.close()
+
+    if return_samples:
+        return shear[:, 0:2]
+    else:
+        g_mean = np.mean(shear[:,0:2], axis=0)
+        g_sd = np.sqrt(np.var(shear[:,0:2], axis=0))
+        return g_mean, g_sd
 
 def get_true_field_shears(field_num):
     """
@@ -59,8 +79,8 @@ def load_all_shears():
     g_truth = []
     for field_num in xrange(k_n_fields):
         try: 
-            gm, gs = get_stooker_field_shears(field_num=field_num)
-            # gm, gs = get_thresher_field_shears(field_num=field_num)
+            # gm, gs = get_stooker_field_shears(field_num=field_num)
+            gm, gs = get_thresher_field_shears(field_num=field_num)
             gt = get_true_field_shears(field_num=field_num)
             g_mean.append(gm)
             g_sd.append(gs)
