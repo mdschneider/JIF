@@ -5,9 +5,10 @@
 
 set galsim=~/code/GalSim/bin/galsim
 
-set datadir=small_shapenoise
-set n_gals = 400
-set sim_yaml=mbi_small_shape_noise_highsnr.yaml
+set datadir=cgc1
+set n_gals=10000
+set n_fields=200
+set sim_yaml=mbi_cgc1.yaml
 
 #
 # Make the directory tree for the data
@@ -26,13 +27,13 @@ mv *.fits ${datadir}/control/ground/constant
 #
 # Extract footprints
 #
-./run_footprints.sh $n_gals
+./run_footprints.sh $n_gals $n_fields
 
 #
 # Run Roaster on all footprints across all fields
 # (takes a while)
 #
-./run_jif_all_fields.sh $n_gals
-./run_stooker_all_fields.sh
+# ./run_jif_all_fields.sh $n_gals
+# ./run_stooker_all_fields.sh
 
 # [run Thresher here]
