@@ -72,14 +72,14 @@ class GalsimGalaxyModel(object):
         """
         Render a GalSim Image() object from the internal model
         """
-        gal = galsim.Spergel(self.params[0].nu,
-                             half_light_radius=self.params[0].hlr,
-                             flux=self.params[0].flux)
-        gal = gal.shear(galsim.Shear(g1=self.params[0].e1,
-                                     g2=self.params[0].e2))
-        # mu = 1. / (1. - (self.params[0].e1**2 + self.params[0].e2**2))
-        # gal = gal.lens(g1=self.params[0].e1, g2=self.params[0].e2, mu=mu)
-        gal = gal.shift(self.params[0].dx, self.params[0].dy)
+        gal = galsim.Spergel(self.params.nu[0],
+                             half_light_radius=self.params.hlr[0],
+                             flux=self.params.flux[0])
+        gal = gal.shear(galsim.Shear(g1=self.params.e1[0],
+                                     g2=self.params.e2[0]))
+        # mu = 1. / (1. - (self.params.e1[0]**2 + self.params.e2[0]**2))
+        # gal = gal.lens(g1=self.params.e1[0], g2=self.params.e2[0], mu=mu)
+        gal = gal.shift(self.params.dx[0], self.params.dy[0])
         obj = galsim.Convolve(self.psf, gal)
         try:
             model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
