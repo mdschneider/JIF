@@ -16,7 +16,7 @@ if ($#argv != 0) then
 endif
 
 set config_file=devel/great3_cgc/roaster_cgc.cfg
-set field=001
+set field=002
 
 ### Run Roaster
 foreach segnum (`seq 0 1000`)

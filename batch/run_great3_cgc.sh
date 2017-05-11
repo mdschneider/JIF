@@ -11,7 +11,7 @@ if ($#argv != 0) then
     goto done
 endif
 
-foreach subfield_index (`seq 2 200`)
+foreach subfield_index (`seq 0 199`)
 	echo "Creating footprint file for CGC field "$subfield_index
 	jif_sheller --subfield_index $subfield_index --n_gals 10000
 end
