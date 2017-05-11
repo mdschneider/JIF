@@ -14,8 +14,8 @@
 #  Created by Michael Schneider on 2016-12-23.
 #
 ## Check usage
-if ($#argv != 1) then
-    echo "Usage: run_jif_cgc_test.sh field"
+if ($#argv != 2) then
+    echo "Usage: run_jif_cgc_test.sh field n_gals"
     echo "Run JIF Roaster for a single 'field' of a GREAT3 branch"
     echo "The field values should be in the format, e.g., '009'"
     goto done
@@ -36,6 +36,7 @@ set config_file=jiffy_small_shapenoise.yaml
 set params_file=jiffy_small_shapenoise_params.cfg
 
 set field=$1
+set n_gals=$2
 
 ##
 ## Modify the config file fed to Roaster for the currently selected field
@@ -59,7 +60,7 @@ python update_config.py
 ##
 ## Run Roaster and Roasting Inspector for each footprint in the selected field
 ##
-foreach segnum (`seq 0 15`)
+foreach segnum (`seq 0 $n_gals`)
 	# Edit parameter file to contain true (sheared) ellipticities
 
 	python update_roaster_params.py --field $field --gal $segnum --config_file $params_file || goto error
@@ -70,13 +71,13 @@ foreach segnum (`seq 0 15`)
 	echo "================================================="
 	jiffy_roaster --config_file $config_file --footprint_number $segnum || goto error
 
-	echo " "
-	echo "================================================="
-	echo "Making Inspector plots for segment "$segnum
-	echo "================================================="
-	set roaster_file=${workdir}/reaper/jif/${field}/roaster_${field}_seg${segnum}.h5
-	echo jiffy_roaster_inspector $roaster_file $config_file	
-	jiffy_roaster_inspector $roaster_file $config_file --footprint_number $segnum || goto error	
+	# echo " "
+	# echo "================================================="
+	# echo "Making Inspector plots for segment "$segnum
+	# echo "================================================="
+	# set roaster_file=${workdir}/reaper/jif/${field}/roaster_${field}_seg${segnum}.h5
+	# echo jiffy_roaster_inspector $roaster_file $config_file	
+	# jiffy_roaster_inspector $roaster_file $config_file --footprint_number $segnum || goto error	
 end
 
 ##

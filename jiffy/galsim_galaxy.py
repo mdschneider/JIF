@@ -12,8 +12,8 @@ import galsim
 K_PARAM_BOUNDS = {
     "nu": [-0.8, 0.8],
     "hlr": [0.01, 10.0],
-    "e1": [-0.9, 0.9],
-    "e2": [-0.9, 0.9],
+    "e1": [-0.7, 0.7],
+    "e2": [-0.7, 0.7],
     "flux": [0.001, 1000.0],
     "dx": [-10.0, 10.0],
     "dy": [-10.0, 10.0]
@@ -81,8 +81,13 @@ class GalsimGalaxyModel(object):
         # gal = gal.lens(g1=self.params[0].e1, g2=self.params[0].e2, mu=mu)
         gal = gal.shift(self.params[0].dx, self.params[0].dy)
         obj = galsim.Convolve(self.psf, gal)
-        model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
-                              gain=gain)
+        try:
+            model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
+                                  gain=gain)
+        except RuntimeError:
+            print "Trying to make an image that's too big."
+            print self.get_params()
+            model = None
         return model
 
 

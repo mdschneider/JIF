@@ -79,3 +79,4 @@ output/psf_bias
 devel/blend_fit_test
 update_config.py
 devel/debug_roaster_bias/output
+devel/jiffy_shear_bias/reaper

@@ -19,9 +19,10 @@ def get_truths(ifield, igal):
     hdulist = fits.open(infile)
     tbdata = hdulist[1].data
 
-    nu = 0.5
-    hlr = 1.0
-    flux = 1.0
+    nu = tbdata.field('gal_nu')[igal]
+    hlr = tbdata.field('gal_hlr')[igal]
+    flux = tbdata.field('gal_flux')[igal]
+
     g1 = tbdata.field('g1')[igal]
     g2 = tbdata.field('g2')[igal]
     # Convert offsets in the truth catalog from pixels to arcseconds 

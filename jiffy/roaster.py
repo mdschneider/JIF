@@ -104,10 +104,13 @@ class Roaster(object):
         valid_params = self.src_models[0].set_params(params)
         if valid_params:
             model = self.get_model_image()
-            delta = (model.array - self.data)**2
-            lnnorm = (- 0.5 * self.ngrid_x * self.ngrid_y *
-                      np.sqrt(self.noise_var * 2 * np.pi))
-            res = -0.5*np.sum(delta / self.noise_var) + lnnorm
+            if model is None:
+                res = -np.inf
+            else:
+                delta = (model.array - self.data)**2
+                lnnorm = (- 0.5 * self.ngrid_x * self.ngrid_y *
+                          np.sqrt(self.noise_var * 2 * np.pi))
+                res = -0.5*np.sum(delta / self.noise_var) + lnnorm
         return res
 
     def __call__(self, params):

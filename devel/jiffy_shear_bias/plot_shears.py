@@ -51,9 +51,12 @@ def get_thresher_field_shears(field_num, nburn=1000, thin=2,
         "thresher_{0:0>3}_galdist0.h5".format(field_num))
     print "infile: ", infile    
 
-    f = h5py.File(infile, 'r')
-    shear = f['shear/shear'][nburn::thin, ...]
-    f.close()
+    try:
+        f = h5py.File(infile, 'r')
+        shear = f['shear/shear'][nburn::thin, ...]
+        f.close()
+    except IOError:
+        shear = np.zeros((1, 3), dtype=np.float64)
 
     if return_samples:
         return shear[:, 0:2]
@@ -74,20 +77,30 @@ def get_true_field_shears(field_num):
     return g
 
 def load_all_shears():
-    g_mean = []
-    g_sd = []
+    g_mean_st = []
+    g_sd_st = []
+    g_mean_th = []
+    g_sd_th = []
     g_truth = []
+    # Columns: (1) Stooker mean,
+    #          (2) Stooker std. dev., 
+    #          (3) Thresher mean,
+    #          (4) Thresher std. dev., 
+    #          (5) truth
+    shears = np.zeros((k_n_fields, 2, 5))
     for field_num in xrange(k_n_fields):
         try: 
-            # gm, gs = get_stooker_field_shears(field_num=field_num)
-            gm, gs = get_thresher_field_shears(field_num=field_num)
+            gm_st, gs_st = get_stooker_field_shears(field_num=field_num)
+            gm_th, gs_th = get_thresher_field_shears(field_num=field_num)
             gt = get_true_field_shears(field_num=field_num)
-            g_mean.append(gm)
-            g_sd.append(gs)
-            g_truth.append(gt)
+            shears[field_num, :, 0] = gm_st
+            shears[field_num, :, 1] = gs_st
+            shears[field_num, :, 2] = gm_th
+            shears[field_num, :, 3] = gs_th
+            shears[field_num, :, 4] = gt
         except IOError:
             pass
-    return np.array(g_mean), np.array(g_sd), np.array(g_truth)
+    return shears
 
 # ==============================================================================
 # ==============================================================================
@@ -125,33 +138,49 @@ def main():
     if args.use_mc_posterior:
         infer_mc_posterior(args)
     else:
-        g_mean, g_sd, g_truth = load_all_shears()
-        print g_mean.shape
-        print g_sd.shape
-        print g_truth.shape
+        shears = load_all_shears()
+        print shears.shape
 
-        print "delta (mean - true) shears:", g_mean - g_truth
+        print "delta (mean - true) shears:", shears[:, :, 0] - shears[:, :, 4]
 
         plt.style.use('ggplot')
         fig = plt.figure(figsize=(10, 8))
 
         for i in xrange(2):
-            x = g_truth[:,i]
-            y = g_mean[:,i] - g_truth[:,i]
+            x = shears[:, i, 4]
+            y = shears[:, i, 0] - shears[:, i, 4]
+
+            yth = shears[:, i, 2] - shears[:, i, 4]
+
             ax = plt.subplot(2, 1, i+1)
             plt.axhline(y=0, color='grey')
             plt.ylabel(r"$\Delta g_{:d}$".format(i+1))
-            slope, intercept, r_value, p_value, std_err = linregress(x,y)
-            print slope, intercept
-            # ax.text(-0.05, 0.0025,
-            #          r"$m = {:3.2f} +/- {:3.2f}$, $c = {:3.2e}$".format(slope, std_err, intercept),
-            #          fontsize=18)
-            plt.title(r"$m = {:3.2e} +/- {:3.2e}$, $c = {:3.2e}$".format(slope, std_err, intercept))
+
+            slope, intercept, r_value, p_value, std_err = linregress(x, y)
+            st_bias = r"$m = {:3.2g} \pm {:3.2g}$, $c = {:3.2g}$".format(
+                slope, std_err, intercept)
+
             xl = np.linspace(np.min(x), np.max(x), 50)
-            plt.plot(xl, slope*xl + intercept, '--')
-            # ax.plot(x, y, '.')
-            ax.errorbar(x, y, yerr=g_sd[:,i], fmt='.', markersize=10)
+            plt.plot(xl, slope*xl + intercept, '--', color='black')
+
+            # Redo the regression for Thresher shears
+            slope, intercept, r_value, p_value, std_err = linregress(x, yth)
+            th_bias = r"$m = {:3.2g} \pm {:3.2g}$, $c = {:3.2g}$".format(
+                slope, std_err, intercept)
+            plt.plot(xl, slope*xl + intercept, '--', color='red')
+
+            print slope, intercept
+            plt.title("Stooker: " + st_bias + " | Thresher: " + th_bias)
+
+            ax.errorbar(x, y, yerr=shears[:, i, 1], fmt='.', markersize=10,
+                        label="Stooker", color='black', alpha=0.5)
+
+            ax.errorbar(x, yth, yerr=shears[:, i, 3], fmt='.', markersize=10,
+                        label="Thresher", color='red', alpha=0.5)
+
             plt.xlim(-0.1, 0.1)
+            if i == 0:
+                plt.legend()
         
         plt.xlabel(r"True $g$")
         plt.tight_layout()

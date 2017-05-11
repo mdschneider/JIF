@@ -15,21 +15,34 @@ psf:
 
 gal:
     type: Spergel
-    nu: 0.5
-    half_light_radius: 1.0
+
+    nu: {type: Random, min: -0.6, max: 0.6}
+
+    half_light_radius: 
+        type: RandomGaussian
+        mean: 1.0
+        sigma: 0.3
+        min: 0.2
+        max: 3.0
+
+    flux:
+        type: RandomDistribution
+        function: x**-1.5
+        x_min: 0.5
+        x_max: 10.0
 
     shear:
         type: G1G2
         g1:
             type: RandomGaussian
-            sigma: 0.002  # small shape noise
-            min: -0.5
-            max: 0.5
+            sigma: 0.26
+            min: -0.65
+            max: 0.65
         g2:
             type: RandomGaussian
-            sigma: 0.002  # small shape noise
-            min: -0.5
-            max: 0.5
+            sigma: 0.26
+            min: -0.65
+            max: 0.65
 
 stamp:
     # Use a Ring type with num=2 to do pairs of 90 degree rotated galaxies.
@@ -37,14 +50,6 @@ stamp:
     # the pair, or neither.
     type: Ring
     num: 1
-    # The Ring type draws galaxies from a distribution that is not a simple 2D Gaussian in 
-    # ellipticity components. Turn off the Ring type to validate the statistical model.
-    # type: Basic
-
-    # shear :
-    #     type : G1G2
-    #     g1 : 0.0
-    #     g2 : 0.05
 
     # The shear was chosen randomly within an annulus with 0.01 < |g| < 0.1.
     shear:
@@ -61,10 +66,18 @@ stamp:
             x_max: 0.1
         beta: { type: Random }
 
+    magnification: 1.0
+    # magnification:
+    #     type: RandomGaussian
+    #     mean: 1.0
+    #     sigma: 0.1
+    #     min: 0.5
+    #     max: 1.5
+
 image:
     type: Tiled
-    nx_tiles: 4
-    ny_tiles: 4
+    nx_tiles: 20
+    ny_tiles: 20
     stamp_size: 48
     pixel_scale: 0.2
 
@@ -77,16 +90,13 @@ image:
     # variance be larger for smaller PSF fwhm.  cf. fmax_var in eval_variables above.
     noise:
         type: Gaussian
-        variance: 3e-10
+        variance: 2e-6
 
     # Offset (in pixels)
     offset:
         type: XY
         x: { type: Random, min: -1.0, max: 1.0 }
         y: { type: Random, min: -1.0, max: 1.0 }
-        # x: { type: Random, min: -0, max: 0 }
-        # y: { type: Random, min: -0, max: 0 }
-
 
     # This means the code will parallelize the creation of a single output file,
     # splitting up the postage stamps among the available cores.
@@ -146,12 +156,14 @@ output:
             psf_e1: "$(@psf.ellip).e1"
             psf_e2: "$(@psf.ellip).e2"
             psf_fwhm: psf.fwhm
+            mu: stamp.magnification
             g1: "$(@stamp.shear).g1"
             g2: "$(@stamp.shear).g2"
             gal_e1: "$(@gal.shear).g1"  # pre-shear-or-convolution galaxy ellipticity
             gal_e2: "$(@gal.shear).g2"
             gal_hlr: gal.half_light_radius
             gal_nu: gal.nu
+            gal_flux: gal.flux
             # The parametric components aren't really available here.
             # So we don't have:
             #   bulge_beta_radians
