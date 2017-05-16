@@ -55,6 +55,6 @@ output:
         - { type: Sequence, nitems: 200 }
         - 0
 
-    nfiles: 50
+    nfiles: 200
 
     nproc: -1

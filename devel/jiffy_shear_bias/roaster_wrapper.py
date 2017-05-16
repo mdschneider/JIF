@@ -70,7 +70,7 @@ def main():
     rstr = jiffy.roaster.init_roaster(args)
     rstr.set_params(truths)
 
-    jiff.roaster.do_sampling(args, rstr)
+    jiffy.roaster.do_sampling(args, rstr)
 
     return None
 
