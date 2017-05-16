@@ -97,8 +97,6 @@ def main():
 
     args = parser.parse_args()
 
-    ntasks = 2
-
     # Loop over fields and galaxies within a field
     n_per_task = split_list_across_tasks(args.n_gals * args.n_fields - args.gal_start, ntasks)
     print "n_per_task:", n_per_task
@@ -131,9 +129,9 @@ def main():
 
     comm.Barrier()
     ###pool.close()
-    # if master:
-    #     for i in range(1, ntasks):
-    #         comm.isend(_close_pool_message(), dest=i)
+    if master:
+        for i in range(1, ntasks):
+            comm.isend(_close_pool_message(), dest=i)
 
     return None
 
