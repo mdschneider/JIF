@@ -65,13 +65,16 @@ def main():
 
     args = parser.parse_args()
 
+    print "Starting roaster wrapper"
     truths = get_truths(args.field, args.footprint_number, args.workdir)
 
     rstr = jiffy.roaster.init_roaster(args)
+    print "Setting truths: ", truths
     rstr.set_params(truths)
 
-    jiff.roaster.do_sampling(args, rstr)
-
+    print "Executing sampler"
+    jiffy.roaster.do_sampling(args, rstr)
+    print "Finished roaster wrapper"
     return None
 
 if __name__ == '__main__':
