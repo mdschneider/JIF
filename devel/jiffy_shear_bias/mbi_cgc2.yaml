@@ -34,16 +34,18 @@ gal:
     shear:
         type: GBeta
         g:
-            type: RandomRayleigh
-            sigma: 
+            # |g| ~ Rayleigh(sigma) <-> Weibull(shape=2, scale=sigma*sqrt(2))
+            type: RandomWeibull
+            a: 2
+            b:
                 type: List
-                items : [ 0.26, 0.03]
+                items : [ 0.368, 0.0424]
                 index : 
                     type : RandomBinomial
                     N : 1
-                    p : 0.1
-            min: 0.0
-            max: 0.65
+                    p : 0.05
+            min : 0.0
+            max : 1.0
         beta: { type: Random }
 
 stamp:
@@ -78,8 +80,8 @@ stamp:
 
 image:
     type: Tiled
-    nx_tiles: 4
-    ny_tiles: 4
+    nx_tiles: 100
+    ny_tiles: 100
     stamp_size: 48
     pixel_scale: 0.2
 
@@ -115,14 +117,14 @@ output:
         # This branch only has one epoch, so epoch is always 0 here.
         format: image-%03d-%1d.fits
         items:
-        - { type: Sequence, nitems: 200 }
+        - { type: Sequence, nitems: 2 }
         - 0
 
     # The full Great3 had 200 files.  Note that to run fewer files than this, you can change this
     # from the command line as `galsim cgc.yaml output.nfiles=10` say.  Likewise for any other
     # parameters in the configuration.  This is often more convenient than changing the original
     # YAML configuration file.
-    nfiles: 200
+    nfiles: 2
 
     # This means the code will parallelize across the different files, doing a full
     # output file in each core at a time.
@@ -147,7 +149,7 @@ output:
             type: FormattedStr
             format: epoch_catalog-%03d-%1d.fits
             items:
-            - { type: Sequence, nitems: 200 }
+            - { type: Sequence, nitems: 2 }
             - 0
         columns:
             num: obj_num
