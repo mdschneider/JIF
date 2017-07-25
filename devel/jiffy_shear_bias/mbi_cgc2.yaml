@@ -35,6 +35,9 @@ gal:
         type: GBeta
         g:
             # |g| ~ Rayleigh(sigma) <-> Weibull(shape=2, scale=sigma*sqrt(2))
+            # Need a truncated Rayleigh distribution here to avoid ellipticities
+            # that are too large. 
+            # In mbi_cgc1.yaml we used 0 < |e| < 0.65
             type: RandomWeibull
             a: 2
             b:
@@ -45,7 +48,7 @@ gal:
                     N : 1
                     p : 0.05
             min : 0.0
-            max : 1.0
+            max : 0.65
         beta: { type: Random }
 
 stamp:
@@ -117,14 +120,14 @@ output:
         # This branch only has one epoch, so epoch is always 0 here.
         format: image-%03d-%1d.fits
         items:
-        - { type: Sequence, nitems: 2 }
+        - { type: Sequence, nitems: 200 }
         - 0
 
     # The full Great3 had 200 files.  Note that to run fewer files than this, you can change this
     # from the command line as `galsim cgc.yaml output.nfiles=10` say.  Likewise for any other
     # parameters in the configuration.  This is often more convenient than changing the original
     # YAML configuration file.
-    nfiles: 2
+    nfiles: 200
 
     # This means the code will parallelize across the different files, doing a full
     # output file in each core at a time.
@@ -149,7 +152,7 @@ output:
             type: FormattedStr
             format: epoch_catalog-%03d-%1d.fits
             items:
-            - { type: Sequence, nitems: 2 }
+            - { type: Sequence, nitems: 200 }
             - 0
         columns:
             num: obj_num
