@@ -28,7 +28,7 @@ def load_roaster_samples(roaster_outfile, igal):
     return data, lnps, paramnames
 
 
-def get_summary_stats_per_gal(samps, paramnames, verbose=True):
+def get_summary_stats_per_gal(samps, paramnames, verbose=False):
     e1ndx = np.where(paramnames == 'e1')[0][0]
     e2ndx = np.where(paramnames == 'e2')[0][0]
     e1mean = np.mean(samps[:, :, e1ndx].ravel())
@@ -36,7 +36,7 @@ def get_summary_stats_per_gal(samps, paramnames, verbose=True):
     e1std = np.std(samps[:, :, e1ndx].ravel())
     e2std = np.std(samps[:, :, e2ndx].ravel())
     if verbose:
-        print "e1ndx: ", e1ndx, " e2ndx:", e2ndx
+        # print "e1ndx: ", e1ndx, " e2ndx:", e2ndx
         print "e1 = {:4.3g} +/- {:4.3g}, e2 = {:4.3g} +/- {:4.3g}".format(
             e1mean, e2mean, e1std, e2std)
     return e1mean, e1std, e2mean, e2std
@@ -59,8 +59,12 @@ def main():
     means = np.zeros(2, dtype=np.float64)
     std_devs = np.zeros(2, dtype=np.float64)
     samples_out = []
+    # For running variance:
+    m = [0., 0.]
+    s = [0., 0.]
+    i = 0
     for infn in args.infns:
-        print 'Reading', infn
+        # print 'Reading', infn
         if not os.path.exists(infn):
             print 'MISSING FILE -- SKIPPING'
             continue
@@ -73,17 +77,25 @@ def main():
         samps, lnps, paramnames = load_roaster_samples(infn, int(seg_lab))
 
         (nsteps, nwalkers, nparams) = samps.shape
-        print "nsteps: {:d}, nwalkers: {:d}, nparams: {:d}".format(nsteps,
-                                                                   nwalkers,
-                                                                   nparams)
+        # print "nsteps: {:d}, nwalkers: {:d}, nparams: {:d}".format(nsteps,
+        #                                                            nwalkers,
+        #                                                            nparams)
 
         # ----- Summary statistics -----
         e1mean, e1std, e2mean, e2std = get_summary_stats_per_gal(samps,
                                                                  paramnames)
         means[0] += e1mean
         means[1] += e2mean
-        std_devs[0] += e1std
-        std_devs[1] += e2std
+        # std_devs[0] += e1std
+        # std_devs[1] += e2std
+
+        if i == 0:
+            m = [e1mean, e2mean]
+        else:
+            m = [m[j] + (means[j] - m[j])/float(i) for j in xrange(2)]
+            s = [s[j] + (means[j] - s[j])*(means[j] - s[j]) for j in xrange(2)]
+        if i > 1:
+            std_devs = [np.sqrt(s / (i - 1)) for j in xrange(2)]
 
         # ----- Aggregate samples -----
         # flatten walkers and samples into single dimension
@@ -93,7 +105,7 @@ def main():
         samples_out.append(samps[ndx, :])
 
     means /= len(args.infns)
-    std_devs /= len(args.infns)
+    #std_devs /= len(args.infns)
 
     samples_out = np.array(samples_out)
 

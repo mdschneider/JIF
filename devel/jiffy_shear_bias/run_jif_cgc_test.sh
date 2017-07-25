@@ -27,13 +27,14 @@ endif
 set user=`whoami`
 # set workdir=./
 # set workdir=./midsnr
-set workdir=./small_shapenoise
+#set workdir=./small_shapenoise
+set workdir=/Volumes/PromisePegasus/JIF/cgc1
 
 # set config_file=jiffy.yaml
 # set config_file=jiffy_midsnr.yaml
-set config_file=jiffy_small_shapenoise.yaml
+set config_file=jiffy_cgc1.yaml
 
-set params_file=jiffy_small_shapenoise_params.cfg
+set params_file=jiffy_cgc1_params.cfg
 
 set field=$1
 set n_gals=$2
@@ -65,19 +66,19 @@ foreach segnum (`seq 0 $n_gals`)
 
 	python update_roaster_params.py --field $field --gal $segnum --config_file $params_file || goto error
 
+	#echo " "
+	#echo "================================================="
+	#echo "Fitting segment number "$segnum
+	#echo "================================================="
+	#jiffy_roaster --config_file $config_file --footprint_number $segnum || goto error
+
 	echo " "
 	echo "================================================="
-	echo "Fitting segment number "$segnum
+	echo "Making Inspector plots for segment "$segnum
 	echo "================================================="
-	jiffy_roaster --config_file $config_file --footprint_number $segnum || goto error
-
-	# echo " "
-	# echo "================================================="
-	# echo "Making Inspector plots for segment "$segnum
-	# echo "================================================="
-	# set roaster_file=${workdir}/reaper/jif/${field}/roaster_${field}_seg${segnum}.h5
-	# echo jiffy_roaster_inspector $roaster_file $config_file	
-	# jiffy_roaster_inspector $roaster_file $config_file --footprint_number $segnum || goto error	
+	set roaster_file=${workdir}/reaper/jif/${field}/roaster_${field}_seg${segnum}.h5
+	echo jiffy_roaster_inspector $roaster_file $config_file	
+	jiffy_roaster_inspector $roaster_file $config_file --footprint_number $segnum || goto error	
 end
 
 ##

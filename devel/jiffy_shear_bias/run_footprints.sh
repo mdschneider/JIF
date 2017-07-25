@@ -12,10 +12,10 @@ endif
 ## Path to the input images.
 ## Assume we're working within JIF/devel/jiffy_shear_bias/
 ## Assume JIF and MagicBeans are installed in the same top-level directory.
-set datadir=./cgc1/
+set datadir=/Volumes/PromisePegasus/JIF/cgc2/
 
-## Have 2 x 2 galaxies in each 'field'.
-## See mbi_no_shape_noise.yaml
+## Have n x n galaxies in each 'field'.
+## See mbi_cgcX.yaml
 set n_gals=$1
 echo "n_gals: "$n_gals
 @ n_fields=($2 - 1)
