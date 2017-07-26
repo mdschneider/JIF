@@ -28,13 +28,13 @@ set user=`whoami`
 # set workdir=./
 # set workdir=./midsnr
 #set workdir=./small_shapenoise
-set workdir=/Volumes/PromisePegasus/JIF/cgc1
+set workdir=/Volumes/PromisePegasus/JIF/cgc2
 
 # set config_file=jiffy.yaml
 # set config_file=jiffy_midsnr.yaml
-set config_file=jiffy_cgc1.yaml
+set config_file=jiffy_cgc2.yaml
 
-set params_file=jiffy_cgc1_params.cfg
+set params_file=jiffy_cgc2_params.cfg
 
 set field=$1
 set n_gals=$2
@@ -64,13 +64,13 @@ python update_config.py
 foreach segnum (`seq 0 $n_gals`)
 	# Edit parameter file to contain true (sheared) ellipticities
 
-	python update_roaster_params.py --field $field --gal $segnum --config_file $params_file || goto error
+	python update_roaster_params.py --field $field --gal $segnum --config_file $params_file --workdir $workdir || goto error
 
 	#echo " "
 	#echo "================================================="
 	#echo "Fitting segment number "$segnum
 	#echo "================================================="
-	#jiffy_roaster --config_file $config_file --footprint_number $segnum || goto error
+	jiffy_roaster --config_file $config_file --footprint_number $segnum || goto error
 
 	echo " "
 	echo "================================================="

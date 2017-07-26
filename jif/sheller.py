@@ -188,54 +188,57 @@ def create_segments(subfield_index=0, experiment="control",
         bkgrnd, noise_var = get_background_and_noise_var(f[0].data)
         noise_vars.append(noise_var)
         backgrounds.append(bkgrnd)
-        # print "empirical nosie variance: {:5.4g}".format(np.var(f[0].data))
+        print "empirical nosie variance: {:5.4g}".format(np.var(f[0].data))
         f.close()
+    logging.debug("Finished background and noise rms estimation")
 
-    ### There are 1e4 galaxies in one GREAT3 image file.
-    ### Save all images to the segment file, but with distinct 'segment_index'
-    ### values.
-    n_gals_image_file = n_gals
-    ngals_per_dim = int(np.sqrt(n_gals)) ### The image is a 20 x 20 grid of galaxies
-    for igal in xrange(n_gals_image_file):
-        if verbose and np.mod(igal, 2) == 0:
-            print "Galaxy {:d} / {:d}".format(igal+1, n_gals_image_file)
-        ### Specify input image grid ranges for this segment
-        ng = k_g3_ngrid[observation_type]
-        i, j = np.unravel_index(igal, (ngals_per_dim, ngals_per_dim))
-        ### These lines define the order in which we sort the postage stamps
-        ### into segment indices:
-        xmin = j * ng
-        xmax = (j+1) * ng
-        ymin = i * ng
-        ymax = (i+1) * ng
+    for ifile, infile in enumerate(infiles): # Iterate over epochs, 
+                                             # select same galaxy
+        f = fits.open(infile)
+        s = fits.open(starfiles[ifile])
 
-        images = []
-        psfs = []
-        for ifile, infile in enumerate(infiles): # Iterate over epochs, 
-                                                 # select same galaxy
-            f = fits.open(infile)
+        ### There are 1e4 galaxies in one GREAT3 image file.
+        ### Save all images to the segment file, but with distinct 'segment_index'
+        ### values.
+        n_gals_image_file = n_gals
+        ngals_per_dim = int(np.sqrt(n_gals)) ### The image is a 20 x 20 grid of galaxies
+        for igal in xrange(n_gals_image_file):
+            if verbose and np.mod(igal, 1000) == 0:
+                print "Galaxy {:d} / {:d}".format(igal+1, n_gals_image_file)
+            ### Specify input image grid ranges for this segment
+            ng = k_g3_ngrid[observation_type]
+            i, j = np.unravel_index(igal, (ngals_per_dim, ngals_per_dim))
+            ### These lines define the order in which we sort the postage stamps
+            ### into segment indices:
+            xmin = j * ng
+            xmax = (j+1) * ng
+            ymin = i * ng
+            ymax = (i+1) * ng
+
+            images = []
+            psfs = []
             images.append(np.asarray(f[0].data[ymin:ymax, xmin:xmax],
                 dtype=np.float64))
-            f.close()
-
-            s = fits.open(starfiles[ifile])
             ### Select just the perfectly centered star image for the PSF model.
             ### There are 8 other postage stamps (for constant PSF branches)
             ### that have offset star locations with respect to the pixel grid.
             ### It's not clear we need these for JIF modeling until we're
-            ### marginalizing the PSF model.
+            ### marginalizing the PSF model.            
             psfs.append(np.asarray(s[0].data[0:ng, 0:ng], dtype=np.float64))
-            s.close()
 
-        #print "noise_vars:", noise_vars
-        seg.save_images(images, noise_vars, [dummy_mask], backgrounds,
-            segment_index=igal, telescope=telescope_name)
-        seg.save_psf_images(psfs, segment_index=igal, telescope=telescope_name,
-            filter_name=filter_name, model_names=None)
-        # seg.save_source_catalog(np.reshape(gal_cat[igal], (1,)),
-        #     segment_index=igal)
-        seg.save_source_catalog(np.asarray(gal_cat[igal]).reshape((1,n_cat_cols)),
-            segment_index=igal)
+
+            #print "noise_vars:", noise_vars
+            seg.save_images(images, noise_vars, [dummy_mask], backgrounds,
+                segment_index=igal, telescope=telescope_name)
+            seg.save_psf_images(psfs, segment_index=igal, telescope=telescope_name,
+                filter_name=filter_name, model_names=None)
+            # seg.save_source_catalog(np.reshape(gal_cat[igal], (1,)),
+            #     segment_index=igal)
+            seg.save_source_catalog(np.asarray(gal_cat[igal]).reshape((1,n_cat_cols)),
+                segment_index=igal)
+
+        f.close()
+        s.close()
 
     ### It's not strictly necessary to instantiate a GalSimGalaxyModel object
     ### here, but it's useful to do the parsing of existing bandpass files to

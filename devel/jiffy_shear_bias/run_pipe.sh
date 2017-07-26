@@ -5,10 +5,10 @@
 
 set galsim=~/code/GalSim/bin/galsim
 
-set datadir=cgc1
+set datadir=/Volumes/PromisePegasus/JIF/cgc2/
 set n_gals=10000
 set n_fields=200
-set sim_yaml=mbi_cgc1.yaml
+set sim_yaml=mbi_cgc2.yaml
 
 #
 # Make the directory tree for the data

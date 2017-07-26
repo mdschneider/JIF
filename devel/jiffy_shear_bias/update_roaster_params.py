@@ -3,18 +3,18 @@ import os
 import numpy as np
 from astropy.io import fits
 
-K_TOPDIR = "small_shapenoise/control/ground/constant"
+K_TOPDIR = "small_shapenoise"
 
 def apply_shear(e, g):
     return (e + g) / (1.0 + g.conjugate() * e)
 
-def get_truths(ifield, igal):
+def get_truths(ifield, igal, workdir):
     """
     Get the true parameter values
     """
     scale = 0.2 # arcseconds
 
-    infile = os.path.join(K_TOPDIR,
+    infile = os.path.join(workdir, "control/ground/constant",
                           "epoch_catalog-{0:0>3}-0.fits".format(ifield))
     hdulist = fits.open(infile)
     tbdata = hdulist[1].data
@@ -67,9 +67,11 @@ def main():
 
     parser.add_argument("--config_file", type=str, default="jiffy_params.cfg")
 
+    parser.add_argument("--workdir", type=str, default=K_TOPDIR)
+
     args = parser.parse_args()
 
-    truths = get_truths(args.field, args.gal)
+    truths = get_truths(args.field, args.gal, args.workdir)
     update_config(truths, args.config_file)
 
 if __name__ == '__main__':

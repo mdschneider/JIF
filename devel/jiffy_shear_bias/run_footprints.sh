@@ -25,7 +25,7 @@ foreach subfield_index (`seq 0 $n_fields`)
 	echo "Creating footprint file for CGC-like field "$subfield_index
 	jif_sheller --subfield_index $subfield_index --data_path $datadir \
 	--catfile_head "epoch_catalog" \
-	--n_gals $n_gals || goto error
+	--n_gals $n_gals --verbose || goto error
 end
 
 ## labels for proper exit or error
