@@ -23,9 +23,9 @@ k_n_fields = 199
 #k_stooker_topdir = "small_shapenoise/reaper/jif/"
 #k_thresher_topdir = "small_shapenoise/thresher/cpp/"
 
-k_truth_topdir = "/Volumes/PromisePegasus/JIF/cgc1/control/ground/constant"
-k_stooker_topdir = "/Volumes/PromisePegasus/JIF/cgc1/reaper/jif"
-k_thresher_topdir = "/Volumes/PromisePegasus/JIF/cgc1/thresher/CPP"
+k_truth_topdir = "/Volumes/PromisePegasus/JIF/cgc2/control/ground/constant"
+k_stooker_topdir = "/Volumes/PromisePegasus/JIF/cgc2/reaper/jif"
+k_thresher_topdir = "/Volumes/PromisePegasus/JIF/cgc2/thresher/CPP"
 
 
 def get_stooker_field_shears(field_num, return_samples=False):

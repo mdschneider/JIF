@@ -7,8 +7,8 @@
 # 
 
 #cd small_shapenoise/reaper/jif
-cd /Volumes/PromisePegasus/JIF/cgc1/reaper/jif
-foreach field (`seq 198 199`)
+cd /Volumes/PromisePegasus/JIF/cgc2/reaper/jif
+foreach field (`seq 0 199`)
     set field_lab=`echo $field | awk '{printf "%03d\n", $0;}'`
     cd $field_lab
     echo $field_lab

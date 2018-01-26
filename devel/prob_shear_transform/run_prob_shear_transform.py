@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 from statsmodels.nonparametric.kde import kdensity
 
 import galsim
-import jif
+import jiffy
 
 import logging
 
