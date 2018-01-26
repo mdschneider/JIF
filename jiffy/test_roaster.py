@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# encoding: utf-8
+# 
 # Copyright (c) 2017, Lawrence Livermore National Security, LLC. 
 # Produced at the Lawrence Livermore National Laboratory. Written by 
 # Michael D. Schneider schneider42@llnl.gov. 

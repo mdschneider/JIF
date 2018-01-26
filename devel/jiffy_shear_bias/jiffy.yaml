@@ -1,11 +1,13 @@
 init:
     init_param_file: jiffy_params.cfg
+    seed: 923841567
 io:
     infile: .//control/ground/constant/segments/seg_034.h5
     outfile: .//reaper/JIF/000/roaster_000
     roaster_outfile: .//reaper/jif/034/roaster_034
 model:
     model_params: e1 e2 hlr flux nu dx dy
+    num_sources: 1
 sampling:
     nburn: 100
     nsamples: 200

@@ -515,7 +515,7 @@ class Roaster(object):
 
     def _get_model_image(self, iepochs):
         """
-        Create a galsim.Image from the source model(s) for epcoh iepochs
+        Create a galsim.Image from the source model(s) for epoch iepochs
         """
         nx = self.nx[iepochs]
         ny = self.ny[iepochs]

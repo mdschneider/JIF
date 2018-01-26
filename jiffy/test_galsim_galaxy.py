@@ -32,7 +32,7 @@ class TestGalSimGalaxyModel(unittest.TestCase):
 
     def test_init_values(self):
         gg = galsim_galaxy.GalsimGalaxyModel()
-        self.assertEqual(gg.psf.__class__.__name__, "Kolmogorov")
+        self.assertEqual(gg.static_psf.__class__.__name__, "Kolmogorov")
         self.assertAlmostEqual(gg.params.nu[0], 0.5)
         self.assertAlmostEqual(gg.params.hlr[0], 1.0)
         self.assertAlmostEqual(gg.params.e1[0], 0.0)
@@ -40,8 +40,8 @@ class TestGalSimGalaxyModel(unittest.TestCase):
         self.assertAlmostEqual(gg.params.flux[0], 1.0)
         self.assertAlmostEqual(gg.params.dx[0], 0.0)
         self.assertAlmostEqual(gg.params.dy[0], 0.0)
-        self.assertAlmostEqual(gg.psf.fwhm, 0.6)
-        self.assertAlmostEqual(gg.psf.flux, 1.0)
+        self.assertAlmostEqual(gg.static_psf.fwhm, 0.6)
+        self.assertAlmostEqual(gg.static_psf.flux, 1.0)
 
     def test_set_params(self):
         gg = galsim_galaxy.GalsimGalaxyModel()

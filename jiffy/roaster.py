@@ -24,7 +24,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc., 59 
 # Temple Place, Suite 330, Boston, MA 02111-1307 USA 
 """
-jiffy rstr.py
+@file jiffy roaster.py
 
 Draw posterior samples of image source model parameters given the
 likelihood functxion of an image footprint
@@ -36,16 +36,23 @@ import galsim_galaxy
 class Roaster(object):
     """
     Likelihood model for footprint pixel data given a parametric source model
-    """
 
+    Only single epoch images are allowed.
+    """
     def __init__(self, config="../config/jiffy.yaml"):
         if isinstance(config, str):
             import yaml
             config = yaml.load(open(config))
         self.config = config
 
+        np.random.seed(self.config["init"]["seed"])
+
+        self.num_sources = self.config['model']['num_sources']
         actv_params = self.config["model"]["model_params"].split(" ")
-        self.src_models = [galsim_galaxy.GalsimGalaxyModel(actv_params)]
+        self.src_models = [galsim_galaxy.GalsimGalaxyModel(actv_params)
+                           for i in xrange(self.num_sources)]
+
+        self.n_params = len(actv_params)
 
         # Initialize objects describing the pixel data in a footprint
         self.ngrid_x = 64
@@ -55,20 +62,44 @@ class Roaster(object):
         self.gain = 1.0
         self.data = None
 
-    def _get_model_image(self):
-        return self.src_models[0].get_image(self.ngrid_x, self.ngrid_y)
-
     def get_params(self):
-        return self.src_models[0].get_params()
+        """
+        Make a flat array of active model parameters for all sources
+
+        For use in MCMC sampling
+        """
+        return np.array([m.get_params() for m in self.src_models]).ravel()
 
     def set_params(self, params):
-        return self.src_models[0].set_params(params)
+        """
+        Set the active parameters for all sources from a flattened array
+        """
+        valid_params = True
+        for isrc in xrange(self.num_sources):
+            imin = isrc * self.n_params
+            imax = (isrc + 1) * self.n_params
+            p_set = params[imin:imax]
+            valid_params *= self.src_models[isrc].set_params(p_set)
+        return valid_params
 
     def set_param_by_name(self, paramname, value):
         """
         Set a galaxy or PSF model parameter by name
+
+        Can pass a single value that will be set for all source models, or a
+        list of length num_sources with unique values for each source.
         """
-        self.src_models[0].params[paramname] = value
+        if isinstance(value, list):
+            if len(value) == self.num_sources:
+                for isrc, v in enumerate(value):
+                    self.src_models[isrc].set_param_by_name(paramname, v)
+            else:
+                raise ValueError("If passing list, must have length num_sources")
+        elif isinstance(value, float):
+            for isrc in xrange(self.num_sources):
+                self.src_models[isrc].set_param_by_name(paramname, value)
+        else:
+            raise ValueError("Unsupported type for input value")
         return None
 
     def make_data(self):
@@ -109,9 +140,13 @@ class Roaster(object):
             self.set_param_by_name(paramname, fval)
         return None
 
-    def get_model_image(self):
-        return self.src_models[0].get_image(self.ngrid_x, self.ngrid_y,
-                                            scale=self.scale, gain=self.gain)
+    def _get_model_image(self):
+        model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
+                                    scale=self.scale)
+        for isrc in xrange(self.num_sources):
+            model = self.src_models[isrc].get_image(image=model_image,
+                                                    gain=self.gain)
+        return model_image
 
     def lnprior(self, params):
         """
@@ -126,7 +161,7 @@ class Roaster(object):
         res = -np.inf
         valid_params = self.src_models[0].set_params(params)
         if valid_params:
-            model = self.get_model_image()
+            model = self._get_model_image()
             if model is None:
                 res = -np.inf
             else:

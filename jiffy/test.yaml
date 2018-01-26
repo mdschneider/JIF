@@ -5,9 +5,11 @@ io :
 
 model :
   model_params : e1 e2
+  num_sources : 1
 
 init :
   init_param_file : ../config/jiffy_params.cfg
+  seed : 9854362
 
 sampling :
   nsamples : 500

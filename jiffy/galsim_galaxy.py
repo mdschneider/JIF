@@ -47,12 +47,25 @@ K_PARAM_BOUNDS = {
 class GalsimGalaxyModel(object):
     """
     Parametric galaxy model from GalSim for image forward modeling
+
+    The galaxy model is fixed as a 'Spergel' profile
     """
     def __init__(self,
                  active_parameters=['e1', 'e2']):
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
 
+        # Check if we're sampling in any PSF model parameters
+        self.sample_psf = False
+        self.actv_params_psf = []
+        if np.any(['psf' in p for p in self.active_parameters]):
+            self.sample_psf = True
+            self.actv_params_psf = [p for p in self.active_parameters 
+                                    if 'psf' in p]
+        self.actv_params_gal = [p for p in self.active_parameters 
+                                if 'psf' not in p]        
+
+        # Initialize parameters array
         self.params = np.array([(0.5, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0)],
                                dtype=[('nu', '<f8'),
                                       ('hlr', '<f8'),
@@ -63,21 +76,32 @@ class GalsimGalaxyModel(object):
                                       ('dy', '<f8')])
         self.params = self.params.view(np.recarray)
 
-        # TESTING: hard-code some stuff for now
-        # self.psf = galsim.Kolmogorov(fwhm=0.6)
-        self.psf_model = galsim_psf.GalsimPSFModel()
-        self.psf_model.set_params([0.6])
-        self.psf = self.psf_model.get_model()
+        # Initialize the PSF model that will be convolved with the galaxy
+        self.psf_model = galsim_psf.GalsimPSFModel(
+            active_parameters=self.actv_params_psf)
+
+        # Store fixed PSF now unless we're sampling in the PSF model parameters
+        self.static_psf = None
+        if not self.sample_psf:
+            self.psf_model.params[0].psf_fwhm = 0.6
+            self.static_psf = self.psf_model.get_model()
+            # print self.static_psf.__dict__
         return None
 
     def get_params(self):
-      return self.params[self.active_parameters].view('<f8').copy()
+      p = self.params[self.actv_params_gal].view('<f8').copy()
+      if self.sample_psf:
+        p = np.append(p, self.psf_model.get_params())
+      return p
 
     def set_params(self, params):
         assert len(params) >= self.n_params
-        for ip, pname in enumerate(self.active_parameters):
+        for ip, pname in enumerate(self.actv_params_gal):
             self.params[pname][0] = params[ip]
-        valid_params = self.validate_params()
+        valid_params = self.validate_params()            
+        if self.sample_psf:
+            valid_params *= self.psf_model.set_params(
+                params[len(self.actv_params_gal):])
         return valid_params
 
     def validate_params(self):
@@ -95,7 +119,13 @@ class GalsimGalaxyModel(object):
                 valid_params *= 0
         return bool(valid_params)
 
-    def get_image(self, ngrid_x, ngrid_y, scale=0.2, gain=1.0):
+    def get_psf(self):
+        if self.sample_psf:
+            return self.psf_model.get_model()
+        else:
+            return self.static_psf
+
+    def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0):
         """
         Render a GalSim Image() object from the internal model
         """
@@ -107,10 +137,14 @@ class GalsimGalaxyModel(object):
         # mu = 1. / (1. - (self.params.e1[0]**2 + self.params.e2[0]**2))
         # gal = gal.lens(g1=self.params.e1[0], g2=self.params.e2[0], mu=mu)
         gal = gal.shift(self.params.dx[0], self.params.dy[0])
-        obj = galsim.Convolve(self.psf, gal)
+        obj = galsim.Convolve(self.get_psf(), gal)
         try:
-            model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
-                                  gain=gain)
+            if image is not None:
+                model = obj.drawImage(image=image, gain=gain,
+                                      add_to_image=True)
+            else:
+                model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
+                                      gain=gain)
         except RuntimeError:
             print "Trying to make an image that's too big."
             print self.get_params()
