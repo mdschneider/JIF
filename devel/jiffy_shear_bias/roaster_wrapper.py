@@ -72,14 +72,9 @@ def main():
     print "Setting truths: ", truths
     rstr.set_params(truths)
 
-<<<<<<< HEAD
-    jiffy.roaster.do_sampling(args, rstr)
-
-=======
     print "Executing sampler"
     jiffy.roaster.do_sampling(args, rstr)
     print "Finished roaster wrapper"
->>>>>>> b4094ebf8f2cf582f03bcadfd0bcd0f1b29d0f15
     return None
 
 if __name__ == '__main__':

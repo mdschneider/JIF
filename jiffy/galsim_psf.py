@@ -5,7 +5,7 @@
 # Produced at the Lawrence Livermore National Laboratory. Written by 
 # Michael D. Schneider schneider42@llnl.gov. 
 # LLNL-CODE-742321. All rights reserved. 
-#
+# 
 # This file is part of JIF. For details, see https://github.com/mdschneider/JIF 
 # 
 # Please also read this link – Our Notice and GNU Lesser General Public License
@@ -14,64 +14,50 @@
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License (as published by the Free Software
 # Foundation) version 2.1 dated February 1999. 
-#
+# 
 # This program is distributed in the hope that it will be useful, but WITHOUT 
 # ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS
 # FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU General
 # Public License for more details. 
-#
+# 
 # You should have received a copy of the GNU Lesser General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc., 59 
 # Temple Place, Suite 330, Boston, MA 02111-1307 USA 
 """
-jiffy galsim_galaxy.py
+jiffy galsim_psf.py
 
-Wrapper for simple GalSim galaxy models to use in MCMC.
+Wrapper for simple GalSim PSF models to use in MCMC.
 """
 import numpy as np
 import galsim
-import galsim_psf
 
 
 K_PARAM_BOUNDS = {
-    "nu": [-0.8, 0.8],
-    "hlr": [0.01, 10.0],
-    "e1": [-0.7, 0.7],
-    "e2": [-0.7, 0.7],
-    "flux": [0.001, 1000.0],
-    "dx": [-10.0, 10.0],
-    "dy": [-10.0, 10.0]
+    "psf_fwhm": [0.1, 2.0] ## in arcseconds
+                           ## Note that very small PSF widths will require 
+                           ## large GalSim FFTs
 }
 
 
-class GalsimGalaxyModel(object):
-    """
-    Parametric galaxy model from GalSim for image forward modeling
-    """
-    def __init__(self,
-                 active_parameters=['e1', 'e2']):
+class GalsimPSFModel(object):
+    """Parametric PSF models from GalSim for image forward modeling"""
+    def __init__(self, active_parameters=['psf_fwhm']):
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
 
-        self.params = np.array([(0.5, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0)],
-                               dtype=[('nu', '<f8'),
-                                      ('hlr', '<f8'),
-                                      ('e1', '<f8'),
-                                      ('e2', '<f8'),
-                                      ('flux', '<f8'),
-                                      ('dx', '<f8'),
-                                      ('dy', '<f8')])
+        self.params = np.array([(1.0)],
+                               dtype=[('psf_fwhm', '<f8')])
         self.params = self.params.view(np.recarray)
 
-        # TESTING: hard-code some stuff for now
-        # self.psf = galsim.Kolmogorov(fwhm=0.6)
-        self.psf_model = galsim_psf.GalsimPSFModel()
-        self.psf_model.set_params([0.6])
-        self.psf = self.psf_model.get_model()
-        return None
-
     def get_params(self):
-      return self.params[self.active_parameters].view('<f8').copy()
+        """
+        Return a list of active model parameter values.
+        """
+        if len(self.active_parameters) > 0:
+            p = self.params[self.active_parameters].view('<f8').copy()
+        else:
+            p = []
+        return p
 
     def set_params(self, params):
         assert len(params) >= self.n_params
@@ -95,19 +81,19 @@ class GalsimGalaxyModel(object):
                 valid_params *= 0
         return bool(valid_params)
 
+    def get_model(self):
+        """
+        Get the GalSim image model
+
+        This is the object that can be used in, e.g., GalSim convolutions
+        """
+        return galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
+
     def get_image(self, ngrid_x, ngrid_y, scale=0.2, gain=1.0):
         """
         Render a GalSim Image() object from the internal model
-        """
-        gal = galsim.Spergel(self.params.nu[0],
-                             half_light_radius=self.params.hlr[0],
-                             flux=self.params.flux[0])
-        gal = gal.shear(galsim.Shear(g1=self.params.e1[0],
-                                     g2=self.params.e2[0]))
-        # mu = 1. / (1. - (self.params.e1[0]**2 + self.params.e2[0]**2))
-        # gal = gal.lens(g1=self.params.e1[0], g2=self.params.e2[0], mu=mu)
-        gal = gal.shift(self.params.dx[0], self.params.dy[0])
-        obj = galsim.Convolve(self.psf, gal)
+        """        
+        obj = self.get_model()
         try:
             model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
                                   gain=gain)
@@ -118,14 +104,14 @@ class GalsimGalaxyModel(object):
         return model
 
 
-if __name__ == '__main__':
+def main():
     """
     Make a default test footprint file
     """
     import footprints
 
-    gg = GalsimGalaxyModel()
-    img = gg.get_image(64, 64)
+    gp = GalsimPSFModel()
+    img = gp.get_image(16, 16)
     noise_var = 1.e-8
     noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
     img.addNoise(noise)
@@ -133,8 +119,12 @@ if __name__ == '__main__':
     dummy_mask = 1.0
     dummy_background = 0.0
 
-    ftpnt = footprints.Footprints("../data/TestData/jiffy_gg_image.h5")
+    ftpnt = footprints.Footprints("../data/TestData/jiffy_psf_image.h5")
 
     ftpnt.save_images([img.array], [noise_var], [dummy_mask], [dummy_background],
-                    segment_index=0, telescope="LSST", filter_name='r')
+                      segment_index=0, telescope="LSST", filter_name='r')
     ftpnt.save_tel_metadata()
+
+
+if __name__ == '__main__':
+    main()

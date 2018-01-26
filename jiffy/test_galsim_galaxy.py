@@ -1,10 +1,13 @@
+#!/usr/bin/env python
+# encoding: utf-8
+# 
 # Copyright (c) 2017, Lawrence Livermore National Security, LLC. 
 # Produced at the Lawrence Livermore National Laboratory. Written by 
 # Michael D. Schneider schneider42@llnl.gov. 
 # LLNL-CODE-742321. All rights reserved. 
 # 
 # This file is part of JIF. For details, see https://github.com/mdschneider/JIF 
-# 
+#
 # Please also read this link – Our Notice and GNU Lesser General Public License
 # https://github.com/mdschneider/JIF/blob/master/LICENSE 
 # 
@@ -51,7 +54,7 @@ class TestGalSimGalaxyModel(unittest.TestCase):
     def test_default_image(self):
         gg = galsim_galaxy.GalsimGalaxyModel()
         image = gg.get_image(64, 64)
-        self.assertAlmostEqual(image.array.sum(), 0.99832934)
+        self.assertAlmostEqual(image.array.sum(), 0.9983294)
         self.assertAlmostEqual(image.array.max(), 0.0094704079)
 
 if __name__ == "__main__":
