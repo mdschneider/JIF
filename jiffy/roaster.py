@@ -31,8 +31,7 @@ likelihood functxion of an image footprint
 """
 import numpy as np
 import galsim
-import galsim_galaxy
-import galsim_psf
+import jiffy
 
 class Roaster(object):
     """
@@ -40,7 +39,7 @@ class Roaster(object):
 
     Only single epoch images are allowed.
     """
-    def __init__(self, config="../config/jiffy.yaml"):
+    def __init__(self, config="../config/jiffy.yaml", model_modules=None):
         if isinstance(config, str):
             import yaml
             config = yaml.load(open(config))
@@ -50,17 +49,17 @@ class Roaster(object):
 
         self.num_sources = self.config['model']['num_sources']
         actv_params = self.config["model"]["model_params"].split(" ")
+        self.n_params = len(actv_params)
 
         model_class_name = self.config["model"]["model_class"]
         args = {"active_parameters": actv_params}
         if model_class_name is "GalsimGalaxyModel":
-            args["psf_model_class_name"] = self.config["model"]["psf_class"]
+            args["psf_model_class_name"] = self.config["model"]["psf_class"]        
 
-        model_modules = __import__('galsim_galaxy', 'galsim_psf')
+        if model_modules is None:
+            model_modules = __import__('jiffy.galsim_galaxy', 'jiffy.galsim_psf')
         self.src_models = [getattr(model_modules, model_class_name)(**args)
                            for i in xrange(self.num_sources)]
-
-        self.n_params = len(actv_params)
 
         # Initialize objects describing the pixel data in a footprint
         self.ngrid_x = 64
@@ -150,10 +149,10 @@ class Roaster(object):
 
     def _get_model_image(self):
         model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
-                                    scale=self.scale)
+                                    scale=self.scale, init_value=0.)
         for isrc in xrange(self.num_sources):
-            model = self.src_models[isrc].get_image(image=model_image,
-                                                    gain=self.gain)
+            model_image = self.src_models[isrc].get_image(image=model_image,
+                                                          gain=self.gain)
         return model_image
 
     def lnprior(self, params):

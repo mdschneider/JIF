@@ -79,6 +79,28 @@ class GalsimPSFModel(object):
         valid_params = self.validate_params()
         return valid_params
 
+    def get_param_by_name(self, paramname):
+        """
+        Get a single parameter value using the parameter name as a key.
+
+        Can access 'active' or 'inactive' parameters.
+        """
+        return self.params[paramname][0]
+
+    def set_param_by_name(self, paramname, value):
+        """
+        Set a single parameter value using the parameter name as a key.
+
+        Can set 'active' or 'inactive' parameters. So, this routine gives a
+        way to set fixed or fiducial values of model parameters that are not
+        used in the MCMC sampling in Roaster.
+
+        @param paramname    The name of the galaxy or PSF model parameter to set
+        @param value        The value to assign to the model parameter
+        """
+        self.params[paramname][0] = value
+        return None
+
     def validate_params(self):
         """
         Check that all model parameters are within allowed ranges
@@ -108,7 +130,7 @@ class GalsimPSFModel(object):
         psf = psf.shift(self.params.psf_dx[0], self.params.psf_dy[0])
         return psf
 
-    def get_image(self, ngrid_x, ngrid_y, scale=0.2, image=None, gain=1.0):
+    def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0):
         """
         Render a GalSim Image() object from the internal model
         """        
