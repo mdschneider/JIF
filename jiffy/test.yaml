@@ -4,6 +4,8 @@ io :
   roaster_outfile : test_roaster_out.h5
 
 model :
+  model_class : GalsimGalaxyModel
+  psf_class : GalsimPSFModel
   model_params : e1 e2
   num_sources : 1
 

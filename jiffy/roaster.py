@@ -32,6 +32,7 @@ likelihood functxion of an image footprint
 import numpy as np
 import galsim
 import galsim_galaxy
+import galsim_psf
 
 class Roaster(object):
     """
@@ -49,7 +50,14 @@ class Roaster(object):
 
         self.num_sources = self.config['model']['num_sources']
         actv_params = self.config["model"]["model_params"].split(" ")
-        self.src_models = [galsim_galaxy.GalsimGalaxyModel(actv_params)
+
+        model_class_name = self.config["model"]["model_class"]
+        args = {"active_parameters": actv_params}
+        if model_class_name is "GalsimGalaxyModel":
+            args["psf_model_class_name"] = self.config["model"]["psf_class"]
+
+        model_modules = __import__('galsim_galaxy', 'galsim_psf')
+        self.src_models = [getattr(model_modules, model_class_name)(**args)
                            for i in xrange(self.num_sources)]
 
         self.n_params = len(actv_params)

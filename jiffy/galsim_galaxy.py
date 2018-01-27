@@ -51,7 +51,8 @@ class GalsimGalaxyModel(object):
     The galaxy model is fixed as a 'Spergel' profile
     """
     def __init__(self,
-                 active_parameters=['e1', 'e2']):
+                 active_parameters=['e1', 'e2'],
+                 psf_model_class_name="GalsimPSFModel"):
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
 
@@ -66,6 +67,20 @@ class GalsimGalaxyModel(object):
                                 if 'psf' not in p]        
 
         # Initialize parameters array
+        self._init_params()
+
+        # Initialize the PSF model that will be convolved with the galaxy
+        self.psf_model = getattr(galsim_psf, psf_model_class_name)(
+            active_parameters=self.actv_params_psf)
+
+        # Store fixed PSF now unless we're sampling in the PSF model parameters
+        self.static_psf = None
+        if not self.sample_psf:
+            self.psf_model.params[0].psf_fwhm = 0.6
+            self.static_psf = self.psf_model.get_model()
+        return None
+
+    def _init_params(self):
         self.params = np.array([(0.5, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0)],
                                dtype=[('nu', '<f8'),
                                       ('hlr', '<f8'),
@@ -75,18 +90,6 @@ class GalsimGalaxyModel(object):
                                       ('dx', '<f8'),
                                       ('dy', '<f8')])
         self.params = self.params.view(np.recarray)
-
-        # Initialize the PSF model that will be convolved with the galaxy
-        self.psf_model = galsim_psf.GalsimPSFModel(
-            active_parameters=self.actv_params_psf)
-
-        # Store fixed PSF now unless we're sampling in the PSF model parameters
-        self.static_psf = None
-        if not self.sample_psf:
-            self.psf_model.params[0].psf_fwhm = 0.6
-            self.static_psf = self.psf_model.get_model()
-            # print self.static_psf.__dict__
-        return None
 
     def get_params(self):
       p = self.params[self.actv_params_gal].view('<f8').copy()
