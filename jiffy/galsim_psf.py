@@ -72,9 +72,10 @@ class GalsimPSFModel(object):
         return p
 
     def set_params(self, params):
+        # print "param counts:", len(params), self.n_params
         assert len(params) >= self.n_params
         for ip, pname in enumerate(self.active_parameters):
-            print "Setting {} to {5.4f}".format(pname, params[ip])
+            # print "Setting {} to {5.4f}".format(pname, params[ip])
             self.params[pname][0] = params[ip]
         valid_params = self.validate_params()
         return valid_params

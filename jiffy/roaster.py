@@ -39,7 +39,7 @@ class Roaster(object):
 
     Only single epoch images are allowed.
     """
-    def __init__(self, config="../config/jiffy.yaml", model_modules=None):
+    def __init__(self, config="../config/jiffy.yaml"):
         if isinstance(config, str):
             import yaml
             config = yaml.load(open(config))
@@ -53,11 +53,14 @@ class Roaster(object):
 
         model_class_name = self.config["model"]["model_class"]
         args = {"active_parameters": actv_params}
-        if model_class_name is "GalsimGalaxyModel":
+        if model_class_name == "GalsimGalaxyModel":
             args["psf_model_class_name"] = self.config["model"]["psf_class"]        
 
-        if model_modules is None:
+        try:
+            model_modules = __import__(self.config['model']['model_modules'])
+        except KeyError:
             model_modules = __import__('jiffy.galsim_galaxy', 'jiffy.galsim_psf')
+
         self.src_models = [getattr(model_modules, model_class_name)(**args)
                            for i in xrange(self.num_sources)]
 
@@ -166,7 +169,7 @@ class Roaster(object):
         Evaluate the log-likelihood of the pixel data in a footprint
         """
         res = -np.inf
-        valid_params = self.src_models[0].set_params(params)
+        valid_params = self.set_params(params)
         if valid_params:
             model = self._get_model_image()
             if model is None:

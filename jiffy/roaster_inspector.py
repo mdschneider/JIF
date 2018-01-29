@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# encoding: utf-8
+# 
 # Copyright (c) 2017, Lawrence Livermore National Security, LLC. 
 # Produced at the Lawrence Livermore National Laboratory. Written by 
 # Michael D. Schneider schneider42@llnl.gov. 
@@ -125,11 +128,14 @@ class RoasterInspector(object):
         import footprints
 
         self.roaster = roaster.Roaster(self.config)
+        print "roaster model class:", type(self.roaster.src_models[0]).__name__
         self.roaster.initialize_param_values(self.config["init"]["init_param_file"])
         self.params_ref = self.roaster.get_params()
 
         dat, noise_var, scale, gain = footprints.load_image(self.config["io"]["infile"],
-                                                            segment=self.args.footprint_number)
+            telescope=self.config["io"]["telescope"],
+            filter_name=self.config["io"]["filter"],
+            segment=self.args.footprint_number)
 
         self.roaster.import_data(dat, float(noise_var), scale=scale, gain=gain)
 
@@ -275,6 +281,7 @@ class RoasterInspector(object):
 
 
 def main():
+    import argparse
     parser = argparse.ArgumentParser()
 
     parser.add_argument("infile",
