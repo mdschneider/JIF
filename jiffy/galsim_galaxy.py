@@ -92,7 +92,8 @@ class GalsimGalaxyModel(object):
         self.params = self.params.view(np.recarray)
 
     def get_params(self):
-      p = self.params[self.actv_params_gal].view('<f8').copy()
+      # p = self.params[self.actv_params_gal].view('<f8').copy()
+      p = np.array([pv for pv in self.params[self.actv_params_gal][0]])      
       if self.sample_psf:
         p = np.append(p, self.psf_model.get_params())
       return p

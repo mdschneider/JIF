@@ -33,14 +33,14 @@ import galsim
 
 
 K_PARAM_BOUNDS = {
-    "psf_fwhm": [0.1, 2.0], ## in arcseconds
-                           ## Note that very small PSF widths will require 
-                           ## large GalSim FFTs
+    "psf_fwhm": [0.02, 200.0], ## in arcseconds
+                               ## Note that very small PSF widths will require 
+                               ## large GalSim FFTs
     "psf_e1": [-0.6, 0.6],
     "psf_e2": [-0.6, 0.6],
     "psf_flux": [0.001, 1000.],
-    "psf_dx": [-10., 10.],
-    "psf_dy": [-10., 10.]
+    "psf_dx": [-100., 100.],
+    "psf_dy": [-100., 100.]
 }
 
 
@@ -66,13 +66,13 @@ class GalsimPSFModel(object):
         Return a list of active model parameter values.
         """
         if len(self.active_parameters) > 0:
-            p = self.params[self.active_parameters].view('<f8').copy()
+            # p = self.params[self.active_parameters].view('<f8').copy()
+            p = np.array([pv for pv in self.params[self.active_parameters][0]])
         else:
             p = []
         return p
 
     def set_params(self, params):
-        # print "param counts:", len(params), self.n_params
         assert len(params) >= self.n_params
         for ip, pname in enumerate(self.active_parameters):
             # print "Setting {} to {5.4f}".format(pname, params[ip])
@@ -115,6 +115,7 @@ class GalsimPSFModel(object):
         for pname, _ in self.params.dtype.descr:
             if not _inbounds(self.params[pname][0], K_PARAM_BOUNDS[pname]):
                 valid_params *= 0
+                print "bad params: ", pname, self.params[pname]
         return bool(valid_params)
 
     def get_model(self):

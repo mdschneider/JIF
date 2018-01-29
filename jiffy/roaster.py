@@ -33,6 +33,7 @@ import numpy as np
 import galsim
 import jiffy
 
+
 class Roaster(object):
     """
     Likelihood model for footprint pixel data given a parametric source model
@@ -179,6 +180,8 @@ class Roaster(object):
                 lnnorm = (- 0.5 * self.ngrid_x * self.ngrid_y *
                           np.sqrt(self.noise_var * 2 * np.pi))
                 res = -0.5*np.sum(delta / self.noise_var) + lnnorm
+        # else:
+        #     print "Invalid parameters"
         return res
 
     def __call__(self, params):
@@ -218,7 +221,7 @@ def do_sampling(args, rstr):
     nthreads = rstr.config["sampling"]["nthreads"]
 
     p0 = emcee.utils.sample_ball(omega_interim, 
-                                 np.ones_like(omega_interim) * 0.01, nwalkers)
+                                 np.ones_like(omega_interim) * 0.001, nwalkers)
 
     sampler = emcee.EnsembleSampler(nwalkers,
                                     nvars,
@@ -237,7 +240,7 @@ def do_sampling(args, rstr):
     for istep in range(nsamples):
         if np.mod(istep + 1, 20) == 0:
             print "\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
-                np.mean(pp))
+                np.mean(lnp))
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         lnprior = np.array([rstr.lnprior(omega) for omega in pp])
         pps.append(np.column_stack((pp.copy(), lnprior)))
@@ -295,6 +298,9 @@ def write_results(args, pps, lnps, rstr):
     grp = hfile.create_group(group_name)
 
     paramnames = rstr.config["model"]["model_params"].split()
+    if rstr.num_sources > 1:
+        paramnames = [p + '_src{:d}'.format(isrc) for isrc in xrange(rstr.num_sources)
+                      for p in paramnames]
 
     ## Write the MCMC samples and log probabilities
     if "post" in grp:

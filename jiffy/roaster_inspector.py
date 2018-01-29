@@ -220,7 +220,7 @@ class RoasterInspector(object):
         ax.set_title("Opt Model")
         opt_params = self._get_opt_params()
         valid_params = self.roaster.set_params(opt_params)
-        model_image = self.roaster.get_model_image()
+        model_image = self.roaster._get_model_image()
         cax = ax.imshow(model_image.array, interpolation='none',
                         cmap=plt.cm.pink, vmin=vmin, vmax=vmax)
         cbar = fig.colorbar(cax)
