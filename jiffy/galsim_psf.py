@@ -30,6 +30,7 @@ Wrapper for simple GalSim PSF models to use in MCMC.
 """
 import numpy as np
 import galsim
+import galsim.lsst
 
 
 K_PARAM_BOUNDS = {
@@ -118,12 +119,13 @@ class GalsimPSFModel(object):
                 print "bad params: ", pname, self.params[pname]
         return bool(valid_params)
 
-    def get_model(self):
+    def get_model(self, theta=None):
         """
         Get the GalSim image model
 
         This is the object that can be used in, e.g., GalSim convolutions
         """
+        # argument theta is not used here
         psf = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
         psf_shape = galsim.Shear(e1=self.params.psf_e1[0],
                                  e2=self.params.psf_e2[0])
@@ -132,67 +134,134 @@ class GalsimPSFModel(object):
         psf = psf.shift(self.params.psf_dx[0], self.params.psf_dy[0])
         return psf
 
-    def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0):
+    def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0,
+                  theta_x_arcmin=0., theta_y_arcmin=0.):
         """
         Render a GalSim Image() object from the internal model
-        """        
-        obj = self.get_model()
-        try:
-            if image is not None:
-                model = obj.drawImage(image=image, gain=gain, add_to_image=True)
-            else:
-                model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
-                                      gain=gain)
-        except RuntimeError:
-            print "Trying to make an image that's too big."
-            print self.get_params()
-            model = None
+        """
+        theta = (theta_x_arcmin*galsim.arcmin, theta_y_arcmin*galsim.arcmin)
+        obj = self.get_model(theta)
+        # try:
+        #     if image is not None:
+        #         model = obj.drawImage(image=image, gain=gain, add_to_image=True, method='fft')
+        #     else:
+        #         model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
+        #                               gain=gain, method='fft')
+        # except RuntimeError:
+        #     print "Trying to make an image that's too big."
+        #     print self.get_params()
+        #     model = None
+        
+        if image is not None:
+            model = obj.drawImage(image=image, gain=gain, add_to_image=True, method='fft')
+        else:
+            model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
+                                  gain=gain, method='fft')        
         return model
 
 
 class GalsimPSFLSST(GalsimPSFModel):
     fov_deg = 3.5
     tel_diam_m = 8.4
-    wavelength_nm = 500.
+    wavelength_nm = 600.
+    gsparams = galsim.GSParams(
+            # folding_threshold=1.e-2, # maximum fractional flux that may be folded around edge of FFT
+            # maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
+            # xvalue_accuracy=1.e-2,   # approximations in real space aim to be this accurate
+            # kvalue_accuracy=1.e-2,   # approximations in fourier space aim to be this accurate
+            # shoot_accuracy=1.e-2,    # approximations in photon shooting aim to be this accurate
+            minimum_fft_size=16,     # minimum size of ffts
+            maximum_fft_size=20480)   # maximum size of ffts
     def __init__(self, active_parameters=['psf_fwhm']):
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
         self._init_params()
         self._init_optics_dz_aberrations()
-        self.aper = galsim.Aperture(diam=self.tel_diam_m)
+        self.aper = galsim.Aperture(diam=self.tel_diam_m,
+                                    obscuration=0.65,
+                                    lam=self.wavelength_nm,
+                                    circular_pupil=True,
+                                    pupil_plane_scale=0.01,
+                                    pupil_plane_size=8.4*4,
+                                    pad_factor=1.0,
+                                    gsparams=self.gsparams)
 
     def _init_params(self):
-        self.params = np.array([(1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 
-                                 0.1)],
-                               dtype=[('psf_fwhm', '<f8'),
-                                      ('psf_e1', '<f8'),
-                                      ('psf_e2', '<f8'),
-                                      ('psf_flux', '<f8'),
-                                      ('psf_dx', '<f8'),
-                                      ('psf_dy', '<f8'),
-                                      ('psf_a_2020', '<f8')])
+        # Parameter names / types
+        atmos_types = [('psf_fwhm', '<f8'),
+                       ('psf_e1',   '<f8'),
+                       ('psf_e2',   '<f8'),
+                       ('psf_flux', '<f8'),
+                       ('psf_dx',   '<f8'),
+                       ('psf_dy',   '<f8')]
+        optics_aberr_types = [('psf_a_{:d}'.format(i), '<f8')
+                              for i in range(1, 41)]
+        param_types = atmos_types + optics_aberr_types
+
+        # Parameter initial values
+        atmos_vals = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+        optics_vals = tuple(0.0 for i in range(1, 41))
+
+        self.params = np.array([atmos_vals + optics_vals],
+                               dtype=param_types)
         self.params = self.params.view(np.recarray)
 
     def _init_optics_dz_aberrations(self):
-        npupil = 12
-        nfield = 21
-        self.aberrations = np.zeros((npupil, nfield), dtype=np.float64)
-        self.aberrations[2, 2] = self.params.psf_a_2020[0]
+        # Read LSST nominal coefficients
+        dat = galsim.lsst.lsst_psfs._read_aberrations()
+        # npupil = int(np.max(dat[:, 0]))
+        # nfield = int(np.max(dat[:, 2]))
+        npupil = 67
+        nfield = 28
 
-    def get_model(self, theta=(0.*galsim.arcmin, 0.*galsim.arcmin)):
-        # atmosphere PSF
+        # Make a lookup table
+        noll = np.zeros((11, 12), dtype=int)
+        for j in range(67):
+            n, m = galsim.phase_screens._noll_to_zern(j)
+            if m >= 0:
+                noll[n, m] = j
+            else:
+                noll[n, abs(m)+1] = j
+
+        self.aberrations = np.zeros((npupil, nfield), dtype=np.float64)
+        for i in xrange(dat.shape[0]):
+            m_pupil = int(dat[i, 1])
+            m_field = int(dat[i, 3])
+            j_pupil = noll[int(dat[i, 0]), m_pupil]
+            j_field = noll[int(dat[i, 2]), m_field]
+            for mp in range(np.min((m_pupil, 2))):
+                for mf in range(np.min((m_field, 2))):
+                    self.aberrations[j_pupil+mp, j_field+mp] = dat[i, 4]
+        return None
+
+    def _get_phase_screens(self):
         atmos = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
-        psf_shape = galsim.Shear(g=self.params.psf_e[0],
-                                 beta=self.params.psf_beta[0]*galsim.radians)
-        atmos = atmos.shear(psf_shape)
+        psf_shape = galsim.Shear(e1=self.params.psf_e1[0],
+                                 e2=self.params.psf_e2[0])
 
         # optics PSF
         op_model = galsim.OpticalScreenField(self.aberrations,
-                                             fov_radius=self.fov_deg)
+                                             fov_radius=self.fov_deg*galsim.degrees)
         screens = galsim.PhaseScreenList(op_model)
-        screens.makePSF(lam=self.wavelength_nm, aper=self.aper, theta=theta)
+        return screens
 
-        psf = galsim.Convolve([atmos, optics])
+    def get_wavefront(self, theta=(0.*galsim.arcmin, 0.*galsim.arcmin)):
+        screens = self._get_phase_screens()
+        wf = screens.wavefront(self.aper.u, self.aper.v, t=0, theta=theta)
+        wf_out = np.zeros_like(wf)
+        wf_out[self.aper.illuminated] = wf[self.aper.illuminated]
+        return wf_out
+
+    def get_model(self, theta=(0.*galsim.arcmin, 0.*galsim.arcmin)):
+        screens = self._get_phase_screens()
+
+        optics = screens.makePSF(lam=self.wavelength_nm, aper=self.aper, 
+                                 theta=theta, pad_factor=1., ii_pad_factor=4.,
+                                 gsparams=self.gsparams)
+
+        # atmos = atmos.shear(psf_shape)
+        # psf = galsim.Convolve([atmos, optics])
+        psf = optics
         psf = psf.shift(self.params.psf_dx[0], self.params.psf_dy[0])
         return psf
 
