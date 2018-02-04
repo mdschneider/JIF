@@ -1,38 +1,39 @@
 #!/usr/bin/env python
 # encoding: utf-8
-# 
-# Copyright (c) 2017, Lawrence Livermore National Security, LLC. 
-# Produced at the Lawrence Livermore National Laboratory. Written by 
-# Michael D. Schneider schneider42@llnl.gov. 
-# LLNL-CODE-742321. All rights reserved. 
-# 
-# This file is part of JIF. For details, see https://github.com/mdschneider/JIF 
-# 
+#
+# Copyright (c) 2017, Lawrence Livermore National Security, LLC.
+# Produced at the Lawrence Livermore National Laboratory. Written by
+# Michael D. Schneider schneider42@llnl.gov.
+# LLNL-CODE-742321. All rights reserved.
+#
+# This file is part of JIF. For details, see https://github.com/mdschneider/JIF
+#
 # Please also read this link – Our Notice and GNU Lesser General Public License
-# https://github.com/mdschneider/JIF/blob/master/LICENSE 
-# 
+# https://github.com/mdschneider/JIF/blob/master/LICENSE
+#
 # This program is free software; you can redistribute it and/or modify it under
-# the terms of the GNU General Public License (as published by the Free Software
-# Foundation) version 2.1 dated February 1999. 
-# 
-# This program is distributed in the hope that it will be useful, but WITHOUT 
+# the terms of the GNU General Public License (as published by the Free
+# Software Foundation) version 2.1 dated February 1999.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
 # ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS
 # FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU General
-# Public License for more details. 
-# 
-# You should have received a copy of the GNU Lesser General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc., 59 
-# Temple Place, Suite 330, Boston, MA 02111-1307 USA 
+# Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with this program; if not, write to the Free Software Foundation, Inc.,
+# 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 import unittest
 import numpy as np
-# import galsim
-import roaster
+import jiffy
+
 
 def ln_gaus(xval, ln_amp, x_mean, sigma):
     """
     Evaluate the log a Gaussian density function (unnormalized)
     """
     return ln_amp - 0.5 * (xval - x_mean)**2 / sigma**2
+
 
 def fit_gaussian(dat_x, dat_y):
     """
@@ -45,6 +46,7 @@ def fit_gaussian(dat_x, dat_y):
     popt, pcov = curve_fit(ln_gaus, dat_x, dat_y, p0=params)
     return popt, pcov
 
+
 class TestRoaster(unittest.TestCase):
     """ Unit tests for the Roaster class in Jiffy
     """
@@ -52,9 +54,10 @@ class TestRoaster(unittest.TestCase):
     def test_init(self):
         """ Check that all values in the Roaster init method are unchanged
         """
-        rstr = roaster.Roaster("test.yaml")
+        rstr = jiffy.Roaster("test.yaml")
         self.assertEquals(len(rstr.src_models), 1)
-        self.assertEquals(rstr.src_models[0].__class__.__name__, "GalsimGalaxyModel")
+        self.assertEquals(rstr.src_models[0].__class__.__name__,
+                          "GalsimGalaxyModel")
         self.assertEquals(rstr.ngrid_x, 64)
         self.assertEquals(rstr.ngrid_y, 64)
         self.assertAlmostEqual(rstr.noise_var, 3e-10)
@@ -63,7 +66,7 @@ class TestRoaster(unittest.TestCase):
         """ Check that the Roaster make_data() method yields constant summary
         statisticss
         """
-        rstr = roaster.Roaster("test.yaml")
+        rstr = jiffy.Roaster("test.yaml")
         rstr.make_data()
         self.assertAlmostEqual(rstr.data.var(), 8.02857e-07)
 
@@ -72,11 +75,11 @@ class TestRoaster(unittest.TestCase):
         Check that the shear bias (m, c) parameters are below threshold for
         a series of simulated images.
 
-        This takes a bit longer, but is the key measure of our code performance.
+        This takes a bit longer, but is the key measure of our code performance
         """
         from scipy.stats import linregress
 
-        rstr = roaster.Roaster("test.yaml")
+        rstr = jiffy.Roaster("test.yaml")
         rstr.make_data()
 
         g_true = np.linspace(-0.3, 0.3, 60)
