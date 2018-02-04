@@ -1,0 +1,171 @@
+modules:
+    - noise_free
+
+psf:
+    type: Kolmogorov
+
+    # This means the psf should change per image, not per object as would be the default.
+    index_key : image_num
+
+    ellip:
+        type: EBeta
+        e: 0.0
+        beta: 0.0 radians
+    fwhm: 0.6
+
+gal:
+    type: Spergel
+    nu: 0.5
+    half_light_radius: 1.0
+
+    shear:
+        type: E1E2
+        e1:
+            type: RandomGaussian
+            sigma: 2.0e-2  # small shape noise
+            min: -0.5
+            max: 0.5
+        e2:
+            type: RandomGaussian
+            sigma: 2.0e-2  # small shape noise
+            min: -0.5
+            max: 0.5
+
+stamp:
+    # Use a Ring type with num=2 to do pairs of 90 degree rotated galaxies.
+    # Note that selection criteria get imposed in a way that eliminates either both galaxies in
+    # the pair, or neither.
+    type: Ring
+    num: 1
+    # The Ring type draws galaxies from a distribution that is not a simple 2D Gaussian in 
+    # ellipticity components. Turn off the Ring type to validate the statistical model.
+    # type: Basic
+
+    # shear :
+    #     type : G1G2
+    #     g1 : 0.0
+    #     g2 : 0.05
+
+    # The shear was chosen randomly within an annulus with 0.01 < |g| < 0.1.
+    shear:
+        type: GBeta
+        # Change the shear every image, not every object.
+        index_key : image_num
+        g:
+            # The probability distribution is linear in |g|: P(g) ~ g. So equal probability per
+            # area within the annulus.  (RandomDistribution automatically renormalizes to have
+            # the total integrated probability equal to 1.0.)
+            type: RandomDistribution
+            function: x
+            x_min: 0.01
+            x_max: 0.1
+        beta: { type: Random }
+
+image:
+    type: Tiled
+    nx_tiles: 5
+    ny_tiles: 5
+    stamp_size: 48
+    pixel_scale: 0.2
+
+    random_seed: 31415
+
+    # Scramble the order of the ring pairs, so they aren't next to each other
+    # order: random
+
+    # Simple Gaussian noise.  Although there is a weird thing they did to have the noise
+    # variance be larger for smaller PSF fwhm.  cf. fmax_var in eval_variables above.
+    noise:
+        type: Gaussian
+        variance: 3e-6
+
+    # Offset (in pixels)
+    offset:
+        type: XY
+        x: { type: Random, min: -1.0, max: 1.0 }
+        y: { type: Random, min: -1.0, max: 1.0 }
+        # x: { type: Random, min: -0, max: 0 }
+        # y: { type: Random, min: -0, max: 0 }
+
+
+    # This means the code will parallelize the creation of a single output file,
+    # splitting up the postage stamps among the available cores.
+    # This is normally overridden by the output.nproc item below, so the parellelization
+    # will be done over files instead.  But if you modify this to only do one file or
+    # set output.nproc=1, then this stamp-based parallelization will turn on.
+    nproc: -1
+
+output:
+    type: Fits
+    file_name:
+        type: FormattedStr
+        # The numbers in the file_name are subfield and epoch number.
+        # This branch only has one epoch, so epoch is always 0 here.
+        format: image-%03d-%1d.fits
+        items:
+        - { type: Sequence, nitems: 50 }
+        - 0
+
+    # The full Great3 had 200 files.  Note that to run fewer files than this, you can change this
+    # from the command line as `galsim cgc.yaml output.nfiles=10` say.  Likewise for any other
+    # parameters in the configuration.  This is often more convenient than changing the original
+    # YAML configuration file.
+    nfiles: 50
+
+    # This means the code will parallelize across the different files, doing a full
+    # output file in each core at a time.
+    # This is generally better than image.nproc, since it doesn't require as much interprocess
+    # communication, which can be rather slow.
+    nproc: -1
+
+    # This lets you rerun the code if there were I/O issues and it will just write the
+    # missing files.  (Potentially ones that have been deleted because they were corrupted.)
+    noclobber: true
+
+    # This wasn't part of the Great3 processing, but it can be useful for developing shear
+    # algorithms to have access to a noise-free version of the image.  This uses a custom
+    # "extra output" item, which we name "noise_free".  The output image will be written to
+    # a separate hdu in the output file with a noise-free version of the main image.
+    noise_free:
+        hdu: 1  # hdu 0 is the main image.
+
+    # Output truth catalogs with some of the generated values
+    truth:
+        file_name :
+            type: FormattedStr
+            format: epoch_catalog-%03d-%1d.fits
+            items:
+            - { type: Sequence, nitems: 50 }
+            - 0
+        columns:
+            num: obj_num
+            x: "$image_pos.x"
+            y: "$image_pos.y"
+            dx: image.offset.x
+            dy: image.offset.y
+            psf_e1: "$(@psf.ellip).e1"
+            psf_e2: "$(@psf.ellip).e2"
+            psf_fwhm: psf.fwhm
+            g1: "$(@stamp.shear).g1"
+            g2: "$(@stamp.shear).g2"
+            gal_e1: "$(@gal.shear).e1"  # pre-shear-or-convolution galaxy ellipticity
+            gal_e2: "$(@gal.shear).e2"
+            # The parametric components aren't really available here.
+            # So we don't have:
+            #   bulge_beta_radians
+            #   bulge_q
+            #   bulge_flux
+            #   bulge_hlr
+            #   bulge_n
+            #   dist_beta_radians
+            #   disk_q
+            #   disk_flux
+            #   disk_hlr
+            # Instead, we only have cosmos_index and theta, which covers the same
+            # information, but in a less specific way.  Here cosmos_index is the
+            # index into the full COSMOS catalog, before application of any cuts at all.
+            # (Not even the rejection of marginal postage stamps.)
+            # So if you want to retrieve the true galaxy properties for the galaxies,
+            # you should read in the COSMOSCatalog using exclusion_level=None, in which
+            # case you can use these indices, or just read in the catalog directly using
+            # pyfits.

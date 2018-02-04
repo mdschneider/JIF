@@ -1,0 +1,13 @@
+init:
+    init_param_file: /g/g20/mdschnei/ldrd2016/JIF/devel/jiffy_shear_bias/jiffy_cgc1_params.cfg
+io:
+    infile: /Volumes/PromisePegasus/JIF/cgc1/control/ground/constant/segments/seg_000.h5
+    outfile: ./cgc1/reaper/JIF/000/roaster_000
+    roaster_outfile: /Volumes/PromisePegasus/JIF/cgc1/reaper/jif/000/roaster_000
+model:
+    model_params: e1 e2 hlr flux nu dx dy
+sampling:
+    nburn: 150
+    nsamples: 200
+    nthreads: 1
+    nwalkers: 32

@@ -50,7 +50,7 @@ The following procedure outlines the steps that can be take to create some test 
 
   ```
   mkdir -p data/TestData
-  mkdir -p output/roasting
+  mkdir -p output/TestData
   ```
 2. Generate the test data with GalSim:
 
@@ -62,12 +62,12 @@ The following procedure outlines the steps that can be take to create some test 
 3. Run the roaster on this data:
 
   ```
-  python Roaster.py ../data/TestData/test_image_data.h5
+  python Roaster.py --config_file ../config/roaster_defaults.cfg
   ```
   This will create an hdf5 results file `../output/roasting/roaster_out.h5`.
 4. Inspect the data with `RoasterInspector`. 
 
   ```
-  python RoasterInspector.py ../output/roasting/roaster_out.h5
+  python RoasterInspector.py ../output/roasting/roaster_out.h5 ../config/roaster_defaults.cfg
   ```
   This will print summary statistics and make some plots.

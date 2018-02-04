@@ -1,0 +1,18 @@
+
+io :
+  infile : ../data/TestData/jiffy_gg_image.h5
+  roaster_outfile : ../output/TestData/jiffy_roaster_out
+
+model :
+  model_params : nu hlr e1 e2 flux dx dy
+  num_sources : 1
+
+init :
+  init_param_file : ../config/jiffy_params.cfg
+  seed : 2935867
+
+sampling :
+  nsamples : 500
+  nwalkers : 16
+  nburn : 200
+  nthreads : 1

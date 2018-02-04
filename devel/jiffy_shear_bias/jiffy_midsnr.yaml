@@ -1,0 +1,12 @@
+init:
+    init_param_file: jiffy_small_shapenoise_params.cfg
+io:
+    infile: ./small_shapenoise/control/ground/constant/segments/seg_001.h5
+    outfile: ./small_shapenoise/reaper/JIF/000/roaster_000
+    roaster_outfile: ./small_shapenoise/reaper/jif/001/roaster_001
+model:
+    model_params: e1 e2 hlr flux nu dx dy
+sampling:
+    nburn: 150
+    nsamples: 200
+    nwalkers: 32

@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-run_prob_shear_transform.py
+run_debug_roaster_bias.py
 
-Run the tests of galaxy model probability distribution transformation under
-shear.
+Run the tests of Roaster posterior biases.
 
-Created by Michael Schneider on 2016-10-22
+Created by Michael Schneider on 2017-02-11
 """
 
 import argparse
@@ -16,12 +15,10 @@ import copy
 import ConfigParser
 import h5py
 import numpy as np
-import numpy as nparams
 import matplotlib.pyplot as plt
-from statsmodels.nonparametric.kde import kdensity
 
 import galsim
-import jiffy
+import jif
 
 import logging
 
@@ -35,15 +32,17 @@ logging.basicConfig(level=logging.DEBUG,
 #                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def make_configs(cfg_name, cfg_params_name, image_file, roaster_file, params, shear, 
+def make_configs(cfg_name, cfg_params_name, image_file, roaster_file, params,
+                 active_parameters,
                  galaxy_model="Spergel", nsamples=100):
-    make_param_config(cfg_params_name, params, shear)
-    make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file, 
-                        galaxy_model, nsamples)
+    make_param_config(cfg_params_name, params)
+    make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file,
+                        active_parameters=active_parameters, 
+                        galaxy_model=galaxy_model, nsamples=nsamples)
     return None
 
 
-def make_param_config(cfg_name, params, shear):
+def make_param_config(cfg_name, params):
     logging.info("Making {}".format(cfg_name))
 
     cfgfile = open(cfg_name, 'w')
@@ -55,8 +54,8 @@ def make_param_config(cfg_name, params, shear):
     Config.set('parameters', 'nu', params[0])
     # Config.set('parameters', 'nu', -0.6)
     Config.set('parameters', 'hlr', params[1])
-    Config.set('parameters', 'e', params[2])
-    Config.set('parameters', 'beta', params[3])
+    Config.set('parameters', 'e1', params[2])
+    Config.set('parameters', 'e2', params[3])
     Config.set('parameters', 'mag_sed1', params[4])
     Config.set('parameters', 'dx', 0.0)
     Config.set('parameters', 'dy', 0.0)
@@ -65,7 +64,8 @@ def make_param_config(cfg_name, params, shear):
     cfgfile.close()
 
 
-def make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file, 
+def make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file,
+                        active_parameters='nu hlr e1 e2 mag_sed1 dx dy',
                         galaxy_model="Spergel", nsamples=100):
     logging.info("Making {}".format(cfg_name))
     cfgfile = open(cfg_name, 'w')
@@ -87,7 +87,7 @@ def make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file,
 
     Config.add_section('model')
     Config.set('model', 'galaxy_model_type', galaxy_model)
-    Config.set('model', 'model_params', 'nu hlr e beta mag_sed1 dx dy')
+    Config.set('model', 'model_params', active_parameters)
     # Config.set('model', 'model_params', 'e beta')
     Config.set('model', 'num_sources', 1)
     Config.set('model', 'achromatic', True)
@@ -113,7 +113,7 @@ def make_roaster_config(cfg_name, cfg_params_name, image_file, roaster_file,
     return None
 
 
-def get_noise_realization(gg, nx=80, ny=80):
+def get_noise_realization(gg, nx=80, ny=80, seed=590025467011):
     """
     @brief      Get a realization of the noise in each pixel of the model image
     @param      gg    an instance of GalSimGalaxyModel
@@ -121,10 +121,10 @@ def get_noise_realization(gg, nx=80, ny=80):
     """
     # im = gg.get_image()
     # nx, ny = im.array.shape
-    noise = jif.telescopes.lsst_noise(random_seed=590025467011)
+    noise = jif.telescopes.lsst_noise(random_seed=seed)
     im = galsim.Image(nx, ny, scale=gg.pixel_scale_arcsec, init_value=0.)
     im.addNoise(noise)
-    return im.array
+    return im.array, noise.getVariance()
 
 
 def run_roaster(cfg_name):
@@ -216,19 +216,55 @@ class InspectorArgs(object):
         self.keeplast = 0
 
 
+def run_meyers_test(nu, nx=64, ny=64, noise_var=3e-7, flux=1.0):
+    """
+    Duplicate the test by J. Meyers here:
+
+    https://github.com/jmeyers314/silver-waffle/blob/master/Spergel%20Probability.ipynb
+    """
+    HLR = 1.0
+    PSF = galsim.Kolmogorov(fwhm=0.6)
+    scale = 0.2
+    noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
+
+    def make_data(nu_val):
+        gal = galsim.Spergel(nu_val, half_light_radius=HLR)
+        gal = gal.withFlux(flux)
+        obj = galsim.Convolve(PSF, gal)
+        img = obj.drawImage(nx=nx, ny=ny, scale=scale)
+        img.addNoise(noise)
+        return img
+
+    img = make_data(nu_val=0.5)
+
+    def lnlike1(nu1):
+        gal = galsim.Spergel(nu1, half_light_radius=HLR)
+        obj = galsim.Convolve(PSF, gal)
+        model = obj.drawImage(nx=nx, ny=ny, scale=scale)
+        return -0.5*np.sum((model.array-img.array)**2/noise_var)
+
+    def lnlikelihood(x):
+        return [lnlike1(nu1) for nu1 in x]
+
+    return lnlikelihood(nu)
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description='Run probability shear transform tests.')
+        description='Run Roaster posterior bias tests.')
 
     parser.add_argument('--nsamples', type=int, default=500,
         help="Number of MCMC samples (after burnin) [Default: 500]")
 
     parser.add_argument('--gal_model', type=str, default='Spergel',
-        help="Galaxy model name for the simulated data (not for Reaper)")
+        help="Galaxy model name for the simulated data")
+
+    parser.add_argument('--seed', type=int, default=1325986508796,
+        help="Seed for PRNG")
 
     args = parser.parse_args()
 
-    logging.debug('Shear probability transform test started')
+    logging.debug('Roaster bias test started')
 
     shear = [0.0, 0.0]
 
@@ -241,104 +277,114 @@ def main():
     ##
     ## GalSimGalaxyModel parameters (for generating the fake data)
     ##
-    galaxy_model_gg = "BulgeDisk"
-    #
-    if galaxy_model_gg == "Spergel":
-        active_parameters_gg = ['nu', 'hlr', 'e', 'beta', 'mag_sed1']
-        params_noshear_gg = [0.3, 1.2, 0.26, 0.5236, 28.5]
-        params_wshear_gg = copy.copy(params_noshear_gg)
-        params_wshear_gg[2:4] = shear_params(params_noshear_gg[2:4], shear)
-    elif galaxy_model_gg == "BulgeDisk":
-        active_parameters_gg = ['e_bulge', 'beta_bulge', 'e_disk', 'beta_disk']
-        params_noshear_gg = [0.05, 0.0, 0.3, 0.5236]
-        params_wshear_gg = copy.copy(params_noshear_gg)
-        params_wshear_gg[0:2] = shear_params(params_noshear_gg[0:2], shear)
-        params_wshear_gg[2:4] = shear_params(params_noshear_gg[2:4], shear)
-    else:
-        raise KeyError("Unsupported galaxy model type")
-
     topdir = 'output'
 
     if args.gal_model == "Spergel":
-        active_parameters = ['nu', 'hlr', 'e', 'beta', 'mag_sed1']
-
-        params_noshear = [0.3, 1.2, 0.26, 0.5236, 28.5]
-        params_wshear = copy.copy(params_noshear)
-        params_wshear[2:4] = shear_params(params_noshear[2:4], shear)
-        print "params w/o shear:", params_noshear
-        print "params w/  shear:", params_wshear
+        active_parameters = ['nu', 'hlr', 'e1', 'e2', 'mag_sed1']
+        params = [0.5, 1.0, 0.0, 0.0, 27.5]
+        print "params:", params
     elif args.gal_model == "BulgeDisk":
-        active_parameters = ['e_bulge', 'beta_bulge', 'e_disk', 'beta_disk']
-
-        params_noshear = [0.1, 0.0, 0.3, 0.5236]
-        params_wshear = copy.copy(params_noshear)
-        params_wshear[0:2] = shear_params(params_noshear[0:2], shear)
-        params_wshear[2:4] = shear_params(params_noshear[2:4], shear)
-        print "params w/o shear:", params_noshear
-        print "params w/  shear:", params_wshear  
+        active_parameters = ['e1_bulge', 'e2_bulge', 'e1_disk', 'e2_disk']
+        params = [0.1, 0.0, 0.3, 0.5236]
+        print "params:", params
     else:
         raise KeyError("Unsupported galaxy model")
 
-    roaster_cfg_name_noshear = os.path.join(topdir, 'roaster_config_noshear.cfg')
-    params_cfg_name_noshear = os.path.join(topdir, 'roaster_params_noshear.cfg')
-    image_file_noshear = os.path.join(topdir, 'roaster_noshear_model_image.h5')
-    roaster_file_noshear = os.path.join(topdir, 'roaster_noshear')
+    ## 0. Generate the test image 
+    image_file = os.path.join(topdir, 'roaster_model_image.h5')        
 
-    roaster_cfg_name_wshear = os.path.join(topdir, 'roaster_config_wshear.cfg')
-    params_cfg_name_wshear = os.path.join(topdir, 'roaster_params_wshear.cfg')
-    image_file_wshear = os.path.join(topdir, 'roaster_wshear_model_image.h5')
-    roaster_file_wshear = os.path.join(topdir, 'roaster_wshear')
-
-    gg = jif.GalSimGalaxyModel(galaxy_model=args.gal_model,
-        telescope_model="LSST",
-        psf_model="Model",
-        active_parameters=active_parameters)
-    noise_realization = get_noise_realization(gg)
-    nx, ny = noise_realization.shape
-
-    ## 0. Generate the test image (without shear)
-    make_configs(roaster_cfg_name_noshear, params_cfg_name_noshear,
-                 image_file_noshear, roaster_file_noshear,
-                 params=params_noshear_roaster, shear=[0., 0.], 
+    ## 1. Run Roaster on the image with only 'nu' as an active parameter
+    roaster_cfg_name = os.path.join(topdir, 'ap1', 'roaster_config.cfg')
+    params_cfg_name = os.path.join(topdir, 'ap1', 'roaster_params.cfg')
+    roaster_file = os.path.join(topdir, 'ap1', 'roaster')
+    if not os.path.exists(os.path.join(topdir, 'ap1')):
+        os.mkdir(os.path.join(topdir, 'ap1'))
+    ## 
+    make_configs(roaster_cfg_name, params_cfg_name,
+                 image_file, roaster_file,
+                 params=params,
+                 active_parameters='nu',
+                 galaxy_model=args.gal_model,
                  nsamples=args.nsamples)
-    gg.set_params(params_noshear_gg)
-    out_image = galsim.Image(nx, ny, init_value=0.)
-    gg.save_footprint(image_file_noshear, out_image=out_image, noise=noise_realization)
 
-    ## 1. Run Roaster on the (unsheared) image
-    run_roaster(roaster_cfg_name_noshear)
 
-    iargs = InspectorArgs(roaster_file_noshear, roaster_cfg_name_noshear)
-    inspector = jif.RoasterInspector(iargs)
-    inspector.plot()
-    inspector.plot_data_and_model()
+    seed = args.seed
+    fig = plt.figure(figsize=(8, 8/1.618))
+    nu = np.linspace(0.2, 0.8, 160)
+    nu_ml = 0.0
+    nu_ml_jm = 0.0
+    niter = 50
+    for i_noise in xrange(niter):
+        gg = jif.GalSimGalaxyModel(galaxy_model=args.gal_model,
+            telescope_model="LSST",
+            psf_model="Model",
+            active_parameters=active_parameters)
 
-    ## 2. Shear the image
-    make_configs(roaster_cfg_name_wshear, params_cfg_name_wshear,
-                 image_file_wshear, roaster_file_wshear,
-                 params=params_wshear_roaster, shear=shear, 
-                 nsamples=args.nsamples)
-    gg.set_params(params_wshear_gg)
-    out_image = galsim.Image(nx, ny, init_value=0.)
-    gg.save_footprint(image_file_wshear, out_image=out_image, noise=noise_realization)
+        noise_realization, noise_var = get_noise_realization(gg, nx=80, ny=80, seed=seed)
+        nx, ny = noise_realization.shape
 
-    ## 3. Run Roaster on the sheared image
-    run_roaster(roaster_cfg_name_wshear)
+        gg.set_params(params)
+        out_image = galsim.Image(nx, ny, init_value=0.)
+        gg.save_footprint(image_file, out_image=out_image, noise=noise_realization)
 
-    iargs = InspectorArgs(roaster_file_wshear, roaster_cfg_name_wshear)
-    inspector = jif.RoasterInspector(iargs)
-    inspector.plot()
-    inspector.plot_data_and_model()
+        ## Plot univariate Roaster posterior as a function of 'nu'
+        cfg = jif.RoasterModule.ConfigFileParser(roaster_cfg_name)
+        rstr, rstr_args = jif.RoasterModule.InitRoaster(cfg)
+        # jif.RoasterModule.save_model_image(rstr_args, rstr)
 
-    ## 4. Unshear the Roaster output parameter samples from step 3.
-    dat_wsh, lnp_wsh = load_roaster_samples(roaster_file_wshear)
-    dat_wsh = unshear_roaster_samples(dat_wsh, shear, e_ndx=e_ndx, beta_ndx=beta_ndx)
+        lnp = np.array([rstr([nu_i]) for nu_i in nu])
+        plt.plot(nu, np.exp(lnp - np.max(lnp)), color="#348ABD", alpha=0.2)
 
-    ## 5. Compare galaxy parameter marginal densities from steps 1 & 4
-    dat_nosh, lnp_nosh = load_roaster_samples(roaster_file_noshear)
-    make_pdf_plots(dat_nosh, dat_wsh, e_ndx=e_ndx, beta_ndx=beta_ndx)
+        nu_ml += nu[np.argmax(lnp)]
 
-    logging.debug('Shear probability transform test finished')
+        # flux = jif.parameters.flux_from_AB_mag(gg.params[0].mag_sed1)
+        noise_var = 6e-8
+        flux = 1.0
+        lnp_jm = run_meyers_test(nu, nx=nx, ny=ny, noise_var=noise_var, flux=flux)
+        plt.plot(nu, np.exp(lnp_jm - np.max(lnp_jm)), color="#7A68A6", alpha=0.2)
+        nu_ml_jm += nu[np.argmax(lnp_jm)]
+
+        seed += 1
+    nu_ml /= niter
+    nu_ml_jm /= niter
+    plt.axvline(0.5, color='grey')
+    plt.axvline(nu_ml, color='#348ABD', linestyle='dashed')
+    plt.axvline(nu_ml_jm, color='#7A68A6', linestyle='dashed')
+    plt.xlabel(r"$\nu$")
+    plt.ylabel(r"Pr($\nu$)")
+    plt.savefig("nu_posterior.png")
+
+
+    # ## 
+    # run_roaster(roaster_cfg_name)
+
+    # iargs = InspectorArgs(roaster_file, roaster_cfg_name)
+    # inspector = jif.RoasterInspector(iargs)
+    # inspector.plot()
+    # inspector.plot_data_and_model()
+
+    # ## 2. Run Roaster on the image with all parameters active
+    # roaster_cfg_name = os.path.join(topdir, 'ap5', 'roaster_config.cfg')
+    # params_cfg_name = os.path.join(topdir, 'ap5', 'roaster_params.cfg')
+    # roaster_file = os.path.join(topdir, 'ap5', 'roaster')  
+    # if not os.path.exists(os.path.join(topdir, 'ap5')):
+    #     os.mkdir(os.path.join(topdir, 'ap5'))     
+    # ## 
+    # make_configs(roaster_cfg_name, params_cfg_name,
+    #              image_file, roaster_file,
+    #              params=params,
+    #              active_parameters='nu hlr e1 e2 mag_sed1',
+    #              galaxy_model=args.gal_model,
+    #              nsamples=args.nsamples)
+
+    # run_roaster(roaster_cfg_name)
+
+    # iargs = InspectorArgs(roaster_file, roaster_cfg_name)
+    # inspector = jif.RoasterInspector(iargs)
+    # inspector.plot()
+    # inspector.plot_data_and_model()
+
+    logging.debug('Roaster bias test finished')
     return 0
 
 

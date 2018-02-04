@@ -1,0 +1,19 @@
+
+io :
+  infile : ../data/TestData/jiffy_gg_image.h5
+  roaster_outfile : test_roaster_out.h5
+
+model :
+  model_class : GalsimGalaxyModel
+  psf_class : GalsimPSFModel
+  model_params : e1 e2
+  num_sources : 1
+
+init :
+  init_param_file : ../config/jiffy_params.cfg
+  seed : 9854362
+
+sampling :
+  nsamples : 500
+  nwalkers : 16
+  nburn : 200
