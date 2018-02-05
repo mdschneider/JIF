@@ -31,7 +31,7 @@ class TestGalSimGalaxyModel(unittest.TestCase):
 
     def test_init_values(self):
         gg = jiffy.GalsimGalaxyModel()
-        self.assertEqual(gg.static_psf.__class__.__name__, "Kolmogorov")
+        self.assertEqual(gg.static_psf.__class__.__name__, "Transformation")
         self.assertAlmostEqual(gg.params.nu[0], 0.5)
         self.assertAlmostEqual(gg.params.hlr[0], 1.0)
         self.assertAlmostEqual(gg.params.e1[0], 0.0)
@@ -39,8 +39,15 @@ class TestGalSimGalaxyModel(unittest.TestCase):
         self.assertAlmostEqual(gg.params.flux[0], 1.0)
         self.assertAlmostEqual(gg.params.dx[0], 0.0)
         self.assertAlmostEqual(gg.params.dy[0], 0.0)
-        self.assertAlmostEqual(gg.static_psf.fwhm, 0.6)
-        self.assertAlmostEqual(gg.static_psf.flux, 1.0)
+        self.assertEqual(gg.sample_psf, False)
+        # self.assertAlmostEqual(gg.static_psf.fwhm, 0.6)
+        # self.assertAlmostEqual(gg.static_psf.flux, 1.0)
+        self.assertAlmostEqual(gg.psf_model.params.psf_fwhm, 0.6)
+        self.assertAlmostEqual(gg.psf_model.params.psf_flux, 1.0)
+        self.assertAlmostEqual(gg.psf_model.params.psf_e1, 0.0)
+        self.assertAlmostEqual(gg.psf_model.params.psf_e2, 0.0)
+        self.assertAlmostEqual(gg.psf_model.params.psf_dx, 0.0)
+        self.assertAlmostEqual(gg.psf_model.params.psf_dy, 0.0)
 
     def test_set_params(self):
         gg = jiffy.GalsimGalaxyModel()
