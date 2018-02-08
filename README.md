@@ -55,14 +55,14 @@ The following procedure outlines the steps that can be take to create some test 
 2. Generate the test data with GalSim:
 
   ```
-  cd jif
+  cd jiffy
   python galsim_galaxy.py
   ```
   This will make the file `test_image_data.h5` in data/TestData
 3. Run the roaster on this data:
 
   ```
-  python Roaster.py --config_file ../config/roaster_defaults.cfg
+  python roaster.py --config_file ../config/roaster_defaults.cfg
   ```
   This will create an hdf5 results file `../output/roasting/roaster_out.h5`.
 4. Inspect the data with `RoasterInspector`. 
