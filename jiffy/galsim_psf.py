@@ -139,12 +139,12 @@ class GalsimPSFModel(object):
         return psf
 
     def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0,
-                  theta_x_arcmin=0., theta_y_arcmin=0.):
+                  theta_x_arcmin=0., theta_y_arcmin=0., with_atmos=True):
         """
         Render a GalSim Image() object from the internal model
         """
         theta = (theta_x_arcmin*galsim.arcmin, theta_y_arcmin*galsim.arcmin)
-        obj = self.get_model(theta)
+        obj = self.get_model(theta, with_atmos=with_atmos)
         # try:
         #     if image is not None:
         #         model = obj.drawImage(image=image, gain=gain, add_to_image=True, method='fft')
@@ -167,14 +167,14 @@ class GalsimPSFModel(object):
 class GalsimPSFLSST(GalsimPSFModel):
     fov_deg = 3.5
     tel_diam_m = 8.4
-    wavelength_nm = 600.
+    wavelength_nm = 500.
     gsparams = galsim.GSParams(
             # folding_threshold=1.e-2, # maximum fractional flux that may be folded around edge of FFT
             # maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
             # xvalue_accuracy=1.e-2,   # approximations in real space aim to be this accurate
             # kvalue_accuracy=1.e-2,   # approximations in fourier space aim to be this accurate
             # shoot_accuracy=1.e-2,    # approximations in photon shooting aim to be this accurate
-            minimum_fft_size=16,     # minimum size of ffts
+            minimum_fft_size=32,     # minimum size of ffts
             maximum_fft_size=20480)   # maximum size of ffts
     def __init__(self, active_parameters=['psf_fwhm']):
         self.active_parameters = active_parameters
@@ -185,9 +185,11 @@ class GalsimPSFLSST(GalsimPSFModel):
                                     obscuration=0.65,
                                     lam=self.wavelength_nm,
                                     circular_pupil=True,
-                                    pupil_plane_scale=0.01,
-                                    pupil_plane_size=8.4*4,
-                                    pad_factor=1.0,
+                                    nstruts=4,
+                                    # pupil_plane_scale=0.02,
+                                    # pupil_plane_size=self.tel_diam_m*2,
+                                    # pad_factor=1.0,
+                                    # oversampling=1.0,
                                     gsparams=self.gsparams)
 
     def _init_params(self):
@@ -203,7 +205,7 @@ class GalsimPSFLSST(GalsimPSFModel):
         param_types = atmos_types + optics_aberr_types
 
         # Parameter initial values
-        atmos_vals = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+        atmos_vals = (0.6, 0.0, 0.0, 1.0, 0.0, 0.0)
         optics_vals = tuple(0.0 for i in range(1, 41))
 
         self.params = np.array([atmos_vals + optics_vals],
@@ -239,12 +241,9 @@ class GalsimPSFLSST(GalsimPSFModel):
         return None
 
     def _get_phase_screens(self):
-        atmos = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
-        psf_shape = galsim.Shear(e1=self.params.psf_e1[0],
-                                 e2=self.params.psf_e2[0])
-
         # optics PSF
         op_model = galsim.OpticalScreenField(self.aberrations,
+                                             diam=self.tel_diam_m,
                                              fov_radius=self.fov_deg*galsim.degrees)
         screens = galsim.PhaseScreenList(op_model)
         return screens
@@ -256,16 +255,21 @@ class GalsimPSFLSST(GalsimPSFModel):
         wf_out[self.aper.illuminated] = wf[self.aper.illuminated]
         return wf_out
 
-    def get_model(self, theta=(0.*galsim.arcmin, 0.*galsim.arcmin)):
+    def get_model(self, theta=(0.*galsim.arcmin, 0.*galsim.arcmin), with_atmos=True):
         screens = self._get_phase_screens()
 
         optics = screens.makePSF(lam=self.wavelength_nm, aper=self.aper, 
                                  theta=theta, pad_factor=1., ii_pad_factor=4.,
                                  gsparams=self.gsparams)
 
-        # atmos = atmos.shear(psf_shape)
-        # psf = galsim.Convolve([atmos, optics])
-        psf = optics
+        if with_atmos:
+            atmos = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
+            psf_shape = galsim.Shear(e1=self.params.psf_e1[0],
+                                     e2=self.params.psf_e2[0])
+            atmos = atmos.shear(psf_shape)            
+            psf = galsim.Convolve([atmos, optics])
+        else:
+            psf = optics
         psf = psf.shift(self.params.psf_dx[0], self.params.psf_dy[0])
         return psf
 
