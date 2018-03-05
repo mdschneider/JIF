@@ -19,7 +19,7 @@ yy = yy[ndx]
 # Initialize the PSF model object
 #
 psf = jiffy.GalsimPSFLSST()
-psf.set_param_by_name("psf_fwhm", 0.6)
+psf.set_param_by_name("psf_fwhm", 0.2)
 
 e1 = []
 e2 = []
@@ -34,10 +34,12 @@ for x, y in zip(xx, yy):
 	e1.append(results.observed_shape.e1)
 	e2.append(results.observed_shape.e2)
 
+print e1
+print e2
 print np.sqrt(np.array(e1)**2 + np.array(e2)**2)
 
 fig, axs = plt.subplots(1, 1)
-plt.title('Arrows scale with plot width, not view')
+# plt.title('Arrows scale with plot width, not view')
 Q = axs.quiver(xx, yy, e1, e2, headaxislength=0, headlength=0)
 # qk = plt.quiverkey(Q, 0.9, 0.9, 2, r'$2 \frac{m}{s}$', labelpos='E',
 #                    coordinates='figure')

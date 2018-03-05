@@ -182,15 +182,15 @@ class GalsimPSFLSST(GalsimPSFModel):
         self._init_params()
         self._init_optics_dz_aberrations()
         self.aper = galsim.Aperture(diam=self.tel_diam_m,
-                                    obscuration=0.65,
+                                    # obscuration=0.65,
                                     lam=self.wavelength_nm,
-                                    circular_pupil=True,
+                                    circular_pupil=True)#,
                                     # nstruts=4,
                                     # pupil_plane_scale=0.02,
                                     # pupil_plane_size=self.tel_diam_m*2,
                                     # pad_factor=1.0,
                                     # oversampling=1.0,
-                                    gsparams=self.gsparams)
+                                    # gsparams=self.gsparams)
 
     def _init_params(self):
         # Parameter names / types
@@ -221,6 +221,7 @@ class GalsimPSFLSST(GalsimPSFModel):
         nfield = 28
 
         # Make a lookup table
+        noll_tab = np.zeros((67, 2), dtype=int)
         noll = np.zeros((11, 12), dtype=int)
         for j in range(67):
             n, m = galsim.phase_screens._noll_to_zern(j)
@@ -228,16 +229,21 @@ class GalsimPSFLSST(GalsimPSFModel):
                 noll[n, m] = j
             else:
                 noll[n, abs(m)+1] = j
+        #     print j, n, m
+            noll_tab[j, :] = [n, m]
 
+        def get_noll_index(n, m):
+            return np.where((noll_tab == (n, m)).all(axis=1))[0][0]
+            
         self.aberrations = np.zeros((npupil, nfield), dtype=np.float64)
         for i in xrange(dat.shape[0]):
             m_pupil = int(dat[i, 1])
             m_field = int(dat[i, 3])
-            j_pupil = noll[int(dat[i, 0]), m_pupil]
-            j_field = noll[int(dat[i, 2]), m_field]
-            for mp in range(np.min((m_pupil, 2))):
-                for mf in range(np.min((m_field, 2))):
-                    self.aberrations[j_pupil+mp, j_field+mp] = dat[i, 4]
+            for mp in [-m_pupil, m_pupil]:
+                j_pupil = get_noll_index(int(dat[i,0]), m_pupil)
+                for mf in [-m_field, m_field]:
+                    j_field = get_noll_index(int(dat[i,2]), m_field)
+                    self.aberrations[j_pupil, j_field] = dat[i, 4]
         return None
 
     def _get_phase_screens(self):
@@ -259,8 +265,8 @@ class GalsimPSFLSST(GalsimPSFModel):
         screens = self._get_phase_screens()
 
         optics = screens.makePSF(lam=self.wavelength_nm, aper=self.aper, 
-                                 theta=theta, pad_factor=1., ii_pad_factor=4.,
-                                 gsparams=self.gsparams)
+                                 theta=theta, diam=self.tel_diam_m)#, pad_factor=1., ii_pad_factor=4.,
+                                 # gsparams=self.gsparams)
 
         if with_atmos:
             atmos = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])

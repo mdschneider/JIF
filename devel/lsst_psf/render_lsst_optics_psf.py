@@ -43,8 +43,8 @@ print lam_over_diam, "arcseconds"
 # psf_im = psf.get_image(scale=0.1*lam_over_diam, ngrid_x=128, ngrid_y=128,
 					   # theta_x_arcmin=-1.6*60., theta_y_arcmin=0.0)
 
-psf_im = psf.get_image(scale=lam_over_diam/10, ngrid_x=128, ngrid_y=128,
-					   theta_x_arcmin=-1.75*60., theta_y_arcmin=0.0,
+psf_im = psf.get_image(scale=lam_over_diam/40, ngrid_x=1024, ngrid_y=1024,
+					   theta_x_arcmin=-1.75*60., theta_y_arcmin=0.,
 					   with_atmos=False)
 
 # nx = 256
