@@ -185,7 +185,7 @@ class GalsimPSFLSST(GalsimPSFModel):
                                     obscuration=0.65,
                                     lam=self.wavelength_nm,
                                     circular_pupil=True,
-                                    nstruts=4,
+                                    # nstruts=4,
                                     # pupil_plane_scale=0.02,
                                     # pupil_plane_size=self.tel_diam_m*2,
                                     # pad_factor=1.0,
