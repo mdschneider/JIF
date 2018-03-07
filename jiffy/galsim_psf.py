@@ -48,6 +48,15 @@ K_PARAM_BOUNDS = {
     "psf_dy": [-100., 100.]
 }
 
+# Make a lookup table
+noll_tab = np.zeros((58, 2), dtype=int)
+for j in range(58):
+    n, m = galsim.phase_screens._noll_to_zern(j)
+    noll_tab[j, :] = [n, m]
+
+def get_noll_index(n, m):
+    return np.where((noll_tab == (n, m)).all(axis=1))[0][0]
+
 
 class GalsimPSFModel(object):
     """Parametric PSF models from GalSim for image forward modeling"""
@@ -167,7 +176,7 @@ class GalsimPSFModel(object):
 class GalsimPSFLSST(GalsimPSFModel):
     fov_deg = 3.5
     tel_diam_m = 8.4
-    wavelength_nm = 500.
+    wavelength_nm = 600.
     gsparams = galsim.GSParams(
             # folding_threshold=1.e-2, # maximum fractional flux that may be folded around edge of FFT
             # maxk_threshold=2.e-1,    # k-values less than this may be excluded off edge of FFT
@@ -184,13 +193,13 @@ class GalsimPSFLSST(GalsimPSFModel):
         self.aper = galsim.Aperture(diam=self.tel_diam_m,
                                     # obscuration=0.65,
                                     lam=self.wavelength_nm,
-                                    circular_pupil=True)#,
+                                    circular_pupil=True,
                                     # nstruts=4,
                                     # pupil_plane_scale=0.02,
                                     # pupil_plane_size=self.tel_diam_m*2,
                                     # pad_factor=1.0,
                                     # oversampling=1.0,
-                                    # gsparams=self.gsparams)
+                                    gsparams=self.gsparams)
 
     def _init_params(self):
         # Parameter names / types
@@ -217,32 +226,26 @@ class GalsimPSFLSST(GalsimPSFModel):
         dat = galsim.lsst.lsst_psfs._read_aberrations()
         # npupil = int(np.max(dat[:, 0]))
         # nfield = int(np.max(dat[:, 2]))
-        npupil = 67
-        nfield = 28
-
-        # Make a lookup table
-        noll_tab = np.zeros((67, 2), dtype=int)
-        noll = np.zeros((11, 12), dtype=int)
-        for j in range(67):
-            n, m = galsim.phase_screens._noll_to_zern(j)
-            if m >= 0:
-                noll[n, m] = j
-            else:
-                noll[n, abs(m)+1] = j
-        #     print j, n, m
-            noll_tab[j, :] = [n, m]
-
-        def get_noll_index(n, m):
-            return np.where((noll_tab == (n, m)).all(axis=1))[0][0]
+        npupil = 57
+        nfield = 29
             
         self.aberrations = np.zeros((npupil, nfield), dtype=np.float64)
         for i in xrange(dat.shape[0]):
+            n_pupil = int(dat[i, 0])
+            m_pupil = int(dat[i, 1])
+            n_field = int(dat[i, 2])
+            m_field = int(dat[i, 3])
+            
+            # j_pupil = get_noll_index(n_pupil, m_pupil)
+            # j_field = get_noll_index(n_field, m_field)
+            # self.aberrations[j_pupil, j_field] = dat[i, 4]
+
             m_pupil = int(dat[i, 1])
             m_field = int(dat[i, 3])
             for mp in [-m_pupil, m_pupil]:
-                j_pupil = get_noll_index(int(dat[i,0]), m_pupil)
+                j_pupil = get_noll_index(int(dat[i, 0]), mp)
                 for mf in [-m_field, m_field]:
-                    j_field = get_noll_index(int(dat[i,2]), m_field)
+                    j_field = get_noll_index(int(dat[i, 2]), mf)
                     self.aberrations[j_pupil, j_field] = dat[i, 4]
         return None
 
@@ -265,8 +268,8 @@ class GalsimPSFLSST(GalsimPSFModel):
         screens = self._get_phase_screens()
 
         optics = screens.makePSF(lam=self.wavelength_nm, aper=self.aper, 
-                                 theta=theta, diam=self.tel_diam_m)#, pad_factor=1., ii_pad_factor=4.,
-                                 # gsparams=self.gsparams)
+                                 theta=theta, diam=self.tel_diam_m, #pad_factor=1., ii_pad_factor=4.,
+                                 gsparams=self.gsparams)
 
         if with_atmos:
             atmos = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
