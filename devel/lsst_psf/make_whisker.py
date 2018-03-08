@@ -21,6 +21,14 @@ yy = yy[ndx]
 psf = jiffy.GalsimPSFLSST()
 psf.set_param_by_name("psf_fwhm", 0.6)
 
+#
+# Set all but one aberration to zero
+#
+a_nmrs = np.zeros_like(psf.aberrations)
+a_nmrs[5,5] = psf.aberrations[5,5]
+a_nmrs[6,6] = psf.aberrations[6,6]
+psf.aberrations = a_nmrs
+
 e1 = []
 e2 = []
 for x, y in zip(xx, yy):
