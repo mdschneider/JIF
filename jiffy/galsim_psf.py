@@ -48,14 +48,14 @@ K_PARAM_BOUNDS = {
     "psf_dy": [-100., 100.]
 }
 
-# Make a lookup table
-noll_tab = np.zeros((58, 2), dtype=int)
-for j in range(58):
-    n, m = galsim.phase_screens._noll_to_zern(j)
-    noll_tab[j, :] = [n, m]
+# # Make a lookup table
+# noll_tab = np.zeros((58, 2), dtype=int)
+# for j in range(58):
+#     n, m = galsim.phase_screens._noll_to_zern(j)
+#     noll_tab[j, :] = [n, m]
 
-def get_noll_index(n, m):
-    return np.where((noll_tab == (n, m)).all(axis=1))[0][0]
+# def get_noll_index(n, m):
+#     return np.where((noll_tab == (n, m)).all(axis=1))[0][0]
 
 
 class GalsimPSFModel(object):
@@ -189,7 +189,6 @@ class GalsimPSFLSST(GalsimPSFModel):
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
         self._init_params()
-        self._init_optics_dz_aberrations()
         self.aper = galsim.Aperture(diam=self.tel_diam_m,
                                     # obscuration=0.65,
                                     lam=self.wavelength_nm,
@@ -213,41 +212,16 @@ class GalsimPSFLSST(GalsimPSFModel):
                               for i in range(1, 41)]
         param_types = atmos_types + optics_aberr_types
 
-        # Parameter initial values
+        # Initialize nominal DZ coefficients
+        self.aberrations = galsim.lsst.lsst_psfs._init_optics_dz_coeffs()
+
+        # Initialize PSF model parameter values
         atmos_vals = (0.6, 0.0, 0.0, 1.0, 0.0, 0.0)
         optics_vals = tuple(0.0 for i in range(1, 41))
 
         self.params = np.array([atmos_vals + optics_vals],
                                dtype=param_types)
         self.params = self.params.view(np.recarray)
-
-    def _init_optics_dz_aberrations(self):
-        # Read LSST nominal coefficients
-        dat = galsim.lsst.lsst_psfs._read_aberrations()
-        # npupil = int(np.max(dat[:, 0]))
-        # nfield = int(np.max(dat[:, 2]))
-        npupil = 57
-        nfield = 29
-            
-        self.aberrations = np.zeros((npupil, nfield), dtype=np.float64)
-        for i in xrange(dat.shape[0]):
-            n_pupil = int(dat[i, 0])
-            m_pupil = int(dat[i, 1])
-            n_field = int(dat[i, 2])
-            m_field = int(dat[i, 3])
-            
-            # j_pupil = get_noll_index(n_pupil, m_pupil)
-            # j_field = get_noll_index(n_field, m_field)
-            # self.aberrations[j_pupil, j_field] = dat[i, 4]
-
-            m_pupil = int(dat[i, 1])
-            m_field = int(dat[i, 3])
-            for mp in [-m_pupil, m_pupil]:
-                j_pupil = get_noll_index(int(dat[i, 0]), mp)
-                for mf in [-m_field, m_field]:
-                    j_field = get_noll_index(int(dat[i, 2]), mf)
-                    self.aberrations[j_pupil, j_field] = dat[i, 4]
-        return None
 
     def _get_phase_screens(self):
         # optics PSF
