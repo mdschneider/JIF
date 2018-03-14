@@ -61,9 +61,9 @@ plt.imshow(psf_im.array)
 plt.colorbar()
 plt.savefig("psf_image.png")
 
-print "================================"
-print "PSF moments"
-print "================================"
-results = psf_im.FindAdaptiveMom()
-print 'e1 = %.5e, e2 = %.5e, sigma = %.5f (pixels)'%(results.observed_shape.e1,
-                results.observed_shape.e2, results.moments_sigma)
+# print "================================"
+# print "PSF moments"
+# print "================================"
+# results = psf_im.FindAdaptiveMom()
+# print 'e1 = %.5e, e2 = %.5e, sigma = %.5f (pixels)'%(results.observed_shape.e1,
+#                 results.observed_shape.e2, results.moments_sigma)
