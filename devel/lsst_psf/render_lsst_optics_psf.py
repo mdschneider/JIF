@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import jiffy
 
+from make_whisker import moments
+
 warnings.simplefilter('ignore')
 
 print "================================"
@@ -13,6 +15,15 @@ psf.set_param_by_name("psf_fwhm", 0.6)
 print psf
 print psf.params
 print np.sum(psf.aberrations, axis=1)
+
+print "================================"
+print "Set DZ terms"
+print "================================"
+j_pupil = 2
+j_field = 2
+a_nmrs = np.zeros_like(psf.aberrations)
+a_nmrs[j_pupil, j_field] = 1.
+psf.aberrations = a_nmrs
 
 print "================================"
 print "Get PSF model object"
@@ -47,9 +58,22 @@ r = 1.75 * 60.
 x = r * np.cos(180.*np.pi/180.)
 y = r * np.sin(180.*np.pi/180.)
 
-psf_im = psf.get_image(scale=lam_over_diam/40, ngrid_x=1024, ngrid_y=1024,
+# psf_im = psf.get_image(scale=lam_over_diam/40, ngrid_x=1024, ngrid_y=1024,
+# 					   theta_x_arcmin=x, theta_y_arcmin=y,
+# 					   with_atmos=False)
+
+psf_im = psf.get_image(scale=0.2, ngrid_x=32, ngrid_y=32,
 					   theta_x_arcmin=x, theta_y_arcmin=y,
-					   with_atmos=False)
+					   with_atmos=True)
+
+Ixx,Iyy,Ixy,xbar,ybar = moments(psf_im.array)
+print "Moments: ", Ixx,Iyy,Ixy,xbar,ybar
+csq = np.sqrt((Ixx - Iyy)**2 + 4*Ixy**2)
+phi = 0.5 * np.arctan2(2*Ixy, Ixx-Iyy)
+print "c^2, phi:", csq, phi
+e1 = np.sqrt(csq) * np.cos(phi)
+e2 = np.sqrt(csq) * np.sin(phi)
+print "e1, e2:", e1, e2
 
 # nx = 256
 # psf_im = psf.get_image(scale=0.6/nx, ngrid_x=nx, ngrid_y=nx,
