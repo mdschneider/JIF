@@ -5,6 +5,8 @@ import jiffy
 
 from make_whisker import moments
 
+pixel_scale_arcsec = 0.2
+
 warnings.simplefilter('ignore')
 
 print "================================"
@@ -12,6 +14,7 @@ print "Initialize PSF object"
 print "================================"
 psf = jiffy.GalsimPSFLSST()
 psf.set_param_by_name("psf_fwhm", 0.6)
+# psf.set_param_by_name("psf_dx", 0.0)
 print psf
 print psf.params
 print np.sum(psf.aberrations, axis=1)
@@ -62,7 +65,7 @@ y = r * np.sin(180.*np.pi/180.)
 # 					   theta_x_arcmin=x, theta_y_arcmin=y,
 # 					   with_atmos=False)
 
-psf_im = psf.get_image(scale=0.2, ngrid_x=32, ngrid_y=32,
+psf_im = psf.get_image(scale=pixel_scale_arcsec, ngrid_x=64, ngrid_y=64,
 					   theta_x_arcmin=x, theta_y_arcmin=y,
 					   with_atmos=True)
 
@@ -70,9 +73,9 @@ Ixx,Iyy,Ixy,xbar,ybar = moments(psf_im.array)
 print "Moments: ", Ixx,Iyy,Ixy,xbar,ybar
 csq = np.sqrt((Ixx - Iyy)**2 + 4*Ixy**2)
 phi = 0.5 * np.arctan2(2*Ixy, Ixx-Iyy)
-print "c^2, phi:", csq, phi
-e1 = np.sqrt(csq) * np.cos(phi)
-e2 = np.sqrt(csq) * np.sin(phi)
+print "c, c^2, phi:", np.sqrt(csq), csq, phi
+e1 = np.sqrt(csq) * np.cos(phi) * pixel_scale_arcsec
+e2 = np.sqrt(csq) * np.sin(phi) * pixel_scale_arcsec
 print "e1, e2:", e1, e2
 
 # nx = 256
