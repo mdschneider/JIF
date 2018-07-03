@@ -4,6 +4,8 @@ io :
   roaster_outfile : ../output/TestData/jiffy_roaster_out
 
 model :
+  model_class : GalsimGalaxyModel
+  psf_class : GalsimPSFModel  
   model_params : nu hlr e1 e2 flux dx dy
   num_sources : 1
 

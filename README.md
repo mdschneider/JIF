@@ -62,7 +62,7 @@ The following procedure outlines the steps that can be take to create some test 
 3. Run the roaster on this data:
 
   ```
-  python roaster.py --config_file ../config/roaster_defaults.cfg
+  python roaster.py --config_file ../config/jiffy.yaml
   ```
   This will create an hdf5 results file `../output/roasting/roaster_out.h5`.
 4. Inspect the data with `RoasterInspector`. 
