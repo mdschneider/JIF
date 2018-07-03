@@ -1,6 +1,8 @@
 
 io :
   infile : ../data/TestData/jiffy_gg_image.h5
+  telescope : LSST
+  filter : r
   roaster_outfile : ../output/TestData/jiffy_roaster_out
 
 model :
