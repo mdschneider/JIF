@@ -101,8 +101,11 @@ if __name__ == '__main__':
     psf = jiffy.GalsimPSFLSST()
     psf.set_param_by_name("psf_fwhm", 0.6)
 
-    for j_pupil in xrange(5, psf.aberrations.shape[0]):
-        for j_field in xrange(1, psf.aberrations.shape[1]):
+    # for j_pupil in xrange(5, psf.aberrations.shape[0]):
+    #     for j_field in xrange(1, psf.aberrations.shape[1]):
+    for j_pupil in xrange(5, 7):
+        for j_field in xrange(5, 7):
+
             print "/////////// {:d}, {:d} //////////".format(j_pupil, j_field)
             # Set all but one aberration to zero
             a_nmrs = np.zeros_like(psf.aberrations)

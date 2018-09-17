@@ -12,7 +12,7 @@ joint modeling becomes even more acute.
 
 - Will Dawson (LLNL)
 - Michael Schneider (LLNL)
-- Joshua Meyers (Stanford)
+- Joshua Meyers (LLNL)
 
 ## Analysis pipeline steps
 

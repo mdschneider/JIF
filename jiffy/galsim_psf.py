@@ -132,7 +132,7 @@ class GalsimPSFModel(object):
                 print "bad params: ", pname, self.params[pname]
         return bool(valid_params)
 
-    def get_model(self, theta=None):
+    def get_model(self, theta=None, with_atmos=True):
         """
         Get the GalSim image model
 
