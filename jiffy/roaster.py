@@ -55,7 +55,7 @@ class Roaster(object):
         model_class_name = self.config["model"]["model_class"]
         args = {"active_parameters": actv_params}
         if model_class_name == "GalsimGalaxyModel":
-            args["psf_model_class_name"] = self.config["model"]["psf_class"]        
+            args["psf_model_class_name"] = self.config["model"]["psf_class"]
 
         try:
             model_modules = __import__(self.config['model']['model_modules'])
