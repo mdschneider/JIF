@@ -33,7 +33,7 @@ import warnings
 import galsim
 try:
     import galsim.lsst
-except ImportError:
+except ImportError: 
     warnings.warn("Cannot import GalSim LSST module - LSST PSF models won't work")
 
 
@@ -139,6 +139,7 @@ class GalsimPSFModel(object):
         This is the object that can be used in, e.g., GalSim convolutions
         """
         # argument theta is not used here
+        # psf = galsim.Moffat(fwhm=self.params.psf_fwhm[0], beta=self.params.psf_beta[0])
         psf = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
         psf_shape = galsim.Shear(e1=self.params.psf_e1[0],
                                  e2=self.params.psf_e2[0])
