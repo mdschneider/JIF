@@ -40,6 +40,8 @@ data :
 # Control the galaxy or star source model 
 #
 model :
+  model_class : GalsimGalaxyModel
+  psf_class : GalsimPSFModel
   # Type of parametric source model.
   # Can be 'Spergel', 'Sersic', 'BulgeDisk', 'star' - see parameters.py
   #   ['Sersic', 'Spergel', 'BulgeDisk' (default), 'star']
