@@ -113,12 +113,15 @@ class Roaster(object):
             raise ValueError("Unsupported type for input value")
         return None
 
-    def make_data(self):
+    def make_data(self, noise=None):
         """
         Make fake data from the current stored galaxy model
+
+        @param noise Specify custom noise model. Use GaussianNoise if not provided.
         """
         image = self._get_model_image()
-        noise = galsim.GaussianNoise(sigma=np.sqrt(self.noise_var))
+        if noise is None:
+            noise = galsim.GaussianNoise(sigma=np.sqrt(self.noise_var))
         image.addNoise(noise)
         self.data = image.array
         return None
