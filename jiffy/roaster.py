@@ -40,11 +40,16 @@ class Roaster(object):
 
     Only single epoch images are allowed.
     """
-    def __init__(self, config="../config/jiffy.yaml"):
+    def __init__(self, config="../config/jiffy.yaml", prior_form=None):
         if isinstance(config, str):
             import yaml
             config = yaml.load(open(config))
         self.config = config
+
+        if prior_form is None:
+            self.prior_form = EmptyPrior()
+        else:
+            self.prior_form = prior_form
 
         np.random.seed(self.config["init"]["seed"])
 
@@ -166,7 +171,7 @@ class Roaster(object):
         """
         Evaluate the log-prior of the model parameters
         """
-        return 0.0
+        return self.prior_form(params)
 
     def lnlike(self, params):
         """
@@ -189,6 +194,20 @@ class Roaster(object):
 
     def __call__(self, params):
         return self.lnlike(params)
+
+
+class EmptyPrior(object):
+    """
+    Prior form for the image model parameters
+
+    This prior form is flat in all parameters (for any given parameterization).
+    """
+
+    def __init__(self):
+        pass
+
+    def __call__(self, *args):
+        return 0.0
 
 
 def init_roaster(args):
