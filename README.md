@@ -10,15 +10,13 @@ joint modeling becomes even more acute.
 
 ## People
 
-- Will Dawson (LLNL)
 - Michael Schneider (LLNL)
+- Will Dawson (LLNL)
 - Joshua Meyers (LLNL)
 
-## Analysis pipeline steps
+## Analysis
 
-1. Shell - source extraction
-2. Roast - Interim sampling of source model parameters
-3. Grind - Hierarchical inference of source distributions via importance sampling
+This package embeds [GalSim](https://github.com/GalSim-developers/GalSim) image models of galaxies and stars into a Markov Chain Monte Carlo (MCMC) framework for probabilistic forward modeling of images. The primary module is `jiffy/roaster.py`, which defines the image model likelihood. Most parameters to `roaster` can be specified in configuration files as in `config/jiffy.yaml`. 
 
 ## Installation
 
@@ -35,10 +33,8 @@ to install while working on the package.
 
 ## Tools / dependencies
 
-- Our image models are built around the [GalSim](https://github.com/GalSim-developers/GalSim/wiki) image simulation framework.
-- For some of the comparative analysis we require [LSST DM Stack](https://confluence.lsstcorp.org/display/LSWUG/LSST+Software+User+Guide). Note that it is possible to install GalSim as part of the LSST DM environment, see [Building GalSim with the LSST stack](https://github.com/GalSim-developers/GalSim/wiki/Building-GalSim-with-the-LSST-stack).
-  - Note that if using the LSST stack install of GalSim this needs to be "setup", by runnning `source loadLSST.bash` then `setup GalSim` in the LSST stack install location.  
-- For parameter inference, we use [emcee](http://dan.iel.fm/emcee/current/) (and probably other samplers TBD).
+- Our image models are built around the [GalSim](https://github.com/GalSim-developers/GalSim/wiki) image simulation framework.  
+- For parameter inference, we use [emcee](http://dan.iel.fm/emcee/current/).
 - The sources (and source groups) we extract from raw imaging are stored in [HDF5](http://www.hdfgroup.org/HDF5/) file formats, with a custom grouping.
 - For part of the results visualization we use [corner](https://github.com/dfm/corner.py).
 

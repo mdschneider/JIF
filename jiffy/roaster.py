@@ -77,6 +77,7 @@ class Roaster(object):
         self.scale = 0.2
         self.gain = 1.0
         self.data = None
+        self.lnnorm = self._set_like_lnnorm()
 
     def get_params(self):
         """
@@ -123,6 +124,8 @@ class Roaster(object):
         Make fake data from the current stored galaxy model
 
         @param noise Specify custom noise model. Use GaussianNoise if not provided.
+        @param mag Specify a magnitude or magnitudes for the image. Use default 
+            fluxes from parameter config file if not provided.
         """
         image = self._get_model_image()
         if noise is None:
@@ -135,11 +138,12 @@ class Roaster(object):
         """
         Import the pixel data and noise variance for a footprint
         """
-        self.ngrid_x, self.ngrid_y = pix_dat_array.shape
+        self.ngrid_y, self.ngrid_x = pix_dat_array.shape
         self.data = pix_dat_array
         self.noise_var = noise_var
         self.scale = scale
         self.gain = gain
+        self.lnnorm = self._set_like_lnnorm()
 
     def initialize_param_values(self, param_file_name):
         """
@@ -173,6 +177,10 @@ class Roaster(object):
         """
         return self.prior_form(params)
 
+    def _set_like_lnnorm(self):
+        return (- 0.5 * self.ngrid_x * self.ngrid_y *
+                np.sqrt(self.noise_var * 2 * np.pi))
+
     def lnlike(self, params):
         """
         Evaluate the log-likelihood of the pixel data in a footprint
@@ -184,10 +192,14 @@ class Roaster(object):
             if model is None:
                 res = -np.inf
             else:
-                delta = (model.array - self.data)**2
-                lnnorm = (- 0.5 * self.ngrid_x * self.ngrid_y *
-                          np.sqrt(self.noise_var * 2 * np.pi))
-                res = -0.5*np.sum(delta / self.noise_var) + lnnorm
+                delta_arr = (model.array - self.data).ravel()
+                delta_sq = np.inner(delta_arr, delta_arr)
+                res = -0.5 * delta_sq / self.noise_var + self.lnnorm
+                #
+                # delta = (model.array - self.data)**2
+                # lnnorm = (- 0.5 * self.ngrid_x * self.ngrid_y *
+                #           np.sqrt(self.noise_var * 2 * np.pi))
+                # res = -0.5*np.sum(delta / self.noise_var) + lnnorm
         # else:
         #     print "Invalid parameters"
         return res
@@ -243,7 +255,7 @@ def do_sampling(args, rstr):
     nthreads = rstr.config["sampling"]["nthreads"]
 
     p0 = emcee.utils.sample_ball(omega_interim, 
-                                 np.ones_like(omega_interim) * 0.001, nwalkers)
+                                 np.ones_like(omega_interim) * 0.01, nwalkers)
 
     sampler = emcee.EnsembleSampler(nwalkers,
                                     nvars,
