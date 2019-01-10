@@ -30,7 +30,7 @@ Wrapper for simple GalSim galaxy models to use in MCMC.
 """
 import numpy as np
 import galsim
-import galsim_psf
+from . import galsim_psf
 
 
 K_PARAM_BOUNDS = {
@@ -179,8 +179,8 @@ class GalsimGalaxyModel(object):
                 model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
                                       gain=gain)
         except RuntimeError:
-            print "Trying to make an image that's too big."
-            print self.get_params()
+            print("Trying to make an image that's too big.")
+            print(self.get_params())
             model = None
         return model
 

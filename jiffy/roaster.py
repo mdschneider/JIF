@@ -58,7 +58,7 @@ class Roaster(object):
         self.n_params = len(actv_params)
 
         model_class_name = self.config["model"]["model_class"]
-        args = {"active_parameters": actv_params}
+        args = dict({"active_parameters": actv_params}, **self.config["source_model_args"])
         if model_class_name == "GalsimGalaxyModel":
             args["psf_model_class_name"] = self.config["model"]["psf_class"]
 
@@ -68,7 +68,7 @@ class Roaster(object):
             model_modules = __import__('jiffy.galsim_galaxy', 'jiffy.galsim_psf')
 
         self.src_models = [getattr(model_modules, model_class_name)(**args)
-                           for i in xrange(self.num_sources)]
+                           for i in range(self.num_sources)]
 
         # Initialize objects describing the pixel data in a footprint
         self.ngrid_x = 64
@@ -92,7 +92,7 @@ class Roaster(object):
         Set the active parameters for all sources from a flattened array
         """
         valid_params = True
-        for isrc in xrange(self.num_sources):
+        for isrc in range(self.num_sources):
             imin = isrc * self.n_params
             imax = (isrc + 1) * self.n_params
             p_set = params[imin:imax]
@@ -113,7 +113,7 @@ class Roaster(object):
             else:
                 raise ValueError("If passing list, must have length num_sources")
         elif isinstance(value, float):
-            for isrc in xrange(self.num_sources):
+            for isrc in range(self.num_sources):
                 self.src_models[isrc].set_param_by_name(paramname, value)
         else:
             raise ValueError("Unsupported type for input value")
@@ -149,8 +149,12 @@ class Roaster(object):
         """
         Initialize model parameter values from config file
         """
-        import ConfigParser
-        config = ConfigParser.RawConfigParser()
+        try:
+            import configparser
+        except:
+            import ConfigParser as configparser
+
+        config = configparser.RawConfigParser()
         config.read(param_file_name)
 
         params = config.items("parameters")
@@ -166,7 +170,7 @@ class Roaster(object):
     def _get_model_image(self):
         model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
                                     scale=self.scale, init_value=0.)
-        for isrc in xrange(self.num_sources):
+        for isrc in range(self.num_sources):
             model_image = self.src_models[isrc].get_image(image=model_image,
                                                           gain=self.gain)
         return model_image
@@ -263,18 +267,18 @@ def do_sampling(args, rstr):
                                     threads=nthreads)
 
     nburn = max([1, rstr.config["sampling"]["nburn"]])
-    print "Burning with {:d} steps".format(nburn)
+    print("Burning with {:d} steps".format(nburn))
     pp, lnp, rstate = sampler.run_mcmc(p0, nburn)
     sampler.reset()
 
     pps = []
     lnps = []
     # lnpriors = []
-    print "Sampling"
+    print("Sampling")
     for istep in range(nsamples):
         if np.mod(istep + 1, 20) == 0:
-            print "\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
-                np.mean(lnp))
+            print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
+                  np.mean(lnp)))
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
         lnprior = np.array([rstr.lnprior(omega) for omega in pp])
         pps.append(np.column_stack((pp.copy(), lnprior)))
@@ -291,8 +295,8 @@ def cluster_walkers(pps, lnps, thresh_multiplier=1):
 
     Follows the algorithm of Hou, Goodman, Hogg et al. (2012)
     """
-    print "Clustering emcee walkers with threshold multiplier {:3.2f}".format(
-        thresh_multiplier)
+    print("Clustering emcee walkers with threshold multiplier {:3.2f}".format(
+        thresh_multiplier))
     pps = np.array(pps)
     lnps = np.array(lnps)
     ### lnps.shape == (Nsteps, Nwalkers) => lk.shape == (Nwalkers,)
@@ -307,10 +311,10 @@ def cluster_walkers(pps, lnps, thresh_multiplier=1):
         nkeep = np.argmax(selection)
     else:
         nkeep = nwalkers
-    print "pps, lnps:", pps.shape, lnps.shape
+    print("pps, lnps:", pps.shape, lnps.shape)
     pps = pps[:, ndx[0:nkeep], :]
     lnps = lnps[:, ndx[0:nkeep]]
-    print "New pps, lnps:", pps.shape, lnps.shape
+    print("New pps, lnps:", pps.shape, lnps.shape)
     return pps, lnps
 
 def write_results(args, pps, lnps, rstr):
@@ -333,7 +337,7 @@ def write_results(args, pps, lnps, rstr):
 
     paramnames = rstr.config["model"]["model_params"].split()
     if rstr.num_sources > 1:
-        paramnames = [p + '_src{:d}'.format(isrc) for isrc in xrange(rstr.num_sources)
+        paramnames = [p + '_src{:d}'.format(isrc) for isrc in range(rstr.num_sources)
                       for p in paramnames]
 
     ## Write the MCMC samples and log probabilities

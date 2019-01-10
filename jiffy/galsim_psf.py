@@ -89,7 +89,7 @@ class GalsimPSFModel(object):
     def set_params(self, params):
         assert len(params) >= self.n_params
         for ip, pname in enumerate(self.active_parameters):
-            # print "Setting {} to {5.4f}".format(pname, params[ip])
+            # print("Setting {} to {5.4f}".format(pname, params[ip]))
             self.params[pname][0] = params[ip]
         valid_params = self.validate_params()
         return valid_params
@@ -129,7 +129,7 @@ class GalsimPSFModel(object):
         for pname, _ in self.params.dtype.descr:
             if not _inbounds(self.params[pname][0], K_PARAM_BOUNDS[pname]):
                 valid_params *= 0
-                print "bad params: ", pname, self.params[pname]
+                print("bad params: ", pname, self.params[pname])
         return bool(valid_params)
 
     def get_model(self, theta=None, with_atmos=True):
