@@ -98,37 +98,37 @@ class RoasterInspector(object):
         return os.path.splitext(self.infile)[0]
 
     def summary(self):
-        print self.__str__()
+        print(self.__str__())
         # print "Roaster input file: ", self.roaster_infile
-        print "data: ", self.data.shape
-        print "paramnames:", self.paramnames.shape, "\n", self.paramnames
+        print("data: ", self.data.shape)
+        print("paramnames:", self.paramnames.shape, "\n", self.paramnames)
         return None
 
     def report(self):
-        print "\n"
+        print("\n")
         for i, p in enumerate(self.paramnames):
             print("%s = %4.3g +/- %4.3g" % (p, 
                 np.mean(self.data[-self.args.keeplast:, :, i]),
                 np.std(self.data[:, :, i])))
-        print "\n"
+        print("\n")
         n = self.data.shape[2]
         rhat = gelman_rubin(self.data[:,:,0:(n-1)])
-        print rhat
-        print "Gelman-Rubin statistic: {:4.3f}".format(rhat[0])
-        print "\n"
+        print(rhat)
+        print("Gelman-Rubin statistic: {:4.3f}".format(rhat[0]))
+        print("\n")
 
     def _get_opt_params(self):
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
         opt_params = np.vstack(self.data[-self.args.keeplast:,...])[ndx,...]
         opt_params = opt_params[0:self.nparams]
-        print "optimal parameters:", opt_params
+        print("optimal parameters:", opt_params)
         return opt_params
 
     def _load_roaster_input_data(self):
         import footprints
 
         self.roaster = roaster.Roaster(self.config)
-        print "roaster model class:", type(self.roaster.src_models[0]).__name__
+        print("roaster model class:", type(self.roaster.src_models[0]).__name__)
         self.roaster.initialize_param_values(self.config["init"]["init_param_file"])
         self.params_ref = self.roaster.get_params()
 
@@ -168,7 +168,7 @@ class RoasterInspector(object):
                               labels=self.paramnames, truths=self.params_ref)
         outfile = (self._outfile_head() +
             "_roaster_inspector_triangle.png")
-        print "Saving {}".format(outfile)
+        print("Saving {}".format(outfile))
         fig.savefig(outfile)
         # except ValueError:
         #     pass
@@ -193,7 +193,7 @@ class RoasterInspector(object):
         fig.tight_layout()
         outfile = (self._outfile_head() +
             '_roaster_inspector_walkers.png')
-        print "Saving {}".format(outfile)
+        print("Saving {}".format(outfile))
         fig.savefig(outfile)
         return None
 
@@ -230,7 +230,7 @@ class RoasterInspector(object):
 
         ### model + noise
         noise_var = self.roaster.noise_var
-        print "noise variance: {:12.10g}".format(noise_var)
+        print("noise variance: {:12.10g}".format(noise_var))
         ax = fig.add_subplot(2, 2, 3)
         ax.set_title("Model + Noise")
         noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
@@ -248,7 +248,7 @@ class RoasterInspector(object):
 
         plt.tight_layout()
         outfile = (self._outfile_head() + '_data_and_model.png')
-        print "Saving {}".format(outfile)
+        print("Saving {}".format(outfile))
         fig.savefig(outfile)
         return None
 
@@ -276,7 +276,7 @@ class RoasterInspector(object):
         # plt.ylim(1, np.max((2., rhat)))
         # legend = plt.legend(loc='best')
         outfile = (self._outfile_head() + '_gr_statistic.png')
-        print "Saving {}".format(outfile)
+        print("Saving {}".format(outfile))
         fig.savefig(outfile, bbox_inches='tight')
 
 
