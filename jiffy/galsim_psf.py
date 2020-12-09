@@ -265,15 +265,19 @@ def main():
     import footprints
 
     gp = GalsimPSFModel()
-    img = gp.get_image(16, 16)
-    noise_var = 1.e-8
+    img = gp.get_image(32, 32)
+    noise_var = 1.e-6
     noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
     img.addNoise(noise)
 
     dummy_mask = 1.0
     dummy_background = 0.0
 
-    ftpnt = footprints.Footprints("../data/TestData/jiffy_psf_image.h5")
+    fname = "../data/TestData/jiffy_psf_image"
+
+    galsim.fits.write(img, fname + ".fits")
+
+    ftpnt = footprints.Footprints(fname + ".h5")
 
     ftpnt.save_images([img.array], [noise_var], [dummy_mask], [dummy_background],
                       segment_index=0, telescope="LSST", filter_name='r')

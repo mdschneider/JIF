@@ -30,7 +30,7 @@ Wrapper for simple GalSim galaxy models to use in MCMC.
 """
 import numpy as np
 import galsim
-from . import galsim_psf
+from jiffy import galsim_psf
 
 
 K_PARAM_BOUNDS = {
@@ -200,7 +200,11 @@ if __name__ == '__main__':
     dummy_mask = 1.0
     dummy_background = 0.0
 
-    ftpnt = footprints.Footprints("../data/TestData/jiffy_gg_image.h5")
+    fname = "../data/TestData/jiffy_gg_image"
+
+    galsim.fits.write(img, fname + ".fits")
+
+    ftpnt = footprints.Footprints(fname + ".h5")
 
     ftpnt.save_images([img.array], [noise_var], [dummy_mask], [dummy_background],
                     segment_index=0, telescope="LSST", filter_name='r')

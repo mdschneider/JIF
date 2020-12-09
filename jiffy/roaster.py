@@ -58,7 +58,7 @@ class Roaster(object):
         self.n_params = len(actv_params)
 
         model_class_name = self.config["model"]["model_class"]
-        args = dict({"active_parameters": actv_params}, **self.config["source_model_args"])
+        args = dict({"active_parameters": actv_params}) #, **self.config["source_model_args"])
         if model_class_name == "GalsimGalaxyModel":
             args["psf_model_class_name"] = self.config["model"]["psf_class"]
 
