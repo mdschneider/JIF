@@ -132,7 +132,7 @@ class Roaster(object):
             noise = galsim.GaussianNoise(sigma=np.sqrt(self.noise_var))
         image.addNoise(noise)
         self.data = image.array
-        return None
+        return image
 
     def import_data(self, pix_dat_array, noise_var, scale=0.2, gain=1.0):
         """
