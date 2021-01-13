@@ -17,13 +17,13 @@ def main():
 	config_file = "../config/jiffy_blend.yaml"
 	config = yaml.load(open(config_file))
 	rstr = jiffy.Roaster(config)
+	rstr.initialize_param_values(config["init"]["init_param_file"])
+
 	img = rstr.make_data()
 	galsim.fits.write(img, os.path.splitext(config["io"]["infile"])[0] + ".fits")
 
-	rstr.initialize_param_values(config["init"]["init_param_file"])
-
 	args = Arguments(config_file, 0)
-	jiffy.do_roaster_sampling(args, rstr)
+	# jiffy.do_roaster_sampling(args, rstr)
 
 
 if __name__ == '__main__':
