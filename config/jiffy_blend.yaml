@@ -1,0 +1,22 @@
+
+io :
+  infile : ../data/TestData/jiffy_gg_blend_image.h5
+  telescope : LSST
+  filter : r
+  roaster_outfile : ../output/TestData/jiffy_roaster_out_blend
+
+model :
+  model_class : GalsimGalaxyModel
+  psf_class : GalsimPSFModel  
+  model_params : nu hlr e1 e2 flux dx dy
+  num_sources : 2
+
+init :
+  init_param_file : ../config/jiffy_params_blend.cfg
+  seed : 2935867
+
+sampling :
+  nsamples : 500
+  nwalkers : 32
+  nburn : 200
+  nthreads : 1
