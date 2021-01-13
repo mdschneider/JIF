@@ -279,7 +279,7 @@ def do_sampling(args, rstr):
         if np.mod(istep + 1, 20) == 0:
             print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
                   np.mean(lnp)))
-        pp, lnp, rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+        pp, lnp, rstate = sampler.run_mcmc(pp, 1, log_prob0=lnp, rstate0=rstate)
         lnprior = np.array([rstr.lnprior(omega) for omega in pp])
         pps.append(np.column_stack((pp.copy(), lnprior)))
         lnps.append(lnp.copy())
