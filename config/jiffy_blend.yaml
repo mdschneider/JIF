@@ -18,5 +18,5 @@ init :
 sampling :
   nsamples : 500
   nwalkers : 32
-  nburn : 200
-  nthreads : 1
+  nburn : 400
+  nthreads : 4

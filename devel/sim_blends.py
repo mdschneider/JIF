@@ -22,8 +22,13 @@ def main():
 	img = rstr.make_data()
 	galsim.fits.write(img, os.path.splitext(config["io"]["infile"])[0] + ".fits")
 
+	ftpnt = footprints.Footprints(config["io"]["infile"])
+	ftpnt.save_images([img.array], [rstr.noise_var], [1], [1],
+		segment_index=0, telescope="LSST", filter_name="r")
+	ftpnt.save_tel_metadata()
+
 	args = Arguments(config_file, 0)
-	# jiffy.do_roaster_sampling(args, rstr)
+	jiffy.do_roaster_sampling(args, rstr)
 
 
 if __name__ == '__main__':
