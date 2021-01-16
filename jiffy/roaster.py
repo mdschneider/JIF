@@ -235,7 +235,12 @@ def init_roaster(args):
 
     config = yaml.load(open(args.config_file))
 
-    rstr = Roaster(config)
+    prior_form = {
+        "Empty": EmptyPrior(),
+        "Spergel": jiffy.DefaultPriorSpergel()
+    }
+
+    rstr = Roaster(config, prior_form=prior_form)
 
     dat, noise_var, scale, gain = footprints.load_image(config["io"]["infile"],
         segment=args.footprint_number)
