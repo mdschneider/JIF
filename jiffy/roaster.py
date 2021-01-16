@@ -238,7 +238,7 @@ def init_roaster(args):
     prior_form = {
         "Empty": EmptyPrior(),
         "Spergel": jiffy.DefaultPriorSpergel()
-    }
+    }[config["model"]["prior_form"]]
 
     rstr = Roaster(config, prior_form=prior_form)
 
