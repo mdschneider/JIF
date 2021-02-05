@@ -31,10 +31,11 @@ Wrapper for simple GalSim PSF models to use in MCMC.
 import numpy as np
 import warnings
 import galsim
-try:
-    import galsim.lsst
-except ImportError: 
-    warnings.warn("Cannot import GalSim LSST module - LSST PSF models won't work")
+
+# try:
+#     import galsim.lsst
+# except ImportError: 
+#     warnings.warn("Cannot import GalSim LSST module - LSST PSF models won't work")
 
 
 K_PARAM_BOUNDS = {
