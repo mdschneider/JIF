@@ -35,7 +35,7 @@ from jiffy import galsim_psf
 
 K_PARAM_BOUNDS = {
     "nu": [-0.8, 0.8],
-    "hlr": [0.01, 10.0],
+    "hlr": [0.01, 6.0],
     "e1": [-0.7, 0.7],
     "e2": [-0.7, 0.7],
     "flux": [0.001, 1000.0],
@@ -180,7 +180,7 @@ class GalsimGalaxyModel(object):
                                       gain=gain)
         except RuntimeError:
             print("Trying to make an image that's too big.")
-            print(self.get_params())
+            #print(self.get_params())
             model = None
         return model
 
