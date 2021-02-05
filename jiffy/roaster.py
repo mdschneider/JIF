@@ -46,6 +46,8 @@ class Roaster(object):
             config = yaml.load(open(config))
         self.config = config
 
+        self.verbose = args.verbose
+
         if prior_form is None:
             self.prior_form = EmptyPrior()
         else:
@@ -267,18 +269,21 @@ def do_sampling(args, rstr):
                                     threads=nthreads)
 
     nburn = max([1, rstr.config["sampling"]["nburn"]])
-    print("Burning with {:d} steps".format(nburn))
+    if self.verbose:
+        print("Burning with {:d} steps".format(nburn))
     pp, lnp, rstate = sampler.run_mcmc(p0, nburn)
     sampler.reset()
 
     pps = []
     lnps = []
     # lnpriors = []
-    print("Sampling")
+    if self.verbose:
+        print("Sampling")
     for istep in range(nsamples):
         if np.mod(istep + 1, 20) == 0:
-            print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
-                  np.mean(lnp)))
+            if self.verbose:
+                print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
+                    np.mean(lnp)))
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, log_prob0=lnp, rstate0=rstate)
         lnprior = np.array([rstr.lnprior(omega) for omega in pp])
         pps.append(np.column_stack((pp.copy(), lnprior)))
@@ -295,8 +300,9 @@ def cluster_walkers(pps, lnps, thresh_multiplier=1):
 
     Follows the algorithm of Hou, Goodman, Hogg et al. (2012)
     """
-    print("Clustering emcee walkers with threshold multiplier {:3.2f}".format(
-        thresh_multiplier))
+    if self.verbose:
+        print("Clustering emcee walkers with threshold multiplier {:3.2f}".format(
+            thresh_multiplier))
     pps = np.array(pps)
     lnps = np.array(lnps)
     ### lnps.shape == (Nsteps, Nwalkers) => lk.shape == (Nwalkers,)
@@ -311,10 +317,12 @@ def cluster_walkers(pps, lnps, thresh_multiplier=1):
         nkeep = np.argmax(selection)
     else:
         nkeep = nwalkers
-    print("pps, lnps:", pps.shape, lnps.shape)
+    if self.verbose:
+        print("pps, lnps:", pps.shape, lnps.shape)
     pps = pps[:, ndx[0:nkeep], :]
     lnps = lnps[:, ndx[0:nkeep]]
-    print("New pps, lnps:", pps.shape, lnps.shape)
+    if self.verbose:
+        print("New pps, lnps:", pps.shape, lnps.shape)
     return pps, lnps
 
 def write_results(args, pps, lnps, rstr):
@@ -365,6 +373,9 @@ def main():
 
     parser.add_argument("--footprint_number", type=int, default=0,
                         help="The footprint number to load from input")
+
+    parser.add_argument('--verbose', action='store_true',
+                        help="Enable verbose messaging")
 
     args = parser.parse_args()
 
