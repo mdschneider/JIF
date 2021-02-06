@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-sheller_great3.py
+sheller.py
 
 Created by Michael Schneider on 2015-10-16
 """
@@ -22,8 +22,9 @@ import footprints
 import logging
 
 # Print log messages to screen:
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+#logging.basicConfig(level=logging.DEBUG,
+#                    format='%(asctime)s - %(levelname)s - %(message)s')
+
 # Print log messages to file:
 #logging.basicConfig(filename='logs/sheller_great3.log',
 #                     level=logging.DEBUG,
@@ -188,9 +189,11 @@ def create_segments(subfield_index=0, experiment="control",
         bkgrnd, noise_var = get_background_and_noise_var(f[0].data)
         noise_vars.append(noise_var)
         backgrounds.append(bkgrnd)
-        print "empirical nosie variance: {:5.4g}".format(np.var(f[0].data))
+        if verbose:
+            print "empirical nosie variance: {:5.4g}".format(np.var(f[0].data))
         f.close()
-    logging.debug("Finished background and noise rms estimation")
+    if verbose:
+        logging.debug("Finished background and noise rms estimation")
 
     for ifile, infile in enumerate(infiles): # Iterate over epochs, 
                                              # select same galaxy
@@ -302,8 +305,8 @@ def main():
                     n_gals=args.n_gals,
                     verbose=args.verbose)
 
-    logging.debug('Finished creating footprints for subfield {:d}'.format(
-        args.subfield_index))
+    #logging.debug('Finished creating footprints for subfield {:d}'.format(
+    #    args.subfield_index))
     return 0
 
 
