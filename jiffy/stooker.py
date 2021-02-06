@@ -42,7 +42,7 @@ def load_roaster_samples(roaster_outfile, igal):
     @param roaster_outfile  Name of the Roaster output file
     @param igal             Index of the footprint to load
     """
-    # print "loading ", roaster_outfile
+    # print("loading ", roaster_outfile)
     hfile = h5py.File(roaster_outfile, 'r')
     grp = hfile['Samples/footprint{:d}'.format(igal)]
     paramnames = grp['post'].attrs['paramnames']
@@ -60,9 +60,9 @@ def get_summary_stats_per_gal(samps, paramnames, verbose=False):
     e1std = np.std(samps[:, :, e1ndx].ravel())
     e2std = np.std(samps[:, :, e2ndx].ravel())
     if verbose:
-        # print "e1ndx: ", e1ndx, " e2ndx:", e2ndx
-        print "e1 = {:4.3g} +/- {:4.3g}, e2 = {:4.3g} +/- {:4.3g}".format(
-            e1mean, e2mean, e1std, e2std)
+        # print("e1ndx: ", e1ndx, " e2ndx:", e2ndx)
+        print("e1 = {:4.3g} +/- {:4.3g}, e2 = {:4.3g} +/- {:4.3g}".format(
+            e1mean, e2mean, e1std, e2std))
     return e1mean, e1std, e2mean, e2std
 
 
@@ -88,22 +88,22 @@ def main():
     s = [0., 0.]
     i = 0
     for infn in args.infns:
-        # print 'Reading', infn
+        # print('Reading', infn)
         if not os.path.exists(infn):
-            print 'MISSING FILE -- SKIPPING'
+            print('MISSING FILE -- SKIPPING')
             continue
 
         # ----- Load -----
         # Get 'seg' label from file name
-        seg_lab = filter(lambda x: 'seg' in x, os.path.splitext(infn)[0].split("_"))[0] # output: 'seg[D]'
+        seg_lab = list(filter(lambda x: 'seg' in x, os.path.splitext(infn)[0].split("_")))[0] # output: 'seg[D]'
         seg_lab = seg_lab.split("g")[1]
 
         samps, lnps, paramnames = load_roaster_samples(infn, int(seg_lab))
 
         (nsteps, nwalkers, nparams) = samps.shape
-        # print "nsteps: {:d}, nwalkers: {:d}, nparams: {:d}".format(nsteps,
+        # print("nsteps: {:d}, nwalkers: {:d}, nparams: {:d}".format(nsteps,
         #                                                            nwalkers,
-        #                                                            nparams)
+        #                                                            nparams))
 
         # ----- Summary statistics -----
         e1mean, e1std, e2mean, e2std = get_summary_stats_per_gal(samps,
