@@ -32,7 +32,7 @@ likelihood functxion of an image footprint
 import numpy as np
 import galsim
 import jiffy
-
+import priors
 
 class Roaster(object):
     """
@@ -43,7 +43,7 @@ class Roaster(object):
     def __init__(self, config="../config/jiffy.yaml", prior_form=None):
         if isinstance(config, str):
             import yaml
-            config = yaml.load(open(config))
+            config = yaml.safe_load(open(config))
         self.config = config
 
         self.verbose = args.verbose
@@ -235,9 +235,12 @@ def init_roaster(args):
     import yaml
     import footprints
 
-    config = yaml.load(open(args.config_file))
+    prior_form = {
+    "Empty": EmptyPrior(),
+    "Spergel": priors.DefaultPriorSpergel()
+    }[config["model"]["prior_form"]]
 
-    rstr = Roaster(config)
+    rstr = Roaster(config, prior_form=prior_form)
 
     dat, noise_var, scale, gain = footprints.load_image(config["io"]["infile"],
         segment=args.footprint_number)
