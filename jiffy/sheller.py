@@ -90,16 +90,16 @@ def get_background_and_noise_var(data, clip_n_sigma=3, clip_converg_tol=0.1,
         # deviation values.
         sigma_frac_change = np.abs(x_std_new-x_std_old)/((x_std_new+x_std_old)/2.)
         if verbose:
-            print 'Masked {0} outlier values from this iteration.'.format(
-                np.sum(~mask_outliers))
-            print 'Current fractional sigma change between clipping iterations = {0:0.2f}'.format(sigma_frac_change)
+            print('Masked {0} outlier values from this iteration.'.format(
+                np.sum(~mask_outliers)))
+            print('Current fractional sigma change between clipping iterations = {0:0.2f}'.format(sigma_frac_change))
         # Replace old values with estimates from this iteration.
         x_std_old = x_std_new.copy()
         x_median_old = np.median(x)
         # Make sure that we don't have a run away while statement.
         i += 1
         if i > 100:
-            print 'Background variance failed to converge after 100 sigma clipping iterations, exiting.'
+            print('Background variance failed to converge after 100 sigma clipping iterations, exiting.')
             sys.exit()
     # Calculate the clipped image median.
     x_clip_median = np.median(x)
@@ -142,7 +142,7 @@ def create_segments(subfield_index=0, experiment="control",
         starfiles.append(os.path.join(indir,
             "starfield_image-{:03d}-{:d}.fits".format(subfield_index, epoch_index)))
     if verbose:
-        print "input files:", infiles
+        print("input files:", infiles)
 
     ### Load the galaxy catalog for this subfield
     f = fits.open(os.path.join(indir,
@@ -162,14 +162,14 @@ def create_segments(subfield_index=0, experiment="control",
         os.makedirs(segdir)
     seg_filename = os.path.join(segdir, "seg_{:03d}.h5".format(subfield_index))
     if verbose:
-        print "seg_filename:", seg_filename
+        print("seg_filename:", seg_filename)
 
     ## Set some common metadata required by the Segment file structure
     ## The telescope name must match a model in the JIF telescopes.py module. 
     # telescope_name = "GREAT3_{}".format(observation_type)
     telescope_name = {"ground": "LSST", "space": "WFIRST"}[observation_type]
     if verbose:
-        print "telescope_name:", telescope_name
+        print("telescope_name:", telescope_name)
     filter_name = k_filter_name
     dummy_mask = 1.0
     dummy_background = 0.0
@@ -190,7 +190,7 @@ def create_segments(subfield_index=0, experiment="control",
         noise_vars.append(noise_var)
         backgrounds.append(bkgrnd)
         if verbose:
-            print "empirical nosie variance: {:5.4g}".format(np.var(f[0].data))
+            print("empirical nosie variance: {:5.4g}".format(np.var(f[0].data)))
         f.close()
     if verbose:
         logging.debug("Finished background and noise rms estimation")
@@ -207,7 +207,7 @@ def create_segments(subfield_index=0, experiment="control",
         ngals_per_dim = int(np.sqrt(n_gals)) ### The image is a 20 x 20 grid of galaxies
         for igal in xrange(n_gals_image_file):
             if verbose and np.mod(igal, 1000) == 0:
-                print "Galaxy {:d} / {:d}".format(igal+1, n_gals_image_file)
+                print("Galaxy {:d} / {:d}".format(igal+1, n_gals_image_file))
             ### Specify input image grid ranges for this segment
             ng = k_g3_ngrid[observation_type]
             i, j = np.unravel_index(igal, (ngals_per_dim, ngals_per_dim))
