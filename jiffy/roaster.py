@@ -32,7 +32,7 @@ likelihood functxion of an image footprint
 import numpy as np
 import galsim
 import jiffy
-import priors
+from . import priors
 
 class Roaster(object):
     """
@@ -45,8 +45,6 @@ class Roaster(object):
             import yaml
             config = yaml.safe_load(open(config))
         self.config = config
-
-        self.verbose = args.verbose
 
         if prior_form is None:
             self.prior_form = EmptyPrior()
@@ -235,6 +233,8 @@ def init_roaster(args):
     import yaml
     import footprints
 
+    config = yaml.safe_load(open(args.config_file))
+
     prior_form = {
     "Empty": EmptyPrior(),
     "Spergel": priors.DefaultPriorSpergel()
@@ -272,7 +272,7 @@ def do_sampling(args, rstr):
                                     threads=nthreads)
 
     nburn = max([1, rstr.config["sampling"]["nburn"]])
-    if self.verbose:
+    if args.verbose:
         print("Burning with {:d} steps".format(nburn))
     pp, lnp, rstate = sampler.run_mcmc(p0, nburn)
     sampler.reset()
@@ -280,11 +280,11 @@ def do_sampling(args, rstr):
     pps = []
     lnps = []
     # lnpriors = []
-    if self.verbose:
+    if args.verbose:
         print("Sampling")
     for istep in range(nsamples):
         if np.mod(istep + 1, 20) == 0:
-            if self.verbose:
+            if args.verbose:
                 print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
                     np.mean(lnp)))
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, log_prob0=lnp, rstate0=rstate)
@@ -303,9 +303,8 @@ def cluster_walkers(pps, lnps, thresh_multiplier=1):
 
     Follows the algorithm of Hou, Goodman, Hogg et al. (2012)
     """
-    if self.verbose:
-        print("Clustering emcee walkers with threshold multiplier {:3.2f}".format(
-            thresh_multiplier))
+    print("Clustering emcee walkers with threshold multiplier {:3.2f}".format(
+          thresh_multiplier))
     pps = np.array(pps)
     lnps = np.array(lnps)
     ### lnps.shape == (Nsteps, Nwalkers) => lk.shape == (Nwalkers,)
@@ -320,12 +319,10 @@ def cluster_walkers(pps, lnps, thresh_multiplier=1):
         nkeep = np.argmax(selection)
     else:
         nkeep = nwalkers
-    if self.verbose:
-        print("pps, lnps:", pps.shape, lnps.shape)
+    # print("pps, lnps:", pps.shape, lnps.shape)
     pps = pps[:, ndx[0:nkeep], :]
     lnps = lnps[:, ndx[0:nkeep]]
-    if self.verbose:
-        print("New pps, lnps:", pps.shape, lnps.shape)
+    # print("New pps, lnps:", pps.shape, lnps.shape)
     return pps, lnps
 
 def write_results(args, pps, lnps, rstr):
