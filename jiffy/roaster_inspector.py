@@ -34,7 +34,7 @@ import matplotlib.pyplot as plt
 import corner
 
 import galsim
-import roaster
+from . import roaster
 
 plt.style.use('ggplot')
 
