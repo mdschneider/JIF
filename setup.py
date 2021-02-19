@@ -37,7 +37,8 @@ setup(name='jif',
       # The python scripts in this package can be designated as distinct
       # command-line executables here. Be careful about potential name clashes.
       entry_points={
-          'console_scripts': ['jiffy_roaster=jiffy.roaster:main',
+          'console_scripts': ['jiffy_sheller=jiffy.sheller:main',
+                              'jiffy_roaster=jiffy.roaster:main',
                               'jiffy_roaster_inspector=jiffy.roaster_inspector:main',
                               'jiffy_stooker=jiffy.stooker:main'],
       },
