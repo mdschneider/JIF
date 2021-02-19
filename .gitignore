@@ -84,3 +84,6 @@ update_config*.py
 *~
 *.zip
 whiskers.pdf
+
+# desc_shear
+devel/desc_shear/jiffy_cgc1_*
