@@ -16,7 +16,7 @@ import copy
 
 from astropy.io import fits
 # import jif.segments as segments
-import jif.galsim_galaxy as gg
+#import jif.galsim_galaxy as gg
 import footprints
 
 import logging
@@ -135,12 +135,12 @@ def create_segments(subfield_index=0, experiment="control",
     else:
         nepochs = 6
     infiles = []
-    starfiles = []
-    for epoch_index in xrange(nepochs):
+    #starfiles = []
+    for epoch_index in range(nepochs):
         infiles.append(os.path.join(indir,
             "image-{:03d}-{:d}.fits".format(subfield_index, epoch_index)))
-        starfiles.append(os.path.join(indir,
-            "starfield_image-{:03d}-{:d}.fits".format(subfield_index, epoch_index)))
+        #starfiles.append(os.path.join(indir,
+        #    "starfield_image-{:03d}-{:d}.fits".format(subfield_index, epoch_index)))
     if verbose:
         print("input files:", infiles)
 
@@ -198,14 +198,14 @@ def create_segments(subfield_index=0, experiment="control",
     for ifile, infile in enumerate(infiles): # Iterate over epochs, 
                                              # select same galaxy
         f = fits.open(infile)
-        s = fits.open(starfiles[ifile])
+        #s = fits.open(starfiles[ifile])
 
         ### There are 1e4 galaxies in one GREAT3 image file.
         ### Save all images to the segment file, but with distinct 'segment_index'
         ### values.
         n_gals_image_file = n_gals
         ngals_per_dim = int(np.sqrt(n_gals)) ### The image is a 20 x 20 grid of galaxies
-        for igal in xrange(n_gals_image_file):
+        for igal in range(n_gals_image_file):
             if verbose and np.mod(igal, 1000) == 0:
                 print("Galaxy {:d} / {:d}".format(igal+1, n_gals_image_file))
             ### Specify input image grid ranges for this segment
@@ -227,7 +227,7 @@ def create_segments(subfield_index=0, experiment="control",
             ### that have offset star locations with respect to the pixel grid.
             ### It's not clear we need these for JIF modeling until we're
             ### marginalizing the PSF model.            
-            psfs.append(np.asarray(s[0].data[0:ng, 0:ng], dtype=np.float64))
+            # psfs.append(np.asarray(s[0].data[0:ng, 0:ng], dtype=np.float64))
 
 
             #print "noise_vars:", noise_vars
@@ -241,7 +241,7 @@ def create_segments(subfield_index=0, experiment="control",
                 segment_index=igal)
 
         f.close()
-        s.close()
+        #s.close()
 
     ### It's not strictly necessary to instantiate a GalSimGalaxyModel object
     ### here, but it's useful to do the parsing of existing bandpass files to
