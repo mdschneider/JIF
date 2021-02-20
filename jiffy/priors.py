@@ -9,10 +9,14 @@ class DefaultPriorSpergel(object):
     """
     def __init__(self):
         ### Gaussian mixture in 'nu' parameter
-        self.nu_mean_1 = -0.6 ### ~ de Vacouleur profile
-        self.nu_mean_2 = 0.5 ### ~ exponential profile
+        # self.nu_mean_1 = -0.6 ### ~ de Vacouleur profile
+        # self.nu_mean_2 = 0.5 ### ~ exponential profile
+        # self.nu_var_1 = 0.05
+        # self.nu_var_2 = 0.01
+        self.nu_mean_1 = -0.10
+        self.nu_mean_2 = 0
         self.nu_var_1 = 0.05
-        self.nu_var_2 = 0.01
+        self.nu_var_2 = 0.05
         ### Gamma distribution keeping half-light radius from becoming
         ### much larger than 1 arcsecond or too close to zero.
         self.hlr_shape = 2.

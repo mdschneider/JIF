@@ -30,6 +30,7 @@ Draw posterior samples of image source model parameters given the
 likelihood functxion of an image footprint
 """
 import numpy as np
+from tqdm import tqdm
 import galsim
 import jiffy
 from . import priors
@@ -236,8 +237,8 @@ def init_roaster(args):
     config = yaml.safe_load(open(args.config_file))
 
     prior_form = {
-    "Empty": EmptyPrior(),
-    "Spergel": priors.DefaultPriorSpergel()
+        "Empty": EmptyPrior(),
+        "Spergel": priors.DefaultPriorSpergel()
     }[config["model"]["prior_form"]]
 
     rstr = Roaster(config, prior_form=prior_form)
@@ -274,25 +275,24 @@ def do_sampling(args, rstr):
     nburn = max([1, rstr.config["sampling"]["nburn"]])
     if args.verbose:
         print("Burning with {:d} steps".format(nburn))
-    pp, lnp, rstate = sampler.run_mcmc(p0, nburn)
+    pp, lnp, rstate = sampler.run_mcmc(p0, nburn, progress=True)
     sampler.reset()
 
     pps = []
     lnps = []
-    # lnpriors = []
     if args.verbose:
         print("Sampling")
-    for istep in range(nsamples):
-        if np.mod(istep + 1, 20) == 0:
-            if args.verbose:
-                print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
-                    np.mean(lnp)))
+    for istep in tqdm(range(nsamples)):
+        # if np.mod(istep + 1, 20) == 0:
+        #     if args.verbose:
+        #         print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
+        #             np.mean(lnp)))
         pp, lnp, rstate = sampler.run_mcmc(pp, 1, log_prob0=lnp, rstate0=rstate)
         lnprior = np.array([rstr.lnprior(omega) for omega in pp])
         pps.append(np.column_stack((pp.copy(), lnprior)))
         lnps.append(lnp.copy())
 
-    pps, lnps = cluster_walkers(pps, lnps, thresh_multiplier=4)
+    # pps, lnps = cluster_walkers(pps, lnps, thresh_multiplier=4)
 
     write_results(args, pps, lnps, rstr)
     return None
