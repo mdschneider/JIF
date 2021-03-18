@@ -121,7 +121,7 @@ class Roaster(object):
             raise ValueError("Unsupported type for input value")
         return None
 
-    def make_data(self, noise=None):
+    def make_data(self, noise=None, real_galaxy_catalog=None):
         """
         Make fake data from the current stored galaxy model
 
@@ -129,7 +129,7 @@ class Roaster(object):
         @param mag Specify a magnitude or magnitudes for the image. Use default 
             fluxes from parameter config file if not provided.
         """
-        image = self._get_model_image()
+        image = self._get_model_image(real_galaxy_catalog=real_galaxy_catalog)
         if noise is None:
             noise = galsim.GaussianNoise(sigma=np.sqrt(self.noise_var))
         image.addNoise(noise)
@@ -169,12 +169,23 @@ class Roaster(object):
             self.set_param_by_name(paramname, fval)
         return None
 
-    def _get_model_image(self):
+    def _get_model_image(self, real_galaxy_catalog=None):
         model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
                                     scale=self.scale, init_value=0.)
         for isrc in range(self.num_sources):
-            model_image = self.src_models[isrc].get_image(image=model_image,
-                                                          gain=self.gain)
+            if model_image is None: # Can happen if previous source could not render
+                model_image = self.src_models[isrc].get_image(self.ngrid_x,
+                    self.ngrid_y, scale=self.scale, gain=self.gain,
+                    real_galaxy_catalog=real_galaxy_catalog)
+            else:
+                model_image = self.src_models[isrc].get_image(image=model_image,
+                                                              gain=self.gain,
+                                                              real_galaxy_catalog=real_galaxy_catalog)
+        if model_image is None:
+            # Image did not render. Make a zero image array for the likelihood
+            model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
+                            scale=self.scale, init_value=0.)
+
         return model_image
 
     def lnprior(self, params):
