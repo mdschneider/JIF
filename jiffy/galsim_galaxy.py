@@ -39,7 +39,7 @@ K_PARAM_BOUNDS = {
     "hlr": [0.01, 6.0],
     "e1": [-0.7, 0.7],
     "e2": [-0.7, 0.7],
-    "flux": [0.001, 1000.0],
+    "flux": [0.0001, 1000.0],
     "dx": [-10.0, 10.0],
     "dy": [-10.0, 10.0]
 }
@@ -79,6 +79,10 @@ class GalsimGalaxyModel(object):
         if not self.sample_psf:
             self.psf_model.params[0].psf_fwhm = 0.6
             self.static_psf = self.psf_model.get_model()
+
+        self.gsparams = galsim.GSParams(
+            maximum_fft_size = 8192
+        )
 
         return None
 
@@ -197,7 +201,8 @@ class GalsimGalaxyModel(object):
         else:
             gal = galsim.Spergel(self.params.nu[0],
                                  half_light_radius=self.params.hlr[0],
-                                 flux=self.params.flux[0])
+                                 flux=self.params.flux[0],
+                                 gsparams=self.gsparams)
             gal = gal.shear(galsim.Shear(g1=self.params.e1[0],
                                          g2=self.params.e2[0]))
         # mu = 1. / (1. - (self.params.e1[0]**2 + self.params.e2[0]**2))

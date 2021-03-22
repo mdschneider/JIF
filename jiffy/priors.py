@@ -13,10 +13,10 @@ class DefaultPriorSpergel(object):
         # self.nu_mean_2 = 0.5 ### ~ exponential profile
         # self.nu_var_1 = 0.05
         # self.nu_var_2 = 0.01
-        self.nu_mean_1 = -0.10
-        self.nu_mean_2 = 0
-        self.nu_var_1 = 0.05
-        self.nu_var_2 = 0.05
+        self.nu_mean_1 = 0.0
+        self.nu_mean_2 = 0.0
+        self.nu_var_1 = 0.1
+        self.nu_var_2 = 0.1
         ### Gamma distribution keeping half-light radius from becoming
         ### much larger than 1 arcsecond or too close to zero.
         self.hlr_shape = 2.
@@ -47,7 +47,7 @@ class DefaultPriorSpergel(object):
         return -0.5 * delta * delta / self.mag_var
 
     def _lnprior_flux(self, flux):
-        return 0
+        return -0.5 * (flux - 1.0)**2 / 0.01
 
     def __call__(self, omega):
         lnp = 0.0

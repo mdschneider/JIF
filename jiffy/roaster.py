@@ -304,7 +304,7 @@ def do_sampling(args, rstr, return_samples=False):
             pps.append(np.column_stack((pp.copy(), lnprior)))
             lnps.append(lnp.copy())
 
-    # pps, lnps = cluster_walkers(pps, lnps, thresh_multiplier=4)
+    pps, lnps = cluster_walkers(pps, lnps, thresh_multiplier=4)
 
     write_results(args, pps, lnps, rstr)
     if return_samples:
