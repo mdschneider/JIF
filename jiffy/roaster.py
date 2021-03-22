@@ -136,6 +136,12 @@ class Roaster(object):
         self.data = image.array
         return image
 
+    def draw(self):
+        """
+        Draw simulated data from the likelihood function
+        """
+        return self.make_data()
+
     def import_data(self, pix_dat_array, noise_var, scale=0.2, gain=1.0):
         """
         Import the pixel data and noise variance for a footprint
