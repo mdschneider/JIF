@@ -28,6 +28,7 @@ jiffy galsim_galaxy.py
 
 Wrapper for simple GalSim galaxy models to use in MCMC.
 """
+import os
 import numpy as np
 import galsim
 from jiffy import galsim_psf
@@ -78,6 +79,7 @@ class GalsimGalaxyModel(object):
         if not self.sample_psf:
             self.psf_model.params[0].psf_fwhm = 0.6
             self.static_psf = self.psf_model.get_model()
+
         return None
 
     def _init_params(self):
@@ -158,15 +160,46 @@ class GalsimGalaxyModel(object):
         else:
             return self.static_psf
 
-    def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0):
+    def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0,
+                  real_galaxy_catalog=None):
         """
         Render a GalSim Image() object from the internal model
+        
+        Parameters
+        ----------
+        ngrid_x : int, optional
+            Description
+        ngrid_y : int, optional
+            Description
+        scale : float, optional
+            Description
+        image : None, optional
+            Description
+        gain : float, optional
+            Description
+        real_gals : bool, optional
+            Render using a GalSim 'RealGalaxy' rather than Spergel profile.
+            Useful for testing model bias. (Default: False)
+        
+        Returns
+        -------
+        TYPE
+            Description
         """
-        gal = galsim.Spergel(self.params.nu[0],
-                             half_light_radius=self.params.hlr[0],
-                             flux=self.params.flux[0])
-        gal = gal.shear(galsim.Shear(g1=self.params.e1[0],
-                                     g2=self.params.e2[0]))
+        if real_galaxy_catalog is not None:
+            # 'Real' galaxies have intrinsic sizes and ellipticities, so 
+            # do not add any more here.
+            rgndx = np.random.randint(low=0, high=real_galaxy_catalog.nobjects)
+            print(f"*** Using GalSim RealGalaxy {rgndx}***")
+            gal = galsim.RealGalaxy(real_galaxy_catalog,
+                                    index=rgndx,
+                                    flux=self.params.flux[0])
+        else:
+            gal = galsim.Spergel(self.params.nu[0],
+                                 half_light_radius=self.params.hlr[0],
+                                 flux=self.params.flux[0])
+            gal = gal.shear(galsim.Shear(g1=self.params.e1[0],
+                                         g2=self.params.e2[0]))
         # mu = 1. / (1. - (self.params.e1[0]**2 + self.params.e2[0]**2))
         # gal = gal.lens(g1=self.params.e1[0], g2=self.params.e2[0], mu=mu)
         gal = gal.shift(self.params.dx[0], self.params.dy[0])

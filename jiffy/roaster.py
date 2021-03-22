@@ -31,6 +31,7 @@ likelihood functxion of an image footprint
 """
 import numpy as np
 from tqdm import tqdm
+from multiprocessing import Pool
 import galsim
 import jiffy
 from . import priors
@@ -120,7 +121,7 @@ class Roaster(object):
             raise ValueError("Unsupported type for input value")
         return None
 
-    def make_data(self, noise=None):
+    def make_data(self, noise=None, real_galaxy_catalog=None):
         """
         Make fake data from the current stored galaxy model
 
@@ -128,7 +129,7 @@ class Roaster(object):
         @param mag Specify a magnitude or magnitudes for the image. Use default 
             fluxes from parameter config file if not provided.
         """
-        image = self._get_model_image()
+        image = self._get_model_image(real_galaxy_catalog=real_galaxy_catalog)
         if noise is None:
             noise = galsim.GaussianNoise(sigma=np.sqrt(self.noise_var))
         image.addNoise(noise)
@@ -174,12 +175,23 @@ class Roaster(object):
             self.set_param_by_name(paramname, fval)
         return None
 
-    def _get_model_image(self):
+    def _get_model_image(self, real_galaxy_catalog=None):
         model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
                                     scale=self.scale, init_value=0.)
         for isrc in range(self.num_sources):
-            model_image = self.src_models[isrc].get_image(image=model_image,
-                                                          gain=self.gain)
+            if model_image is None: # Can happen if previous source could not render
+                model_image = self.src_models[isrc].get_image(self.ngrid_x,
+                    self.ngrid_y, scale=self.scale, gain=self.gain,
+                    real_galaxy_catalog=real_galaxy_catalog)
+            else:
+                model_image = self.src_models[isrc].get_image(image=model_image,
+                                                              gain=self.gain,
+                                                              real_galaxy_catalog=real_galaxy_catalog)
+        if model_image is None:
+            # Image did not render. Make a zero image array for the likelihood
+            model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
+                            scale=self.scale, init_value=0.)
+
         return model_image
 
     def lnprior(self, params):
@@ -258,7 +270,7 @@ def init_roaster(args):
 
     return rstr
 
-def do_sampling(args, rstr):
+def do_sampling(args, rstr, return_samples=False):
     """
     Execute MCMC sampling for posterior model inference
     """
@@ -268,40 +280,43 @@ def do_sampling(args, rstr):
     nvars = len(omega_interim)
     nsamples = rstr.config["sampling"]["nsamples"]
     nwalkers = rstr.config["sampling"]["nwalkers"]
-    nthreads = rstr.config["sampling"]["nthreads"]
 
     p0 = emcee.utils.sample_ball(omega_interim, 
                                  np.ones_like(omega_interim) * 0.01, nwalkers)
 
-    sampler = emcee.EnsembleSampler(nwalkers,
-                                    nvars,
-                                    rstr,
-                                    threads=nthreads)
+    with Pool() as pool:
+        sampler = emcee.EnsembleSampler(nwalkers,
+                                        nvars,
+                                        rstr,
+                                        pool=pool)
 
-    nburn = max([1, rstr.config["sampling"]["nburn"]])
-    if args.verbose:
-        print("Burning with {:d} steps".format(nburn))
-    pp, lnp, rstate = sampler.run_mcmc(p0, nburn, progress=True)
-    sampler.reset()
+        nburn = max([1, rstr.config["sampling"]["nburn"]])
+        if args.verbose:
+            print("Burning with {:d} steps".format(nburn))
+        pp, lnp, rstate = sampler.run_mcmc(p0, nburn, progress=True)
+        sampler.reset()
 
-    pps = []
-    lnps = []
-    if args.verbose:
-        print("Sampling")
-    for istep in tqdm(range(nsamples)):
-        # if np.mod(istep + 1, 20) == 0:
-        #     if args.verbose:
-        #         print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
-        #             np.mean(lnp)))
-        pp, lnp, rstate = sampler.run_mcmc(pp, 1, log_prob0=lnp, rstate0=rstate)
-        lnprior = np.array([rstr.lnprior(omega) for omega in pp])
-        pps.append(np.column_stack((pp.copy(), lnprior)))
-        lnps.append(lnp.copy())
+        pps = []
+        lnps = []
+        if args.verbose:
+            print("Sampling")
+        for istep in tqdm(range(nsamples)):
+            # if np.mod(istep + 1, 20) == 0:
+            #     if args.verbose:
+            #         print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
+            #             np.mean(lnp)))
+            pp, lnp, rstate = sampler.run_mcmc(pp, 1, log_prob0=lnp, rstate0=rstate)
+            lnprior = np.array([rstr.lnprior(omega) for omega in pp])
+            pps.append(np.column_stack((pp.copy(), lnprior)))
+            lnps.append(lnp.copy())
 
     # pps, lnps = cluster_walkers(pps, lnps, thresh_multiplier=4)
 
     write_results(args, pps, lnps, rstr)
-    return None
+    if return_samples:
+        return pps, lnps
+    else:
+        return None
 
 def cluster_walkers(pps, lnps, thresh_multiplier=1):
     """
