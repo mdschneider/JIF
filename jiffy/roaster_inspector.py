@@ -71,11 +71,6 @@ class RoasterInspector(object):
         self._load_roaster_file(args)
         self._load_roaster_input_data()
 
-        outdir = os.path.dirname(args.infile)[0]
-        if not os.path.exists(outdir):
-            os.makedirs(outdir)
-        return None
-
     def _load_roaster_file(self, args):
         f = h5py.File(args.infile, 'r')
         g = f['Samples/footprint{:d}'.format(args.footprint_number)]

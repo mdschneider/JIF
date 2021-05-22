@@ -224,7 +224,7 @@ class Roaster(object):
                 #           np.sqrt(self.noise_var * 2 * np.pi))
                 # res = -0.5*np.sum(delta / self.noise_var) + lnnorm
         # else:
-        #     print "Invalid parameters"
+        #     print("Invalid parameters")
         return res
 
     def __call__(self, params):
@@ -270,6 +270,31 @@ def init_roaster(args):
 
     return rstr
 
+def run_sampler(args, sampler, p0, nsamples, rstr):
+    nburn = max([1, rstr.config["sampling"]["nburn"]])
+    if args.verbose:
+        print("Burning with {:d} steps".format(nburn))
+    pp, lnp, rstate = sampler.run_mcmc(p0, nburn, progress=True)
+    sampler.reset()
+
+    pps = []
+    lnps = []
+    if args.verbose:
+        print("Sampling")
+        nsample_range = tqdm(range(nsamples))
+    else:
+        nsample_range = range(nsamples)
+    for istep in nsample_range:
+        # if np.mod(istep + 1, 20) == 0:
+        #     if args.verbose:
+        #         print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
+        #             np.mean(lnp)))
+        pp, lnp, rstate = sampler.run_mcmc(pp, 1, log_prob0=lnp, rstate0=rstate)
+        lnprior = np.array([rstr.lnprior(omega) for omega in pp])
+        pps.append(np.column_stack((pp.copy(), lnprior)))
+        lnps.append(lnp.copy())
+    return pps, lnps
+
 def do_sampling(args, rstr, return_samples=False):
     """
     Execute MCMC sampling for posterior model inference
@@ -284,32 +309,14 @@ def do_sampling(args, rstr, return_samples=False):
     p0 = emcee.utils.sample_ball(omega_interim, 
                                  np.ones_like(omega_interim) * 0.01, nwalkers)
 
-    with Pool() as pool:
-        sampler = emcee.EnsembleSampler(nwalkers,
-                                        nvars,
-                                        rstr,
-                                        pool=pool)
-
-        nburn = max([1, rstr.config["sampling"]["nburn"]])
-        if args.verbose:
-            print("Burning with {:d} steps".format(nburn))
-        pp, lnp, rstate = sampler.run_mcmc(p0, nburn, progress=True)
-        sampler.reset()
-
-        pps = []
-        lnps = []
-        if args.verbose:
-            print("Sampling")
-        for istep in tqdm(range(nsamples)):
-            # if np.mod(istep + 1, 20) == 0:
-            #     if args.verbose:
-            #         print("\tStep {:d} / {:d}, lnp: {:5.4g}".format(istep + 1, nsamples,
-            #             np.mean(lnp)))
-            pp, lnp, rstate = sampler.run_mcmc(pp, 1, log_prob0=lnp, rstate0=rstate)
-            lnprior = np.array([rstr.lnprior(omega) for omega in pp])
-            pps.append(np.column_stack((pp.copy(), lnprior)))
-            lnps.append(lnp.copy())
-
+    if args.unparallelize:
+        sampler = emcee.EnsembleSampler(nwalkers, nvars, rstr)
+        pps, lnps = run_sampler(args, sampler, p0, nsamples, rstr)
+    else:
+        with Pool() as pool:
+            sampler = emcee.EnsembleSampler(nwalkers, nvars, rstr, pool=pool)
+            pps, lnps = run_sampler(args, sampler, p0, nsamples, rstr)
+        
     pps, lnps = cluster_walkers(pps, lnps, thresh_multiplier=4)
 
     write_results(args, pps, lnps, rstr)
@@ -324,8 +331,8 @@ def cluster_walkers(pps, lnps, thresh_multiplier=1):
 
     Follows the algorithm of Hou, Goodman, Hogg et al. (2012)
     """
-    print("Clustering emcee walkers with threshold multiplier {:3.2f}".format(
-          thresh_multiplier))
+    # print("Clustering emcee walkers with threshold multiplier {:3.2f}".format(
+    #       thresh_multiplier))
     pps = np.array(pps)
     lnps = np.array(lnps)
     ### lnps.shape == (Nsteps, Nwalkers) => lk.shape == (Nwalkers,)
@@ -394,6 +401,9 @@ def main():
 
     parser.add_argument("--footprint_number", type=int, default=0,
                         help="The footprint number to load from input")
+
+    parser.add_argument("--unparallelize", action='store_true',
+                        help="Disable parallelizing during sampling")
 
     parser.add_argument('--verbose', action='store_true',
                         help="Enable verbose messaging")
