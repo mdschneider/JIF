@@ -9,6 +9,7 @@ __pycache__/
 .Python
 env/
 build/
+devel/
 develop-eggs/
 dist/
 downloads/
@@ -70,20 +71,14 @@ git_tag.tex
 roaster_example.pdf
 .Rproj.user
 *.tar
-devel/sed_atlas/123
 *.Rproj
 .RData
 .Rhistory
 output/psf_bias
 *-checkpoint.ipynb
-devel/blend_fit_test
 update_config.py
-devel/debug_roaster_bias/output
-devel/jiffy_shear_bias/reaper
 update_config*.py
 *~
 *.zip
 whiskers.pdf
 
-# desc_shear
-devel/desc_shear/jiffy_cgc1_*
