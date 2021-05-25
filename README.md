@@ -13,6 +13,7 @@ joint modeling becomes even more acute.
 - Michael Schneider (LLNL)
 - Will Dawson (LLNL)
 - Joshua Meyers (LLNL)
+- Kerianne Pruett (LLNL)
 
 ## Analysis
 
@@ -30,6 +31,10 @@ or
     python setup.py develop
 
 to install while working on the package.
+
+Install all python requirements with,
+
+    pip install env/requirements.txt
 
 ## Tools / dependencies
 
