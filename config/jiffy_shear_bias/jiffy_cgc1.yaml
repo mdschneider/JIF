@@ -1,0 +1,20 @@
+init:
+    init_param_file: /g/g12/pruett6/jiffy_shear_bias/jiffy_cgc1_params.cfg
+    seed: 2935867
+io:
+    filter: r
+    infile: cgc1/control/ground/constant/segments/seg_002.h5
+    outfile: ./cgc1/reaper/JIF/000/roaster_000
+    roaster_outfile: cgc1/reaper/jif/002/roaster_002
+    telescope: LSST
+model:
+    model_class: GalsimGalaxyModel
+    model_params: e1 e2 hlr flux nu dx dy
+    prior_form: Spergel
+    num_sources: 1
+    psf_class: GalsimPSFModel
+sampling:
+    nburn: 300 #450 #500
+    nsamples: 200
+    nthreads: 1
+    nwalkers: 32
