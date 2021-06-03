@@ -8,13 +8,6 @@ and pixel sizes can lead to biases in inferred galaxy properties unless included
 of all images of the same source. If sources are blended together in any observations, the need for
 joint modeling becomes even more acute.
 
-## People
-
-- Michael Schneider (LLNL)
-- Will Dawson (LLNL)
-- Joshua Meyers (LLNL)
-- Kerianne Pruett (LLNL)
-
 ## Analysis
 
 This package embeds [GalSim](https://github.com/GalSim-developers/GalSim) image models of galaxies and stars into a Markov Chain Monte Carlo (MCMC) framework for probabilistic forward modeling of images. The primary module is `jiffy/roaster.py`, which defines the image model likelihood. Most parameters to `roaster` can be specified in configuration files as in `config/jiffy.yaml`. 
@@ -34,7 +27,7 @@ to install while working on the package.
 
 Install all python requirements with,
 
-    pip install env/requirements.txt
+    pip install requirements.txt
 
 ## Tools / dependencies
 
