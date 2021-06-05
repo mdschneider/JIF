@@ -9,6 +9,7 @@ model :
   model_class : GalsimGalaxyModel
   psf_class : GalsimPSFModel  
   model_params : nu hlr e1 e2 flux dx dy
+  prior_form : Empty
   num_sources : 1
 
 init :
