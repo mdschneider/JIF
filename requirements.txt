@@ -7,3 +7,5 @@ scipy
 h5py
 emcee
 corner
+tqdm
+galsim

@@ -1,9 +1,9 @@
 # JIF
-Joint Image Framework (JIF) for probabilistic modeling of astronomical images of stars and galaxies as seen by multiple telescopes.
+Joint Image Framework (JIF) for probabilistic modeling of astronomical images of stars and galaxies in optical wavelengths.
 
 ## Motivation
 
-How do we optimally combine of galaxies seen from space and ground? The different PSFs, wavelength coverage,
+How do we optimally combine images of galaxies seen from space and ground? The different PSFs, wavelength coverage,
 and pixel sizes can lead to biases in inferred galaxy properties unless included in a joint model
 of all images of the same source. If sources are blended together in any observations, the need for
 joint modeling becomes even more acute.
@@ -25,9 +25,11 @@ or
 
 to install while working on the package.
 
-Install all python requirements with,
+Install python requirements available with PIP via,
 
-    pip install requirements.txt
+    pip install -r requirements.txt
+
+In addition, the [footprints](https://github.com/mdschneider/footprints) package is required, which must be cloned from github.
 
 ## Tools / dependencies
 
@@ -56,7 +58,7 @@ The following procedure outlines the steps that can be take to create some test 
 3. Run the roaster on this data:
 
   ```
-  python roaster.py --config_file ../config/jiffy.yaml
+  python -m jiffy.roaster.py --config_file ../config/jiffy.yaml
   ```
   This will create an hdf5 results file `../output/TestData/jiffy_roaster_out_seg0.h5`.
 4. Inspect the data with `RoasterInspector`. 
@@ -64,4 +66,4 @@ The following procedure outlines the steps that can be take to create some test 
   ```
   python roaster_inspector.py ../output/TestData/jiffy_roaster_out_seg0.h5 ../config/jiffy.yaml
   ```
-  This will print summary statistics and make some plots.
+  This will print summary statistics and make some plots in `output/TestData`.
