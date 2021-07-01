@@ -228,7 +228,7 @@ class Roaster(object):
         return res
 
     def __call__(self, params):
-        return self.lnlike(params)
+        return self.lnlike(params) + self.lnprior(params)
 
 
 class EmptyPrior(object):
