@@ -53,11 +53,11 @@ class DefaultPriorSpergel(object):
         lnp = 0.0
         ### 'nu' parameter - peaked at exponential and de Vacouleur profile values
         omega = np.rec.array([tuple(omega)], 
-                             dtype=[('nu', '<f8'),
-                                    ('hlr', '<f8'),
-                                    ('e1', '<f8'),
+                             dtype=[('e1', '<f8'),
                                     ('e2', '<f8'),
+                                    ('hlr', '<f8'),
                                     ('flux', '<f8'),
+                                    ('nu', '<f8'),
                                     ('dx', '<f8'),
                                     ('dy', '<f8')])
         # print(omega)
