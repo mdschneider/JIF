@@ -30,7 +30,7 @@ import jiffy
 
 def ln_gaus(xval, ln_amp, x_mean, sigma):
     """
-    Evaluate the log a Gaussian density function (unnormalized)
+    Evaluate the log of a Gaussian density function (unnormalized)
     """
     return ln_amp - 0.5 * (xval - x_mean)**2 / sigma**2
 
@@ -55,11 +55,11 @@ class TestRoaster(unittest.TestCase):
         """ Check that all values in the Roaster init method are unchanged
         """
         rstr = jiffy.Roaster("test.yaml")
-        self.assertEquals(len(rstr.src_models), 1)
-        self.assertEquals(rstr.src_models[0].__class__.__name__,
+        self.assertEqual(len(rstr.src_models), 1)
+        self.assertEqual(rstr.src_models[0].__class__.__name__,
                           "GalsimGalaxyModel")
-        self.assertEquals(rstr.ngrid_x, 64)
-        self.assertEquals(rstr.ngrid_y, 64)
+        self.assertEqual(rstr.ngrid_x, 64)
+        self.assertEqual(rstr.ngrid_y, 64)
         self.assertAlmostEqual(rstr.noise_var, 3e-10)
 
     def test_make_data(self):
