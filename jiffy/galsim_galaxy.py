@@ -35,7 +35,7 @@ from jiffy import galsim_psf
 
 
 K_PARAM_BOUNDS = {
-    "nu": [-0.5, 0.6],
+    "nu": [-0.8, 0.8],
     "hlr": [0.01, 6.0],
     "e1": [-0.7, 0.7],
     "e2": [-0.7, 0.7],
@@ -212,22 +212,26 @@ class GalsimGalaxyModel(object):
         
         #import time
 
-        try:
-            # start_t = time.time()
-            if image is not None:
-                # print(image)
-                model = obj.drawImage(image=image, gain=gain,
-                                      add_to_image=True)
-            else:
-                model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
-                                      gain=gain)
-        except galsim.GalSimFFTSizeError:
-            print("Trying to make an image that's too big.")
-            # print(self.get_params())
+        N = obj.getGoodImageSize(scale)
+        if N > 2048:
             model = None
-        # finally:
-            # end_t = time.time() - start_t
-            # print("Time: ", end_t)
+        else: 
+            try:
+                # start_t = time.time()
+                if image is not None:
+                    # print(image)
+                    model = obj.drawImage(image=image, gain=gain,
+                                          add_to_image=True)
+                else:
+                    model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
+                                          gain=gain)
+            except galsim.GalSimFFTSizeError:
+                print("Trying to make an image that's too big.")
+                # print(self.get_params())
+                model = None
+            # finally:
+                # end_t = time.time() - start_t
+                # print("Time: ", end_t)
         return model
 
 
