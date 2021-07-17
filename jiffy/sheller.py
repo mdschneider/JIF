@@ -130,7 +130,7 @@ def create_segments(subfield_index=0, experiment="control",
 
     ### Collect input image filenames for all epochs.
     ### FIXME: Get correct 'experiment' names here
-    if experiment in ["control", "real_galaxy", "variable_PSF"]:
+    if experiment in ["control", "real",  "real_galaxy", "variable_PSF"]:
         nepochs = 1
     else:
         nepochs = 6

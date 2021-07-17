@@ -45,7 +45,8 @@ class Roaster(object):
     def __init__(self, config="../config/jiffy.yaml", prior_form=None):
         if isinstance(config, str):
             import yaml
-            config = yaml.safe_load(open(config))
+            with open(config, 'r') as f:
+                config = yaml.safe_load(f)
         self.config = config
 
         if prior_form is None:
