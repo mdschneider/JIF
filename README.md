@@ -43,26 +43,24 @@ In addition, the [footprints](https://github.com/mdschneider/footprints) package
 The following procedure outlines the steps that can be take to create some test data with `galasim_galaxy`, analyze it with `Roaster`, and inspect the results with `RoasterInspector`. This example does not require installation via `setup.py`.
 
 1. Create the directory structure (if not already in place). cd to the parent repository directory (i.e. the one containing jif).
-
   ```
   mkdir -p data/TestData
   mkdir -p output/TestData
   ```
 2. Generate the test data with GalSim:
-
   ```
   cd jiffy
   python galsim_galaxy.py
   ```
   This will make the file `test_image_data.h5` in data/TestData
+  
 3. Run the roaster on this data:
-
   ```
   jiffy_roaster --config_file ../config/jiffy.yaml
   ```
   This will create an hdf5 results file `../output/TestData/jiffy_roaster_out_seg0.h5`.
+  
 4. Inspect the data with `RoasterInspector`. 
-
   ```
   jiffy_roaster_inspector ../output/TestData/jiffy_roaster_out_seg0.h5 ../config/jiffy.yaml
   ```
