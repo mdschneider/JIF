@@ -275,7 +275,7 @@ def run_sampler(args, sampler, p0, nsamples, rstr):
     nburn = max([1, rstr.config["sampling"]["nburn"]])
     if args.verbose:
         print("Burning with {:d} steps".format(nburn))
-    pp, lnp, rstate = sampler.run_mcmc(p0, nburn, progress=True)
+    pp, lnp, rstate = sampler.run_mcmc(p0, nburn, progress=args.verbose)
     sampler.reset()
 
     pps = []
