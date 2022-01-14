@@ -101,19 +101,17 @@ class RoasterInspector(object):
         return None
 
     def report(self):
-        if self.verbose:
-            print("\n")
-            for i, p in enumerate(self.paramnames):
-                print("%s = %4.3g +/- %4.3g" % (p, 
-                    np.mean(self.data[-self.args.keeplast:, :, i]),
-                    np.std(self.data[:, :, i])))
-            print("\n")
+        print("\n")
+        for i, p in enumerate(self.paramnames):
+            print("%s = %4.3g +/- %4.3g" % (p, 
+                np.mean(self.data[-self.args.keeplast:, :, i]),
+                np.std(self.data[:, :, i])))
+        print("\n")
         n = self.data.shape[2]
         rhat = gelman_rubin(self.data[:,:,0:(n-1)])
-        if self.verbose:
-            print(rhat)
-            print("Gelman-Rubin statistic: {:4.3f}".format(rhat[0]))
-            print("\n")
+        print(rhat)
+        print("Gelman-Rubin statistic: {:4.3f}".format(rhat[0]))
+        print("\n")
 
     def _get_opt_params(self):
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
@@ -309,7 +307,8 @@ def main():
 
     inspector = RoasterInspector(args)
     inspector.summary()
-    inspector.report()
+    if self.verbose:
+        inspector.report()
     # inspector.save_param_cov()
     inspector.plot()
     inspector.plot_data_and_model()
