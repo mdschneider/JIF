@@ -93,26 +93,23 @@ class RoasterInspector(object):
         return os.path.splitext(self.infile)[0]
 
     def summary(self):
-        if self.verbose:
-            print(self.__str__())
-           # print "Roaster input file: ", self.roaster_infile
-            print("data: ", self.data.shape)
-            print("paramnames:", self.paramnames.shape, "\n", self.paramnames)
+        print(self.__str__())
+       # print "Roaster input file: ", self.roaster_infile
+        print("data: ", self.data.shape)
+        print("paramnames:", self.paramnames.shape, "\n", self.paramnames)
         return None
 
     def report(self):
-        if self.verbose:
-            print("\n")
-            for i, p in enumerate(self.paramnames):
-                print("%s = %4.3g +/- %4.3g" % (p, 
-                    np.mean(self.data[-self.args.keeplast:, :, i]),
-                    np.std(self.data[-self.args.keeplast:, :, i])))
-            print("\n")
+        print("\n")
+        for i, p in enumerate(self.paramnames):
+            print("%s = %4.3g +/- %4.3g" % (p, 
+                np.mean(self.data[-self.args.keeplast:, :, i]),
+                np.std(self.data[-self.args.keeplast:, :, i])))
+        print("\n")
         rhat = gelman_rubin(self.data[:,:,:-1])
-        if self.verbose:
-            print(rhat)
-            print("Gelman-Rubin statistic: {:4.3f}".format(rhat[0]))
-            print("\n")
+        print(rhat)
+        print("Gelman-Rubin statistic: {:4.3f}".format(rhat[0]))
+        print("\n")
 
     def _get_opt_params(self):
         ndx = np.argmax(self.logprob[-self.args.keeplast:,...])
@@ -307,8 +304,9 @@ def main():
     args = parser.parse_args()
 
     inspector = RoasterInspector(args)
-    inspector.summary()
-    inspector.report()
+    if args.verbose:
+        inspector.summary()
+        inspector.report()
     # inspector.save_param_cov()
     inspector.plot()
     inspector.plot_data_and_model()

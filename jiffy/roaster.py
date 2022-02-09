@@ -115,7 +115,7 @@ class Roaster(object):
                     self.src_models[isrc].set_param_by_name(paramname, v)
             else:
                 raise ValueError("If passing list, must have length num_sources")
-        elif isinstance(value, float):
+        elif np.issubdtype(value, np.floating):
             for isrc in range(self.num_sources):
                 self.src_models[isrc].set_param_by_name(paramname, value)
         else:
@@ -263,7 +263,7 @@ def init_roaster(args):
     rstr = Roaster(config, prior_form=prior_form)
 
     dat, noise_var, scale, gain = footprints.load_image(config["io"]["infile"],
-        segment=args.footprint_number)
+        segment=args.footprint_number, filter_name=config["io"]["filter"])
 
     rstr.import_data(dat, noise_var, scale=scale, gain=gain)
 
@@ -275,7 +275,7 @@ def run_sampler(args, sampler, p0, nsamples, rstr):
     nburn = max([1, rstr.config["sampling"]["nburn"]])
     if args.verbose:
         print("Burning with {:d} steps".format(nburn))
-    pp, lnp, rstate = sampler.run_mcmc(p0, nburn, progress=True)
+    pp, lnp, rstate = sampler.run_mcmc(p0, nburn, progress=args.verbose)
     sampler.reset()
 
     pps = []
