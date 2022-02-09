@@ -115,7 +115,7 @@ class Roaster(object):
                     self.src_models[isrc].set_param_by_name(paramname, v)
             else:
                 raise ValueError("If passing list, must have length num_sources")
-        elif isinstance(value, float):
+        elif np.issubdtype(value, np.floating):
             for isrc in range(self.num_sources):
                 self.src_models[isrc].set_param_by_name(paramname, value)
         else:
