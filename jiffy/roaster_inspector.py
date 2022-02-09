@@ -104,10 +104,9 @@ class RoasterInspector(object):
         for i, p in enumerate(self.paramnames):
             print("%s = %4.3g +/- %4.3g" % (p, 
                 np.mean(self.data[-self.args.keeplast:, :, i]),
-                np.std(self.data[:, :, i])))
+                np.std(self.data[-self.args.keeplast:, :, i])))
         print("\n")
-        n = self.data.shape[2]
-        rhat = gelman_rubin(self.data[:,:,0:(n-1)])
+        rhat = gelman_rubin(self.data[:,:,:-1])
         print(rhat)
         print("Gelman-Rubin statistic: {:4.3f}".format(rhat[0]))
         print("\n")
