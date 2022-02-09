@@ -263,7 +263,7 @@ def init_roaster(args):
     rstr = Roaster(config, prior_form=prior_form)
 
     dat, noise_var, scale, gain = footprints.load_image(config["io"]["infile"],
-        segment=args.footprint_number)
+        segment=args.footprint_number, filter_name=config["io"]["filter"])
 
     rstr.import_data(dat, noise_var, scale=scale, gain=gain)
 
