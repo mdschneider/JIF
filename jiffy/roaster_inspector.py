@@ -72,18 +72,18 @@ class RoasterInspector(object):
         self._load_roaster_input_data()
 
     def _load_roaster_file(self, args):
-        f = h5py.File(args.infile, 'r')
-        g = f['Samples/footprint{:d}'.format(args.footprint_number)]
-        self.infile = args.infile
+        with h5py.File(args.infile, 'r') as f:
+            g = f['Samples/footprint{:d}'.format(args.footprint_number)]
+            self.infile = args.infile
 
-        self.paramnames = g['post'].attrs['paramnames']
-        if len(self.paramnames.shape) > 1:
-            self.paramnames = np.array(self.paramnames).ravel()
+            self.paramnames = g['post'].attrs['paramnames']
+            if len(self.paramnames.shape) > 1:
+                self.paramnames = np.array(self.paramnames).ravel()
 
-        self.nparams = len(self.paramnames)
-        self.data = g['post'][...]
-        self.logprob = g['logprobs'][...]
-        f.close()
+            self.nparams = len(self.paramnames)
+            self.data = g['post'][...]
+            self.logprob = g['logprobs'][...]
+        
         return None
 
     def __str__(self):
