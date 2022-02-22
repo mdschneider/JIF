@@ -175,6 +175,20 @@ class Roaster(object):
                 fval = float(val)
             self.set_param_by_name(paramname, fval)
         return None
+    
+    def initialize_from_image(self):
+        image = galsim.Image(self.data)
+        
+        self.set_param_by_name('flux', image.array.sum())
+        
+        moments = image.FindAdaptiveMom()
+        self.set_param_by_name('e1', moments.observed_shape.e1)
+        self.set_param_by_name('e2', moments.observed_shape.e2)
+        self.set_param_by_name('hlr', moments.moments_sigma * self.scale)
+        self.set_param_by_name('dx', moments.moments_centroid.x - image.true_center.x)
+        self.set_param_by_name('dy', moments.moments_centroid.y - image.true_center.y)
+        
+        return None
 
     def _get_model_image(self, real_galaxy_catalog=None):
         model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
@@ -268,6 +282,8 @@ def init_roaster(args):
     rstr.import_data(dat, noise_var, scale=scale, gain=gain)
 
     rstr.initialize_param_values(config["init"]["init_param_file"])
+    if args.initialize_from_image:
+        rstr.initialize_from_image()
 
     return rstr
 
@@ -408,6 +424,9 @@ def main():
 
     parser.add_argument('--verbose', action='store_true',
                         help="Enable verbose messaging")
+    
+    parser.add_argument('--initialize_from_image', action='store_true',
+                        help="Use image characteristics to set initial parameter values. So far only tested on centered, isolated galaxies.")
 
     args = parser.parse_args()
 
