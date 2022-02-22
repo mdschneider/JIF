@@ -333,8 +333,10 @@ def do_sampling(args, rstr, return_samples=False):
         with Pool() as pool:
             sampler = emcee.EnsembleSampler(nwalkers, nvars, rstr, pool=pool)
             pps, lnps = run_sampler(args, sampler, p0, nsamples, rstr)
-        
-    pps, lnps = cluster_walkers(pps, lnps, thresh_multiplier=4)
+    
+    if args.cluster_walkers:
+        pps, lnps = cluster_walkers(pps, lnps,
+            thresh_multiplier=args.cluster_walkers_thresh)
 
     write_results(args, pps, lnps, rstr)
     if return_samples:
@@ -427,6 +429,15 @@ def main():
     
     parser.add_argument('--initialize_from_image', action='store_true',
                         help="Use image characteristics to set initial parameter values. So far only tested on centered, isolated galaxies.")
+    
+    parser.add_argument('--cluster_walkers', action='store_true',
+                        help="Throw away outlier walkers.")
+    
+    parser.add_argument('--cluster_walkers_thresh', type=float, default=4,
+                        help="Threshold multiplier for throwing away walkers.")
+    
+    
+    parser.add_argument()
 
     args = parser.parse_args()
 
