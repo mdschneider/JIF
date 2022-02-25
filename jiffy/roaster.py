@@ -109,12 +109,15 @@ class Roaster(object):
         Can pass a single value that will be set for all source models, or a
         list of length num_sources with unique values for each source.
         """
-        if isinstance(value, list):
+        if hasattr(value, '__len__'):
             if len(value) == self.num_sources:
                 for isrc, v in enumerate(value):
-                    self.src_models[isrc].set_param_by_name(paramname, v)
+                    if np.issubdtype(type(v), np.floating):
+                        self.src_models[isrc].set_param_by_name(paramname, v)
+                    else:
+                        raise ValueError("If passing iterable, each entry must be a number")
             else:
-                raise ValueError("If passing list, must have length num_sources")
+                raise ValueError("If passing iterable, must have length num_sources")
         elif np.issubdtype(type(value), np.floating):
             for isrc in range(self.num_sources):
                 self.src_models[isrc].set_param_by_name(paramname, value)
