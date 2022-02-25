@@ -180,14 +180,14 @@ class Roaster(object):
         return None
     
     def initialize_from_image(self):
-        image = galsim.Image(self.data)
+        image = galsim.Image(self.data, scale=self.scale)
         
         self.set_param_by_name('flux', image.array.sum())
         
         moments = image.FindAdaptiveMom()
         self.set_param_by_name('e1', moments.observed_shape.e1)
         self.set_param_by_name('e2', moments.observed_shape.e2)
-        self.set_param_by_name('hlr', moments.moments_sigma * self.scale)
+        self.set_param_by_name('hlr', moments.moments_sigma)
         self.set_param_by_name('dx', moments.moments_centroid.x - image.true_center.x)
         self.set_param_by_name('dy', moments.moments_centroid.y - image.true_center.y)
         
