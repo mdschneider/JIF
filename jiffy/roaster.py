@@ -179,20 +179,46 @@ class Roaster(object):
             self.set_param_by_name(paramname, fval)
         return None
     
-    def initialize_from_image(self):
+    def initialize_from_image(self, args):
         image = galsim.ImageF(self.data)
         
-        self.set_param_by_name('flux', image.array.sum())
+        flux = image.array.sum()
+        if flux < jiffy.galsim_galaxy.K_PARAM_BOUNDS['flux'][0]:
+            if args.verbose:
+                print('Flux initialization from image failed - Total image flux too small')
+        elif flux > jiffy.galsim_galaxy.K_PARAM_BOUNDS['flux'][1]:
+            if args.verbose:
+                print('Flux initialization from image failed - Total image flux too small')
+        else:
+            self.set_param_by_name('flux', flux)
         
-        moments = image.FindAdaptiveMom()
-        self.set_param_by_name('e1', moments.observed_shape.e1)
-        self.set_param_by_name('e2', moments.observed_shape.e2)
-        # FindAdaptiveMom() returns sigma and centroid in units of pixels,
-        # but the image model expects these to be in units of arc.
-        self.set_param_by_name('hlr', moments.moments_sigma * self.scale)
-        self.set_param_by_name('dx', (moments.moments_centroid.x - image.true_center.x) * self.scale)
-        self.set_param_by_name('dy', (moments.moments_centroid.y - image.true_center.y) * self.scale)
-        
+        try:
+            moments = image.FindAdaptiveMom()
+        except galsim.hsm.GalSimHSMError:
+            if args.verbose:
+                print('HSM initialzation failed.')
+            return None
+
+        params = {'e1': moments.observed_shape.e1,
+                'e2': moments.observed_shape.e2,
+                # FindAdaptiveMom() returns sigma and centroid in units of pixels,
+                # but the image model expects these to be in units of arc.
+                'hlr': moments.moments_sigma * self.scale,
+                'dx': (moments.moments_centroid.x - image.true_center.x) * self.scale,
+                'dy': (moments.moments_centroid.y - image.true_center.y) * self.scale}
+        for paramname, paramvalue in params.items():
+            if paramvalue < jiffy.galsim_galaxy.K_PARAM_BOUNDS[paramname][0]:
+                if args.verbose:
+                    print('HSM estimate for', paramname, 'too small.')
+                    print('Setting to lowest admissible value.')
+                paramvalue = jiffy.galsim_galaxy.K_PARAM_BOUNDS[paramname][0]
+            elif paramvalue > jiffy.galsim_galaxy.K_PARAM_BOUNDS[paramname][1]:
+                if args.verbose:
+                    print('HSM estimate for', paramname, 'too large.')
+                    print('Setting to highest admissible value.')
+                paramvalue = jiffy.galsim_galaxy.K_PARAM_BOUNDS[paramname][1]
+            self.set_param_by_name(paramname, paramvalue)
+
         return None
 
     def _get_model_image(self, real_galaxy_catalog=None):
@@ -288,7 +314,7 @@ def init_roaster(args):
 
     rstr.initialize_param_values(config["init"]["init_param_file"])
     if args.initialize_from_image:
-        rstr.initialize_from_image()
+        rstr.initialize_from_image(args)
 
     return rstr
 
