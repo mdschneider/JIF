@@ -185,10 +185,10 @@ class Roaster(object):
         flux = image.array.sum()
         if flux < jiffy.galsim_galaxy.K_PARAM_BOUNDS['flux'][0]:
             if args.verbose:
-                print('Flux initialization from image failed - Total image flux too small')
+                print('Flux initialization from image failed - Total image flux too small.')
         elif flux > jiffy.galsim_galaxy.K_PARAM_BOUNDS['flux'][1]:
             if args.verbose:
-                print('Flux initialization from image failed - Total image flux too small')
+                print('Flux initialization from image failed - Total image flux too large.')
         else:
             self.set_param_by_name('flux', flux)
         
@@ -196,7 +196,7 @@ class Roaster(object):
             moments = image.FindAdaptiveMom()
         except galsim.hsm.GalSimHSMError:
             if args.verbose:
-                print('HSM initialzation failed.')
+                print('HSM initialization failed.')
             return None
 
         params = {'e1': moments.observed_shape.e1,
