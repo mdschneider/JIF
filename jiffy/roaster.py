@@ -248,7 +248,7 @@ class Roaster(object):
 
     def _set_like_lnnorm(self):
         return (- 0.5 * self.ngrid_x * self.ngrid_y *
-                np.sqrt(self.noise_var * 2 * np.pi))
+                np.log(self.noise_var * 2 * np.pi))
 
     def lnlike(self, params):
         """
