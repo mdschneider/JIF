@@ -80,6 +80,8 @@ class Roaster(object):
         self.scale = 0.2
         self.gain = 1.0
         self.data = None
+        self.mask = None
+        self.bkg = None
         self.lnnorm = self._set_like_lnnorm()
 
     def get_params(self):
@@ -146,13 +148,15 @@ class Roaster(object):
         """
         return self.make_data()
 
-    def import_data(self, pix_dat_array, noise_var, scale=0.2, gain=1.0):
+    def import_data(self, pix_dat_array, noise_var, mask=1, bkg=0, scale=0.2, gain=1.0):
         """
         Import the pixel data and noise variance for a footprint
         """
         self.ngrid_y, self.ngrid_x = pix_dat_array.shape
         self.data = pix_dat_array
         self.noise_var = noise_var
+        self.mask = mask
+        self.bkg = bkg
         self.scale = scale
         self.gain = gain
         self.lnnorm = self._set_like_lnnorm()
@@ -247,7 +251,13 @@ class Roaster(object):
         return self.prior_form(params)
 
     def _set_like_lnnorm(self):
-        return (- 0.5 * self.ngrid_x * self.ngrid_y *
+        npix = self.ngrid_x * self.ngrid_y
+        if np.issubdtype(type(self.mask), np.floating):
+            npix *= self.mask
+        elif issubclass(type(self.mask), np.ndarray):
+            npix = np.sum(self.mask)
+        
+        return (- 0.5 * npix *
                 np.log(self.noise_var * 2 * np.pi))
 
     def lnlike(self, params):
@@ -261,7 +271,10 @@ class Roaster(object):
             if model is None:
                 res = -np.inf
             else:
-                delta_arr = (model.array - self.data).ravel()
+                delta = model.array - self.data
+                if self.mask is not None:
+                    delta *= self.mask
+                delta_arr = delta.ravel()
                 delta_sq = np.inner(delta_arr, delta_arr)
                 res = -0.5 * delta_sq / self.noise_var + self.lnnorm
                 #
@@ -307,10 +320,10 @@ def init_roaster(args):
 
     rstr = Roaster(config, prior_form=prior_form)
 
-    dat, noise_var, scale, gain = footprints.load_image(config["io"]["infile"],
+    dat, noise_var, mask, bkg, scale, gain = footprints.load_image(config["io"]["infile"],
         segment=args.footprint_number, filter_name=config["io"]["filter"])
 
-    rstr.import_data(dat, noise_var, scale=scale, gain=gain)
+    rstr.import_data(dat, noise_var, mask=mask, bkg=bkg, scale=scale, gain=gain)
 
     rstr.initialize_param_values(config["init"]["init_param_file"])
     if args.initialize_from_image:

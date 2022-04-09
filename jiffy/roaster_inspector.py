@@ -128,12 +128,12 @@ class RoasterInspector(object):
         self.roaster.initialize_param_values(self.config["init"]["init_param_file"])
         self.params_ref = self.roaster.get_params()
 
-        dat, noise_var, scale, gain = footprints.load_image(self.config["io"]["infile"],
+        dat, noise_var, mask, bkg, scale, gain = footprints.load_image(self.config["io"]["infile"],
             telescope=self.config["io"]["telescope"],
             filter_name=self.config["io"]["filter"],
             segment=self.args.footprint_number)
 
-        self.roaster.import_data(dat, float(noise_var), scale=scale, gain=gain)
+        self.roaster.import_data(dat, float(noise_var), mask, bkg, scale=scale, gain=gain)
 
     #     self.roaster.Load(self.config["infiles"]["infile_1"],
     #                       segment=self.args.segment_number,
