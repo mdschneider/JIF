@@ -137,7 +137,10 @@ class Roaster(object):
         """
         image = self._get_model_image(real_galaxy_catalog=real_galaxy_catalog)
         if noise is None:
-            noise = galsim.GaussianNoise(sigma=np.sqrt(self.noise_var))
+            if np.issubdtype(type(self.noise_var), np.floating):
+                noise = galsim.GaussianNoise(sigma=np.sqrt(self.noise_var))
+            elif issubclass(type(self.noise_var), np.ndarray):
+                noise = galsim.VariableGaussianNoise(rng=None, var_image=self.noise_var)
         image.addNoise(noise)
         self.data = image.array
         return image
@@ -251,14 +254,24 @@ class Roaster(object):
         return self.prior_form(params)
 
     def _set_like_lnnorm(self):
-        npix = self.ngrid_x * self.ngrid_y
-        if np.issubdtype(type(self.mask), np.floating):
-            npix *= self.mask
-        elif issubclass(type(self.mask), np.ndarray):
-            npix = np.sum(self.mask)
-        
-        return (- 0.5 * npix *
-                np.log(self.noise_var * 2 * np.pi))
+        logden = -0.5 * np.log(self.noise_var * 2 * np.pi)
+
+        lnnorm = None
+        if np.issubdtype(type(self.noise_var), np.number):
+            if self.mask is None:
+                npix = self.ngrid_x * self.ngrid_y
+            elif np.issubdtype(type(self.mask), np.number):
+                npix = self.ngrid_x * self.ngrid_y * mask
+            else:
+                npix = np.sum(self.mask)
+            lnnorm = npix * logden
+        else:
+            if self.mask is None:
+                lnnorm = np.sum(logden)
+            else:
+                lnnorm = np.sum(logden * self.mask)
+
+        return lnnorm
 
     def lnlike(self, params):
         """
@@ -268,20 +281,12 @@ class Roaster(object):
         valid_params = self.set_params(params)
         if valid_params:
             model = self._get_model_image()
-            if model is None:
-                res = -np.inf
-            else:
+            if model is not None:
                 delta = model.array - self.data
                 if self.mask is not None:
                     delta *= self.mask
-                delta_arr = delta.ravel()
-                delta_sq = np.inner(delta_arr, delta_arr)
-                res = -0.5 * delta_sq / self.noise_var + self.lnnorm
-                #
-                # delta = (model.array - self.data)**2
-                # lnnorm = (- 0.5 * self.ngrid_x * self.ngrid_y *
-                #           np.sqrt(self.noise_var * 2 * np.pi))
-                # res = -0.5*np.sum(delta / self.noise_var) + lnnorm
+                sum_chi_sq = np.sum(delta**2 / self.noise_var)
+                res = -0.5 * sum_chi_sq + self.lnnorm
         # else:
         #     print("Invalid parameters")
         return res

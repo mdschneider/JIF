@@ -133,7 +133,7 @@ class RoasterInspector(object):
             filter_name=self.config["io"]["filter"],
             segment=self.args.footprint_number)
 
-        self.roaster.import_data(dat, float(noise_var), mask, bkg, scale=scale, gain=gain)
+        self.roaster.import_data(dat, noise_var, mask, bkg, scale=scale, gain=gain)
 
     #     self.roaster.Load(self.config["infiles"]["infile_1"],
     #                       segment=self.args.segment_number,
