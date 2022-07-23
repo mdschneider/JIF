@@ -1,8 +1,55 @@
 import numpy as np
+from jiffy.galsim_galaxy import K_PARAM_BOUNDS
 
 # ---------------------------------------------------------------------------------------
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------
+class IsolatedFootprintPrior(object):
+    def __init__(self):
+        self.scale = 0.2 # arcsec per pixel
+
+        # Mean and inverse covariance matrix of log-hlr (in log-pixels)
+        # and log-flux (in log-inst flux)
+        self.mean_hlrflux = np.array([-0.73449379,  0.66477136])
+        self.inv_cov_hlrflux = np.array([[ 3.2714894 , -1.15197307],
+                                         [-1.15197307,  1.68133763]])
+        self.lognorm_hlrflux = 0.5*np.log(np.linalg.det(2*np.pi * self.inv_cov_hlrflux))
+
+        self.mean_e = 0
+        # Laplace distribution parameter for e1,e2
+        self.laplace_width_e = 0.20539633515040584
+        self.lognorm_e = -np.log(2*self.laplace_width_e)
+
+        self.mean_dxdy = 0
+        # Variance of dx,dy, in pixels
+        self.gauss_var_dxdy = 0.5867927590344775
+        self.lognorm_dxdy = -0.5*np.log(2*np.pi * self.gauss_var_dxdy)
+
+        self.lognorm_nu = -np.log(K_PARAM_BOUNDS['nu'][1] - K_PARAM_BOUNDS['nu'][0])
+
+    def __call__(self, params):
+        e1, e2, hlr, flux, nu, dx, dy = tuple(params)
+        # The prior parameters correspond to pixel distances, not arcsec
+        hlr, dx, dy = hlr/self.scale, dx/self.scale, dy/self.scale
+
+        # 2D Gaussian prior for log-hlr, log-flux
+        hlrflux = np.log(np.array([hlr, flux])) - self.mean_hlrflux
+        lnprior_hlrflux = self.lognorm_hlrflux - 0.5*np.dot(hlrflux, np.matmul(self.inv_cov_hlrflux, hlrflux))
+
+        # Laplace priors for e1, e2 with the same width
+        lnprior_e1 = self.lognorm_e - np.abs(e1 - self.mean_e) / self.laplace_width_e
+        lnprior_e2 = self.lognorm_e - np.abs(e2 - self.mean_e) / self.laplace_width_e
+
+        # 1D Gaussian priors for dx, dy with the same width
+        lnprior_dx = self.lognorm_dxdy - 0.5*(dx - self.mean_dxdy)**2 / self.gauss_var_dxdy
+        lnprior_dy = self.lognorm_dxdy - 0.5*(dy - self.mean_dxdy)**2 / self.gauss_var_dxdy
+
+        # Flat prior for nu
+        lnprior_nu = self.lognorm_nu
+
+        lnprior = lnprior_hlrflux + lnprior_e1 + lnprior_e2 + lnprior_dx + lnprior_dy + lnprior_nu
+        return lnprior
+
 class DefaultPriorSpergel(object):
     """
     A default prior for a single-component Spergel galaxy

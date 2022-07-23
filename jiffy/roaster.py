@@ -256,8 +256,15 @@ class Roaster(object):
     def _set_like_lnnorm(self):
         logden = -0.5 * np.log(self.noise_var * 2 * np.pi)
 
-        lnnorm = None
-        if np.issubdtype(type(self.noise_var), np.number):
+        if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
+            # Per-pixel variance plane
+            # Ignore pixels with zero variance - we don't have a good model for those
+            valid_pixels = self.noise_var != 0
+            if self.mask is not None:
+                valid_pixels &= self.mask.astype(bool)
+            lnnorm = np.sum(logden[valid_pixels])
+        else:
+            # Constant variance over the whole image
             if self.mask is None:
                 npix = self.ngrid_x * self.ngrid_y
             elif np.issubdtype(type(self.mask), np.number):
@@ -265,13 +272,8 @@ class Roaster(object):
             else:
                 npix = np.sum(self.mask)
             lnnorm = npix * logden
-        else:
-            if self.mask is None:
-                lnnorm = np.sum(logden)
-            else:
-                lnnorm = np.sum(logden * self.mask)
 
-        return lnnorm
+        return float(lnnorm)
 
     def lnlike(self, params):
         """
@@ -282,14 +284,26 @@ class Roaster(object):
         if valid_params:
             model = self._get_model_image()
             if model is not None:
+                # Compute log-likelihood assuming independent Gaussian-distributed noise in each pixel
                 delta = model.array - self.data
-                if self.mask is not None:
-                    delta *= self.mask
-                sum_chi_sq = np.sum(delta**2 / self.noise_var)
+                if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
+                    # Per-pixel variance plane
+                    # Ignore pixels with zero variance - we don't have a good model for those
+                    valid_pixels = self.noise_var != 0
+                    if self.mask is None:
+                        sum_chi_sq = np.sum(delta[valid_pixels]**2 / self.noise_var[valid_pixels])
+                    else:
+                        valid_pixels &= self.mask.astype(bool)
+                        sum_chi_sq = np.sum(delta[valid_pixels]**2 / (self.noise_var[valid_pixels]))
+                else:
+                    # Constant variance over the whole image
+                    if self.mask is None:
+                        sum_chi_sq = np.sum(delta**2) / self.noise_var
+                    else:
+                        sum_chi_sq = np.sum(delta[self.mask.astype(bool)]**2) / self.noise_var
                 res = -0.5 * sum_chi_sq + self.lnnorm
-        # else:
-        #     print("Invalid parameters")
-        return res
+
+        return float(res)
 
     def __call__(self, params):
         return self.lnlike(params) + self.lnprior(params)
@@ -320,7 +334,7 @@ def init_roaster(args):
 
     prior_form = {
         "Empty": EmptyPrior(),
-        "Spergel": priors.DefaultPriorSpergel()
+        "IsolatedFootprintPrior": priors.IsolatedFootprintPrior()
     }[config["model"]["prior_form"]]
 
     rstr = Roaster(config, prior_form=prior_form)
