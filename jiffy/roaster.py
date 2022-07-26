@@ -254,7 +254,7 @@ class Roaster(object):
         return self.prior_form(params)
 
     def _set_like_lnnorm(self):
-        logden = -0.5 * np.log(self.noise_var * 2 * np.pi)
+        logden = -0.5*np.log(2*np.pi * self.noise_var)
 
         if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
             # Per-pixel variance plane
@@ -280,33 +280,39 @@ class Roaster(object):
         Evaluate the log-likelihood of the pixel data in a footprint
         """
         res = -np.inf
-        valid_params = self.set_params(params)
-        if valid_params:
-            model = self._get_model_image()
-            if model is not None:
-                # Compute log-likelihood assuming independent Gaussian-distributed noise in each pixel
-                delta = model.array - self.data
-                if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
-                    # Per-pixel variance plane
-                    # Ignore pixels with zero variance - we don't have a good model for those
-                    valid_pixels = self.noise_var != 0
-                    if self.mask is None:
-                        sum_chi_sq = np.sum(delta[valid_pixels]**2 / self.noise_var[valid_pixels])
-                    else:
-                        valid_pixels &= self.mask.astype(bool)
-                        sum_chi_sq = np.sum(delta[valid_pixels]**2 / (self.noise_var[valid_pixels]))
+
+        model = self._get_model_image()
+        if model is not None:
+            # Compute log-likelihood assuming independent Gaussian-distributed noise in each pixel
+            delta = model.array - self.data
+            if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
+                # Per-pixel variance plane
+                # Ignore pixels with zero variance - we don't have a good model for those
+                valid_pixels = self.noise_var != 0
+                if self.mask is None:
+                    sum_chi_sq = np.sum(delta[valid_pixels]**2 / self.noise_var[valid_pixels])
                 else:
-                    # Constant variance over the whole image
-                    if self.mask is None:
-                        sum_chi_sq = np.sum(delta**2) / self.noise_var
-                    else:
-                        sum_chi_sq = np.sum(delta[self.mask.astype(bool)]**2) / self.noise_var
-                res = -0.5 * sum_chi_sq + self.lnnorm
+                    valid_pixels &= self.mask.astype(bool)
+                    sum_chi_sq = np.sum(delta[valid_pixels]**2 / (self.noise_var[valid_pixels]))
+            else:
+                # Constant variance over the whole image
+                if self.mask is None:
+                    sum_chi_sq = np.sum(delta**2) / self.noise_var
+                else:
+                    sum_chi_sq = np.sum(delta[self.mask.astype(bool)]**2) / self.noise_var
+            res = -0.5*sum_chi_sq + self.lnnorm
 
         return float(res)
 
     def __call__(self, params):
-        return self.lnlike(params) + self.lnprior(params)
+        lnp = -np.inf
+
+        valid_params = self.set_params(params)
+        if valid_params:
+            lnp = self.lnlike(params)
+            lnp += self.lnprior(params)
+
+        return lnp
 
 
 class EmptyPrior(object):

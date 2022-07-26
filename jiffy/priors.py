@@ -28,7 +28,7 @@ class IsolatedFootprintPrior(object):
         self.lognorm_nu = -np.log(K_PARAM_BOUNDS['nu'][1] - K_PARAM_BOUNDS['nu'][0])
 
     def __call__(self, params):
-        e1, e2, hlr, flux, nu, dx, dy = tuple(params)
+        nu, hlr, e1, e2, flux, dx, dy = tuple(params)
         # The prior parameters correspond to pixel distances, not arcsec
         hlr, dx, dy = hlr/self.scale, dx/self.scale, dy/self.scale
 

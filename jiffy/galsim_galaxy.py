@@ -35,7 +35,7 @@ from jiffy import galsim_psf
 
 
 K_PARAM_BOUNDS = {
-    "nu": [-0.8, 0.8],
+    "nu": [-0.8, 3.9],
     "hlr": [0.01, 6.0],
     "e1": [-0.7, 0.7],
     "e2": [-0.7, 0.7],
