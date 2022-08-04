@@ -34,15 +34,19 @@ import galsim
 from jiffy import galsim_psf
 
 
+# Used in validate_params()
 K_PARAM_BOUNDS = {
-    "nu": [-0.8, 3.9],
+    "nu": [-0.84, 3.99],
     "hlr": [0.01, 6.0],
-    "e1": [-0.7, 0.7],
-    "e2": [-0.7, 0.7],
+    "e1": [-0.99, 0.99],
+    "e2": [-0.99, 0.99],
     "flux": [0.0001, 1000.0],
-    "dx": [-10.0, 10.0],
-    "dy": [-10.0, 10.0]
+    "dx": [-20.0, 20.0],
+    "dy": [-20.0, 20.0]
 }
+PARAM_CONSTRAINTS = (
+    lambda params: params['e1'][0]**2 + params['e2'][0]**2 < 1,
+)
 
 
 class GalsimGalaxyModel(object):
@@ -156,6 +160,10 @@ class GalsimGalaxyModel(object):
         for pname, _ in self.params.dtype.descr:
             if not _inbounds(self.params[pname][0], K_PARAM_BOUNDS[pname]):
                 valid_params *= 0
+        for constraint_satisfied in PARAM_CONSTRAINTS:
+            if not constraint_satisfied(self.params):
+                valid_params *= 0
+
         return bool(valid_params)
 
     def get_psf(self):
