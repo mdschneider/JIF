@@ -505,9 +505,6 @@ def main():
     parser.add_argument('--cluster_walkers_thresh', type=float, default=4,
                         help="Threshold multiplier for throwing away walkers.")
     
-    
-    parser.add_argument()
-
     args = parser.parse_args()
 
     rstr = init_roaster(args)
