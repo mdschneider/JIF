@@ -10,19 +10,19 @@ class IsolatedFootprintPrior(object):
 
         # Mean and inverse covariance matrix of log-hlr (in log-pixels)
         # and log-flux (in log-inst flux)
-        self.mean_hlrflux = np.array([-0.73449379,  0.66477136])
-        self.inv_cov_hlrflux = np.array([[ 3.2714894 , -1.15197307],
-                                         [-1.15197307,  1.68133763]])
+        self.mean_hlrflux = np.array([-0.83008735,  0.70397003])
+        self.inv_cov_hlrflux = np.array([[ 3.56382608, -1.54375759],
+                                         [-1.54375759,  2.05263523]])
         self.lognorm_hlrflux = 0.5*np.log(np.linalg.det(2*np.pi * self.inv_cov_hlrflux))
 
         self.mean_e = 0
         # Laplace distribution parameter for e1,e2
-        self.laplace_width_e = 0.20539633515040584
+        self.laplace_width_e = 0.19345975321402278
         self.lognorm_e = -np.log(2*self.laplace_width_e)
 
         self.mean_dxdy = 0
         # Variance of dx,dy, in pixels
-        self.gauss_var_dxdy = 0.5867927590344775
+        self.gauss_var_dxdy = 0.5769578977280152
         self.lognorm_dxdy = -0.5*np.log(2*np.pi * self.gauss_var_dxdy)
 
         self.lognorm_nu = -np.log(K_PARAM_BOUNDS['nu'][1] - K_PARAM_BOUNDS['nu'][0])
