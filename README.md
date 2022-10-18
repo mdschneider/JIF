@@ -14,6 +14,24 @@ This package embeds [GalSim](https://github.com/GalSim-developers/GalSim) image 
 
 ## Installation
 
+To create a conda environment named "jiftutorial" and install the minimum necessary packages:
+
+    conda create -n jiftutorial python=3.8.12 numpy tqdm h5py yaml matplotlib jupyter astropy pandas
+    conda activate jiftutorial
+    conda install -c conda-forge galsim emcee
+    python -m pip install -U corner
+
+In addition, this package (JIF) as well as the [footprints](https://github.com/mdschneider/footprints) package need to be cloned and installed from their respective repos, as follows:
+
+    git clone git@github.com:mdschneider/footprints.git
+    git clone git@github.com:mdschneider/JIF.git
+    cd footprints
+    python setup.py install
+    cd ../JIF
+    python setup.py install
+
+### More details
+
 Everything in this project is in python (not including our external dependencies).
 Install with,
 
@@ -25,11 +43,9 @@ or
 
 to install while working on the package.
 
-Install python requirements available with PIP via,
+Install python requirements available with PIP via:
 
     pip install -r requirements.txt
-
-In addition, the [footprints](https://github.com/mdschneider/footprints) package is required, which must be cloned from github.
 
 ## Tools / dependencies
 
