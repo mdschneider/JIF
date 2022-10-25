@@ -213,21 +213,15 @@ class GalsimGalaxyModel(object):
                                  gsparams=self.gsparams)
             gal = gal.shear(galsim.Shear(g1=self.params.e1[0],
                                          g2=self.params.e2[0]))
-        # mu = 1. / (1. - (self.params.e1[0]**2 + self.params.e2[0]**2))
-        # gal = gal.lens(g1=self.params.e1[0], g2=self.params.e2[0], mu=mu)
         gal = gal.shift(self.params.dx[0], self.params.dy[0])
         obj = galsim.Convolve(self.get_psf(), gal)
         
-        #import time
-
         N = obj.getGoodImageSize(scale)
         if N > 2048:
             model = None
         else: 
             try:
-                # start_t = time.time()
                 if image is not None:
-                    # print(image)
                     model = obj.drawImage(image=image, gain=gain,
                                           add_to_image=True)
                 else:
@@ -235,11 +229,9 @@ class GalsimGalaxyModel(object):
                                           gain=gain)
             except galsim.GalSimFFTSizeError:
                 print("Trying to make an image that's too big.")
-                # print(self.get_params())
+                print('Model params:')
+                print(self.get_params())
                 model = None
-            # finally:
-                # end_t = time.time() - start_t
-                # print("Time: ", end_t)
         return model
 
 
