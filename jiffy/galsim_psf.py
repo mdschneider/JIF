@@ -49,16 +49,6 @@ K_PARAM_BOUNDS = {
     "psf_dy": [-100., 100.]
 }
 
-# # Make a lookup table
-# noll_tab = np.zeros((58, 2), dtype=int)
-# for j in range(58):
-#     n, m = galsim.phase_screens._noll_to_zern(j)
-#     noll_tab[j, :] = [n, m]
-
-# def get_noll_index(n, m):
-#     return np.where((noll_tab == (n, m)).all(axis=1))[0][0]
-
-
 class GalsimPSFModel(object):
     """Parametric PSF models from GalSim for image forward modeling"""
     def __init__(self, active_parameters=['psf_fwhm']):
@@ -140,7 +130,6 @@ class GalsimPSFModel(object):
         This is the object that can be used in, e.g., GalSim convolutions
         """
         # argument theta is not used here
-        # psf = galsim.Moffat(fwhm=self.params.psf_fwhm[0], beta=self.params.psf_beta[0])
         psf = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
         psf_shape = galsim.Shear(e1=self.params.psf_e1[0],
                                  e2=self.params.psf_e2[0])
@@ -156,16 +145,6 @@ class GalsimPSFModel(object):
         """
         theta = (theta_x_arcmin*galsim.arcmin, theta_y_arcmin*galsim.arcmin)
         obj = self.get_model(theta, with_atmos=with_atmos)
-        # try:
-        #     if image is not None:
-        #         model = obj.drawImage(image=image, gain=gain, add_to_image=True, method='fft')
-        #     else:
-        #         model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
-        #                               gain=gain, method='fft')
-        # except RuntimeError:
-        #     print "Trying to make an image that's too big."
-        #     print self.get_params()
-        #     model = None
         
         if image is not None:
             model = obj.drawImage(image=image, gain=gain, add_to_image=True, method='fft')
