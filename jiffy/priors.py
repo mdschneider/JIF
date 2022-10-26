@@ -1,6 +1,24 @@
 import numpy as np
 from jiffy.galsim_galaxy import K_PARAM_BOUNDS
 
+priors = {None: EmptyPrior,
+          'Empty': EmptyPrior,
+          'EmptyPrior': EmptyPrior,
+          'IsolatedFootprintPrior': IsolatedFootprintPrior}
+
+def initialize_prior(prior_form=None, prior_module=None, **kwargs):
+    if prior_module is None:
+        # prior_form should be one of the names of priors in this file
+        prior = priors[prior_form]
+    if :
+        prior_module = __import__(prior_module)
+        # prior_form should be the name of a class in prior_module
+        prior = getattr(prior_module, prior_form)
+
+    # Initialize an instance of the prior with the given keyword arguments
+    return prior(**kwargs)
+
+
 # ---------------------------------------------------------------------------------------
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------

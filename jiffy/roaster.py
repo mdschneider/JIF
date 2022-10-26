@@ -42,17 +42,25 @@ class Roaster(object):
 
     Only single epoch images are allowed.
     '''
-    def __init__(self, config='../config/jiffy.yaml', prior_form=None):
+    def __init__(self, config='../config/jiffy.yaml'):
         if isinstance(config, str):
             import yaml
             with open(config, 'r') as f:
                 config = yaml.safe_load(f)
         self.config = config
 
-        if prior_form is None:
-            self.prior_form = EmptyPrior()
-        else:
-            self.prior_form = prior_form
+        prior_form = None
+        prior_module = None
+        prior_kwargs = dict()
+        for arg_name in self.config['model']:
+            if arg_name[:6] == 'prior_':
+                if arg_name[6:] == 'form':
+                    prior_form = self.config['model'][arg_name]
+                elif arg_name[6:] == 'module':
+                    prior_module = self.config['model'][arg_name]
+                else:
+                    prior_kwargs[name] = self.config['model'][arg_name]
+        self.prior = priors.initialize_prior(prior_form, prior_module, **prior_kwargs)
 
         np.random.seed(self.config['init']['seed'])
 
@@ -251,10 +259,10 @@ class Roaster(object):
         '''
         Evaluate the log-prior of the model parameters
         '''
-        return self.prior_form(params)
+        return self.prior(params)
 
     def _set_like_lnnorm(self):
-        logden = -0.5*np.log(2*np.pi * self.noise_var)
+        logden = -0.5 * np.log(2 * np.pi * self.noise_var)
 
         if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
             # Per-pixel variance plane
@@ -338,12 +346,7 @@ def init_roaster(args):
 
     config = yaml.safe_load(open(args.config_file))
 
-    prior_form = {
-        'Empty': EmptyPrior(),
-        'IsolatedFootprintPrior': priors.IsolatedFootprintPrior()
-    }[config['model']['prior_form']]
-
-    rstr = Roaster(config, prior_form=prior_form)
+    rstr = Roaster(config)
 
     if 'footprint' in config:
         dat = config['footprint']['image']
