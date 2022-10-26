@@ -1,49 +1,30 @@
 import numpy as np
+import pickle
 from jiffy.galsim_galaxy import K_PARAM_BOUNDS
-
-priors = {None: EmptyPrior,
-          'Empty': EmptyPrior,
-          'EmptyPrior': EmptyPrior,
-          'IsolatedFootprintPrior': IsolatedFootprintPrior}
-
-def initialize_prior(prior_form=None, prior_module=None, **kwargs):
-    if prior_module is None:
-        # prior_form should be one of the names of priors in this file
-        prior = priors[prior_form]
-    else:
-        prior_module = __import__(prior_module)
-        # prior_form should be the name of a class in prior_module
-        prior = getattr(prior_module, prior_form)
-
-    # Initialize an instance of the prior with the given keyword arguments
-    return prior(**kwargs)
-
 
 # ---------------------------------------------------------------------------------------
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------
 class IsolatedFootprintPrior(object):
-    def __init__(self):
+    def __init__(self, e_gm_filename, dr_gm_filename):
         self.scale = 0.2 # arcsec per pixel
 
         # Mean and inverse covariance matrix of log-hlr (in log-pixels)
         # and log-flux (in log-inst flux)
-        self.mean_hlrflux = np.array([-0.83008735,  0.70397003])
-        self.inv_cov_hlrflux = np.array([[ 3.56382608, -1.54375759],
+        self.mean_hlrFlux = np.array([-0.83008735,  0.70397003])
+        self.inv_cov_hlrFlux = np.array([[ 3.56382608, -1.54375759],
                                          [-1.54375759,  2.05263523]])
-        self.lognorm_hlrflux = 0.5*np.log(np.linalg.det(2*np.pi * self.inv_cov_hlrflux))
+        self.lognorm_hlrFlux = 0.5 * np.log(np.linalg.det(2 * np.pi * self.inv_cov_hlrFlux))
 
-        self.mean_e = 0
-        # Laplace distribution parameter for e1,e2
-        self.laplace_width_e = 0.19345975321402278
-        self.lognorm_e = -np.log(2*self.laplace_width_e)
+        with open(e_gm_filename, mode='rb') as e_gm_file:
+            self.e_gm = pickle.load(e_gm_file)
+        self.lognorm_e_angle = np.log(2 * np.pi)
 
-        self.mean_dxdy = 0
-        # Variance of dx,dy, in pixels
-        self.gauss_var_dxdy = 0.5769578977280152
-        self.lognorm_dxdy = -0.5*np.log(2*np.pi * self.gauss_var_dxdy)
+        with open(dr_gm_filename, mode='rb') as dr_gm_file:
+            self.dr_gm = pickle.load(dr_gm_file)
+        self.lognorm_dr_angle = np.log(2 * np.pi)
 
-        self.lognorm_nu = -np.log(K_PARAM_BOUNDS['nu'][1] - K_PARAM_BOUNDS['nu'][0])
+        self.lognorm_nu = np.log(K_PARAM_BOUNDS['nu'][1] - K_PARAM_BOUNDS['nu'][0])
 
     def __call__(self, params):
         nu, hlr, e1, e2, flux, dx, dy = tuple(params)
@@ -51,22 +32,28 @@ class IsolatedFootprintPrior(object):
         hlr, dx, dy = hlr/self.scale, dx/self.scale, dy/self.scale
 
         # 2D Gaussian prior for log-hlr, log-flux
-        hlrflux = np.log(np.array([hlr, flux])) - self.mean_hlrflux
-        lnprior_hlrflux = self.lognorm_hlrflux - 0.5*np.dot(hlrflux, np.matmul(self.inv_cov_hlrflux, hlrflux))
+        hlrFlux_dev = np.log(np.array([hlr, flux])) - self.mean_hlrFlux
+        lnprior_hlrFlux = self.lognorm_hlrFlux
+        lnprior_hlrFlux -= 0.5*np.dot(hlrFlux_dev, np.matmul(self.inv_cov_hlrFlux, hlrFlux_dev))
 
-        # Laplace priors for e1, e2 with the same width
-        lnprior_e1 = self.lognorm_e - np.abs(e1 - self.mean_e) / self.laplace_width_e
-        lnprior_e2 = self.lognorm_e - np.abs(e2 - self.mean_e) / self.laplace_width_e
+        # Bayesian Gaussian mixture model for ellipticity
+        e = np.sqrt(e1**2 + e2**2)
+        lnprior_e = -self.e_gm.score_samples([[e]])[0]
+        # Flat prior for ellipticity angle
+        lnprior_e_angle = self.lognorm_e_angle
 
-        # 1D Gaussian priors for dx, dy with the same width
-        lnprior_dx = self.lognorm_dxdy - 0.5*(dx - self.mean_dxdy)**2 / self.gauss_var_dxdy
-        lnprior_dy = self.lognorm_dxdy - 0.5*(dy - self.mean_dxdy)**2 / self.gauss_var_dxdy
+        # Bayesian Gaussian mixture model for position
+        dr = np.sqrt(dx**2 + dy**2)
+        lnprior_dr = -self.dr_gm.score_samples([[dr]])[0]
+        # Flat prior for position angle
+        lnprior_dr_angle = self.lognorm_dr_angle
 
         # Flat prior for nu
         lnprior_nu = self.lognorm_nu
 
-        lnprior = lnprior_hlrflux + lnprior_e1 + lnprior_e2 + lnprior_dx + lnprior_dy + lnprior_nu
+        lnprior = lnprior_hlrFlux + lnprior_e + lnprior_e_angle + lnprior_dr + lnprior_dr_angle + lnprior_nu
         return lnprior
+
 
 class DefaultPriorSpergel(object):
     """
@@ -147,3 +134,21 @@ class DefaultPriorSpergel(object):
         dy = omega[0].dy
         lnp += -0.5 * (dx*dx + dy*dy) / self.pos_var
         return lnp
+
+
+priors = {None: EmptyPrior,
+          'Empty': EmptyPrior,
+          'EmptyPrior': EmptyPrior,
+          'IsolatedFootprintPrior': IsolatedFootprintPrior}
+
+def initialize_prior(prior_form=None, prior_module=None, **kwargs):
+    if prior_module is None:
+        # prior_form should be one of the names of priors in this file
+        prior = priors[prior_form]
+    else:
+        prior_module = __import__(prior_module)
+        # prior_form should be the name of a class in prior_module
+        prior = getattr(prior_module, prior_form)
+
+    # Initialize an instance of the prior with the given keyword arguments
+    return prior(**kwargs)
