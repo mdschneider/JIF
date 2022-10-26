@@ -10,7 +10,7 @@ def initialize_prior(prior_form=None, prior_module=None, **kwargs):
     if prior_module is None:
         # prior_form should be one of the names of priors in this file
         prior = priors[prior_form]
-    if :
+    else:
         prior_module = __import__(prior_module)
         # prior_form should be the name of a class in prior_module
         prior = getattr(prior_module, prior_form)
