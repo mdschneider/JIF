@@ -2,6 +2,21 @@ import numpy as np
 import pickle
 from jiffy.galsim_galaxy import K_PARAM_BOUNDS
 
+
+class EmptyPrior(object):
+    '''
+    Prior form for the image model parameters
+
+    This prior form is flat in all parameters (for any given parameterization).
+    '''
+
+    def __init__(self):
+        pass
+
+    def __call__(self, *args):
+        return 0.0
+
+
 # ---------------------------------------------------------------------------------------
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------

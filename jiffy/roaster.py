@@ -58,8 +58,8 @@ class Roaster(object):
                     prior_form = self.config['model'][arg_name]
                 elif arg_name[6:] == 'module':
                     prior_module = self.config['model'][arg_name]
-                else:
-                    prior_kwargs[name] = self.config['model'][arg_name]
+        for arg_name in self.config['prior']:
+            prior_kwargs[arg_name] = self.config['prior'][arg_name]
         self.prior = priors.initialize_prior(prior_form, prior_module, **prior_kwargs)
 
         np.random.seed(self.config['init']['seed'])
@@ -321,20 +321,6 @@ class Roaster(object):
             lnp += self.lnprior(params)
 
         return lnp
-
-
-class EmptyPrior(object):
-    '''
-    Prior form for the image model parameters
-
-    This prior form is flat in all parameters (for any given parameterization).
-    '''
-
-    def __init__(self):
-        pass
-
-    def __call__(self, *args):
-        return 0.0
 
 
 def init_roaster(args):
