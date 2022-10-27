@@ -21,7 +21,7 @@ class EmptyPrior(object):
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------
 class IsolatedFootprintPrior(object):
-    def __init__(self, e_gm_filename, dr_gm_filename):
+    def __init__(self, e_gm_filename='e_gmfile.pkl', dr_gm_filename='dr_gmfile.pkl'):
         self.scale = 0.2 # arcsec per pixel
 
         # Mean and inverse covariance matrix of log-hlr (in log-pixels)

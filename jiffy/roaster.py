@@ -58,8 +58,9 @@ class Roaster(object):
                     prior_form = self.config['model'][arg_name]
                 elif arg_name[6:] == 'module':
                     prior_module = self.config['model'][arg_name]
-        for arg_name in self.config['prior']:
-            prior_kwargs[arg_name] = self.config['prior'][arg_name]
+        if 'prior' in self.config:
+            for arg_name in self.config['prior']:
+                prior_kwargs[arg_name] = self.config['prior'][arg_name]
         self.prior = priors.initialize_prior(prior_form, prior_module, **prior_kwargs)
 
         np.random.seed(self.config['init']['seed'])
