@@ -55,9 +55,8 @@ class GalsimGalaxyModel(object):
 
     The galaxy model is fixed as a 'Spergel' profile
     """
-    def __init__(self,
-                 active_parameters=['e1', 'e2'],
-                 psf_model_class_name="GalsimPSFModel"):
+    def __init__(self, config,
+                 active_parameters=['e1', 'e2']):
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
 
@@ -66,29 +65,28 @@ class GalsimGalaxyModel(object):
         self.actv_params_psf = []
         if np.any(['psf' in p for p in self.active_parameters]):
             self.sample_psf = True
-            self.actv_params_psf = [p for p in self.active_parameters 
+            self.actv_params_psf = [p for p in self.active_parameters
                                     if 'psf' in p]
-        self.actv_params_gal = [p for p in self.active_parameters 
-                                if 'psf' not in p]        
+        self.actv_params_gal = [p for p in self.active_parameters
+                                if 'psf' not in p]
 
         # Initialize parameters array
         self._init_params()
 
         # Initialize the PSF model that will be convolved with the galaxy
+        psf_model_class_name = config['model']['psf_class']
         self.psf_model = getattr(galsim_psf, psf_model_class_name)(
-            active_parameters=self.actv_params_psf)
+            config, active_parameters=self.actv_params_psf)
 
         # Store fixed PSF now unless we're sampling in the PSF model parameters
         self.static_psf = None
         if not self.sample_psf:
-            self.psf_model.params[0].psf_fwhm = 0.6
             self.static_psf = self.psf_model.get_model()
 
         self.gsparams = galsim.GSParams(
             maximum_fft_size = 8192
         )
 
-        return None
 
     def _init_params(self):
         self.params = np.array([(0.5, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0)],

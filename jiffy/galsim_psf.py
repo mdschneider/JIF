@@ -23,41 +23,111 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program; if not, write to the Free Software Foundation, Inc.,
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
-"""
+'''
 jiffy galsim_psf.py
 
 Wrapper for simple GalSim PSF models to use in MCMC.
-"""
+'''
 import numpy as np
 import warnings
 import galsim
 
-# try:
-#     import galsim.lsst
-# except ImportError: 
-#     warnings.warn("Cannot import GalSim LSST module - LSST PSF models won't work")
-
-
 K_PARAM_BOUNDS = {
-    "psf_fwhm": [0.02, 200.0], ## in arcseconds
+    'psf_fwhm': [0.02, 200.0], ## in arcseconds
                                ## Note that very small PSF widths will require 
                                ## large GalSim FFTs
-    "psf_e1": [-0.6, 0.6],
-    "psf_e2": [-0.6, 0.6],
-    "psf_flux": [0.001, 1000.],
-    "psf_dx": [-100., 100.],
-    "psf_dy": [-100., 100.]
+    'psf_e1': [-0.6, 0.6],
+    'psf_e2': [-0.6, 0.6],
+    'psf_flux': [0.001, 1000.],
+    'psf_dx': [-100., 100.],
+    'psf_dy': [-100., 100.]
 }
 
-class GalsimPSFModel(object):
-    """Parametric PSF models from GalSim for image forward modeling"""
-    def __init__(self, active_parameters=['psf_fwhm']):
+
+class PSFModel(object):
+    def __init__(self, config, active_parameters=[]):
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
         self._init_params()
 
     def _init_params(self):
-        self.params = np.array([(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)],
+        self.params = np.array([], dtype=[]).view(np.recarray)
+
+    def get_params(self):
+        if self.n_params > 0:
+            p = np.array([pv for pv in self.params[self.active_parameters][0]])
+        else:
+            p = []
+        return p
+
+    def get_param_by_name(self, paramname):
+        '''
+        Get a single parameter value using the parameter name as a key.
+
+        Can access "active" or "inactive" parameters.
+        '''
+        return self.params[paramname][0]
+
+    def set_param_by_name(self, paramname, value):
+        '''
+        Set a single parameter value using the parameter name as a key.
+
+        Can set "active" or "inactive" parameters. So, this routine gives a
+        way to set fixed or fiducial values of model parameters that are not
+        used in the MCMC sampling in Roaster.
+
+        @param paramname    The name of the galaxy or PSF model parameter to set
+        @param value        The value to assign to the model parameter
+        '''
+        self.params[paramname][0] = value
+
+    def validate_params(self):
+        '''
+        Check that all model parameters are within allowed ranges
+
+        @returns a boolean indicating the validity of the current parameters
+        '''
+        def _inbounds(param, bounds):
+            return param >= bounds[0] and param <= bounds[1]
+
+        for pname, _ in self.params.dtype.descr:
+            if not _inbounds(self.params[pname][0], K_PARAM_BOUNDS[pname]):
+                return False
+        return True
+
+
+class ImagePSFModel(PSFModel):
+    def __init__(self, config, active_parameters=[]):
+        super().__init__(config, active_parameters)
+        self.filename = config['footprint']['psf_image']
+        self.scale = config['footprint']['scale']
+
+    def get_model(self):
+        '''
+        Get the GalSim image model
+
+        This is the object that can be used in, e.g., GalSim convolutions
+        '''
+        gs_image = self.get_image()
+        model = galsim.InterpolatedImage(gs_image)
+        return model
+
+    def get_image(self):
+        '''
+        Render a GalSim Image() object from the internal model
+        '''
+        image_array = np.load(self.filename)
+        gs_image = galsim.Image(image_array, scale=self.scale)
+        return gs_image
+
+
+class GalsimPSFModel(PSFModel):
+    '''Parametric PSF models from GalSim for image forward modeling'''
+    def __init__(self, config, active_parameters=['psf_fwhm']):
+        super().__init__(config, active_parameters)
+
+    def _init_params(self):
+        self.params = np.array([(0.8, 0.0, 0.0, 1.0, 0.0, 0.0)],
                                dtype=[('psf_fwhm', '<f8'),
                                       ('psf_e1', '<f8'),
                                       ('psf_e2', '<f8'),
@@ -66,69 +136,12 @@ class GalsimPSFModel(object):
                                       ('psf_dy', '<f8')])
         self.params = self.params.view(np.recarray)
 
-    def get_params(self):
-        """
-        Return a list of active model parameter values.
-        """
-        if len(self.active_parameters) > 0:
-            # p = self.params[self.active_parameters].view('<f8').copy()
-            p = np.array([pv for pv in self.params[self.active_parameters][0]])
-        else:
-            p = []
-        return p
-
-    def set_params(self, params):
-        assert len(params) >= self.n_params
-        for ip, pname in enumerate(self.active_parameters):
-            # print("Setting {} to {5.4f}".format(pname, params[ip]))
-            self.params[pname][0] = params[ip]
-        valid_params = self.validate_params()
-        return valid_params
-
-    def get_param_by_name(self, paramname):
-        """
-        Get a single parameter value using the parameter name as a key.
-
-        Can access 'active' or 'inactive' parameters.
-        """
-        return self.params[paramname][0]
-
-    def set_param_by_name(self, paramname, value):
-        """
-        Set a single parameter value using the parameter name as a key.
-
-        Can set 'active' or 'inactive' parameters. So, this routine gives a
-        way to set fixed or fiducial values of model parameters that are not
-        used in the MCMC sampling in Roaster.
-
-        @param paramname    The name of the galaxy or PSF model parameter to set
-        @param value        The value to assign to the model parameter
-        """
-        self.params[paramname][0] = value
-        return None
-
-    def validate_params(self):
-        """
-        Check that all model parameters are within allowed ranges
-
-        @returns a boolean indicating the validity of the current parameters
-        """
-        def _inbounds(param, bounds):
-            return param >= bounds[0] and param <= bounds[1]
-
-        valid_params = 1
-        for pname, _ in self.params.dtype.descr:
-            if not _inbounds(self.params[pname][0], K_PARAM_BOUNDS[pname]):
-                valid_params *= 0
-                print("bad params: ", pname, self.params[pname])
-        return bool(valid_params)
-
     def get_model(self, theta=None, with_atmos=True):
-        """
+        '''
         Get the GalSim image model
 
         This is the object that can be used in, e.g., GalSim convolutions
-        """
+        '''
         # argument theta is not used here
         psf = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
         psf_shape = galsim.Shear(e1=self.params.psf_e1[0],
@@ -140,9 +153,9 @@ class GalsimPSFModel(object):
 
     def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0,
                   theta_x_arcmin=0., theta_y_arcmin=0., with_atmos=True):
-        """
+        '''
         Render a GalSim Image() object from the internal model
-        """
+        '''
         theta = (theta_x_arcmin*galsim.arcmin, theta_y_arcmin*galsim.arcmin)
         obj = self.get_model(theta, with_atmos=with_atmos)
         
@@ -150,7 +163,7 @@ class GalsimPSFModel(object):
             model = obj.drawImage(image=image, gain=gain, add_to_image=True, method='fft')
         else:
             model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
-                                  gain=gain, method='fft')        
+                                  gain=gain, method='fft')
         return model
 
 
@@ -166,10 +179,8 @@ class GalsimPSFLSST(GalsimPSFModel):
             # shoot_accuracy=1.e-2,    # approximations in photon shooting aim to be this accurate
             minimum_fft_size=32,     # minimum size of ffts
             maximum_fft_size=20480)   # maximum size of ffts
-    def __init__(self, active_parameters=['psf_fwhm']):
-        self.active_parameters = active_parameters
-        self.n_params = len(self.active_parameters)
-        self._init_params()
+    def __init__(self, config, active_parameters=['psf_fwhm']):
+        super().__init__(config, active_parameters)
         self.aper = galsim.Aperture(diam=self.tel_diam_m,
                                     # obscuration=0.65,
                                     lam=self.wavelength_nm,
@@ -222,7 +233,7 @@ class GalsimPSFLSST(GalsimPSFModel):
     def get_model(self, theta=(0.*galsim.arcmin, 0.*galsim.arcmin), with_atmos=True):
         screens = self._get_phase_screens()
 
-        optics = screens.makePSF(lam=self.wavelength_nm, aper=self.aper, 
+        optics = screens.makePSF(lam=self.wavelength_nm, aper=self.aper,
                                  theta=theta, diam=self.tel_diam_m, #pad_factor=1., ii_pad_factor=4.,
                                  gsparams=self.gsparams)
 
@@ -230,7 +241,7 @@ class GalsimPSFLSST(GalsimPSFModel):
             atmos = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
             psf_shape = galsim.Shear(e1=self.params.psf_e1[0],
                                      e2=self.params.psf_e2[0])
-            atmos = atmos.shear(psf_shape)            
+            atmos = atmos.shear(psf_shape)
             psf = galsim.Convolve([atmos, optics])
         else:
             psf = optics
@@ -239,9 +250,9 @@ class GalsimPSFLSST(GalsimPSFModel):
 
 
 def main():
-    """
+    '''
     Make a default test footprint file
-    """
+    '''
     import footprints
 
     gp = GalsimPSFModel()
@@ -253,14 +264,14 @@ def main():
     dummy_mask = 1.0
     dummy_background = 0.0
 
-    fname = "../data/TestData/jiffy_psf_image"
+    fname = '../data/TestData/jiffy_psf_image'
 
-    galsim.fits.write(img, fname + ".fits")
+    galsim.fits.write(img, fname + '.fits')
 
-    ftpnt = footprints.Footprints(fname + ".h5")
+    ftpnt = footprints.Footprints(fname + '.h5')
 
     ftpnt.save_images([img.array], [noise_var], [dummy_mask], [dummy_background],
-                      segment_index=0, telescope="LSST", filter_name='r')
+                      segment_index=0, telescope='LSST', filter_name='r')
     ftpnt.save_tel_metadata()
 
 

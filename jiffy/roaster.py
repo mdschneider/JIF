@@ -66,20 +66,17 @@ class Roaster(object):
         np.random.seed(self.config['init']['seed'])
 
         self.num_sources = self.config['model']['num_sources']
+
         actv_params = self.config['model']['model_params'].split(' ')
+        model_kwargs = dict({'active_parameters': actv_params})
         self.n_params = len(actv_params)
 
         model_class_name = self.config['model']['model_class']
-        args = dict({'active_parameters': actv_params})
-        if model_class_name == 'GalsimGalaxyModel':
-            args['psf_model_class_name'] = self.config['model']['psf_class']
-
-        try:
-            model_modules = __import__(self.config['model']['model_modules'])
-        except KeyError:
-            model_modules = __import__('jiffy.galsim_galaxy', 'jiffy.galsim_psf')
-
-        self.src_models = [getattr(model_modules, model_class_name)(**args)
+        if 'model_module' in self.config['model']:
+            model_module = __import__(self.config['model']['model_module'])
+        else:
+            model_module = __import__('jiffy.galsim_galaxy')
+        self.src_models = [getattr(model_module, model_class_name)(config, **model_kwargs)
                            for i in range(self.num_sources)]
 
         # Initialize objects describing the pixel data in a footprint
@@ -331,20 +328,22 @@ def init_roaster(args):
     import yaml
     import footprints
 
-    config = yaml.safe_load(open(args.config_file))
+    with open(args.config_file) as config_file:
+        config = yaml.safe_load(config_file)
 
     rstr = Roaster(config)
 
+    def _load_array(item):
+        if isinstance(item, str):
+            item = np.load(item)
+        return item
     if 'footprint' in config:
-        dat = config['footprint']['image']
-        noise_var = config['footprint']['variance']
-        mask = config['footprint']['mask']
-        scale = config['footprint']['scale']
-        gain = config['footprint']['gain']
-
-        for plane in [dat, noise_var, mask]:
-            if isinstance(plane, str):
-                plane = np.load(plane)
+        dat = _load_array(config['footprint']['image'])
+        noise_var = _load_array(config['footprint']['variance'])
+        mask = _load_array(config['footprint']['mask'])
+        scale = _load_array(config['footprint']['scale'])
+        gain = _load_array(config['footprint']['gain'])
+        bkg = _load_array(config['footprint']['background'])
     else:
         dat, noise_var, mask, bkg, scale, gain = footprints.load_image(config['io']['infile'],
             segment=args.footprint_number, filter_name=config['io']['filter'])
