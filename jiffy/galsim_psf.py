@@ -97,10 +97,21 @@ class PSFModel(object):
 
 
 class ImagePSFModel(PSFModel):
-    def __init__(self, config, active_parameters=[]):
+    '''
+    Prioritize using arguments explicitly supplied to the constructor.
+    Only if these are not supplied, check the config file for relevant values.
+    '''
+    def __init__(self, config, active_parameters=[], psf_image=None, scale=None):
         super().__init__(config, active_parameters)
-        self.filename = config['footprint']['psf_image']
-        self.scale = config['footprint']['scale']
+        self.psf_image = psf_image
+        if self.psf_image is None:
+            if 'footprint' in config and 'psf_image' in config['footprint']:
+                filename = config['footprint']['psf_image']
+                self.psf_image = np.load(filename)
+        self.scale = scale
+        if self.scale is None:
+            if 'footprint' in config and 'scale' in config['footprint']:
+                self.scale = config['footprint']['scale']
 
     def get_model(self):
         '''
@@ -116,8 +127,7 @@ class ImagePSFModel(PSFModel):
         '''
         Render a GalSim Image() object from the internal model
         '''
-        image_array = np.load(self.filename)
-        gs_image = galsim.Image(image_array, scale=self.scale)
+        gs_image = galsim.Image(self.psf_image, scale=self.scale)
         return gs_image
 
 

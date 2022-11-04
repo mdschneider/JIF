@@ -36,13 +36,13 @@ from jiffy import galsim_psf
 
 # Used in validate_params()
 K_PARAM_BOUNDS = {
-    "nu": [-0.84, 3.99],
-    "hlr": [0.01, 6.0],
-    "e1": [-0.99, 0.99],
-    "e2": [-0.99, 0.99],
-    "flux": [0.0001, 1000.0],
-    "dx": [-20.0, 20.0],
-    "dy": [-20.0, 20.0]
+    'nu': [-0.84, 3.99],
+    'hlr': [0.01, 6.0],
+    'e1': [-0.99, 0.99],
+    'e2': [-0.99, 0.99],
+    'flux': [0.0001, 1000.0],
+    'dx': [-20.0, 20.0],
+    'dy': [-20.0, 20.0]
 }
 PARAM_CONSTRAINTS = (
     lambda params: params['e1'][0]**2 + params['e2'][0]**2 < 1,
@@ -50,13 +50,13 @@ PARAM_CONSTRAINTS = (
 
 
 class GalsimGalaxyModel(object):
-    """
+    '''
     Parametric galaxy model from GalSim for image forward modeling
 
     The galaxy model is fixed as a 'Spergel' profile
-    """
+    '''
     def __init__(self, config,
-                 active_parameters=['e1', 'e2']):
+                 active_parameters=['e1', 'e2'], **kwargs):
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
 
@@ -73,20 +73,23 @@ class GalsimGalaxyModel(object):
         # Initialize parameters array
         self._init_params()
 
-        # Initialize the PSF model that will be convolved with the galaxy
-        psf_model_class_name = config['model']['psf_class']
-        self.psf_model = getattr(galsim_psf, psf_model_class_name)(
-            config, active_parameters=self.actv_params_psf)
-
-        # Store fixed PSF now unless we're sampling in the PSF model parameters
-        self.static_psf = None
-        if not self.sample_psf:
-            self.static_psf = self.psf_model.get_model()
+        # Initialize psf model
+        self._init_psf(config, **kwargs)
 
         self.gsparams = galsim.GSParams(
             maximum_fft_size = 8192
         )
 
+    def _init_psf(self, config, **kwargs):
+        # Initialize the PSF model that will be convolved with the galaxy
+        psf_model_class_name = config['model']['psf_class']
+        self.psf_model = getattr(galsim_psf, psf_model_class_name)(
+            config, active_parameters=self.actv_params_psf, **kwargs)
+
+        # Store fixed PSF now unless we're sampling in the PSF model parameters
+        self.static_psf = None
+        if not self.sample_psf:
+            self.static_psf = self.psf_model.get_model()
 
     def _init_params(self):
         self.params = np.array([(0.5, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0)],
@@ -100,28 +103,27 @@ class GalsimGalaxyModel(object):
         self.params = self.params.view(np.recarray)
 
     def get_params(self):
-      # p = self.params[self.actv_params_gal].view('<f8').copy()
-      p = np.array([pv for pv in self.params[self.actv_params_gal][0]])      
-      if self.sample_psf:
-        p = np.append(p, self.psf_model.get_params())
-      return p
+        p = np.array([pv for pv in self.params[self.actv_params_gal][0]])
+        if self.sample_psf:
+            p = np.append(p, self.psf_model.get_params())
+        return p
 
     def set_params(self, params):
         assert len(params) >= self.n_params
         for ip, pname in enumerate(self.actv_params_gal):
             self.params[pname][0] = params[ip]
-        valid_params = self.validate_params()            
+        valid_params = self.validate_params()
         if self.sample_psf:
             valid_params *= self.psf_model.set_params(
                 params[len(self.actv_params_gal):])
         return valid_params
 
     def get_param_by_name(self, paramname):
-        """
+        '''
         Get a single parameter value using the parameter name as a key.
 
-        Can access 'active' or 'inactive' parameters.
-        """
+        Can access "active" or "inactive" parameters.
+        '''
         if 'psf' in paramname:
             p = self.psf_model.get_param_by_name(paramname)
         else:
@@ -129,16 +131,16 @@ class GalsimGalaxyModel(object):
         return p
 
     def set_param_by_name(self, paramname, value):
-        """
+        '''
         Set a single parameter value using the parameter name as a key.
 
-        Can set 'active' or 'inactive' parameters. So, this routine gives a
+        Can set "active" or "inactive" parameters. So, this routine gives a
         way to set fixed or fiducial values of model parameters that are not
         used in the MCMC sampling in Roaster.
 
         @param paramname    The name of the galaxy or PSF model parameter to set
         @param value        The value to assign to the model parameter
-        """
+        '''
         if 'psf' in paramname:
             self.psf_model.set_param_by_name(paramname, value)
         else:
@@ -146,11 +148,11 @@ class GalsimGalaxyModel(object):
         return None
 
     def validate_params(self):
-        """
+        '''
         Check that all model parameters are within allowed ranges
 
         @returns a boolean indicating the validity of the current parameters
-        """
+        '''
         def _inbounds(param, bounds):
             return param >= bounds[0] and param <= bounds[1]
 
@@ -172,7 +174,7 @@ class GalsimGalaxyModel(object):
 
     def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0,
                   real_galaxy_catalog=None):
-        """
+        '''
         Render a GalSim Image() object from the internal model
         
         Parameters
@@ -188,19 +190,19 @@ class GalsimGalaxyModel(object):
         gain : float, optional
             Description
         real_gals : bool, optional
-            Render using a GalSim 'RealGalaxy' rather than Spergel profile.
+            Render using a GalSim "RealGalaxy" rather than Spergel profile.
             Useful for testing model bias. (Default: False)
         
         Returns
         -------
         TYPE
             Description
-        """
+        '''
         if real_galaxy_catalog is not None:
-            # 'Real' galaxies have intrinsic sizes and ellipticities, so 
+            # "Real" galaxies have intrinsic sizes and ellipticities, so
             # do not add any more here.
             rgndx = np.random.randint(low=0, high=real_galaxy_catalog.nobjects)
-            print(f"*** Using GalSim RealGalaxy {rgndx}***")
+            print(f'*** Using GalSim RealGalaxy {rgndx}***')
             gal = galsim.RealGalaxy(real_galaxy_catalog,
                                     index=rgndx,
                                     flux=self.params.flux[0])
@@ -217,7 +219,7 @@ class GalsimGalaxyModel(object):
         N = obj.getGoodImageSize(scale)
         if N > 2048:
             model = None
-        else: 
+        else:
             try:
                 if image is not None:
                     model = obj.drawImage(image=image, gain=gain,
@@ -234,9 +236,9 @@ class GalsimGalaxyModel(object):
 
 
 if __name__ == '__main__':
-    """
+    '''
     Make a default test footprint file
-    """
+    '''
     import footprints
 
     gg = GalsimGalaxyModel()
@@ -248,12 +250,12 @@ if __name__ == '__main__':
     dummy_mask = 1.0
     dummy_background = 0.0
 
-    fname = "../data/TestData/jiffy_gg_image"
+    fname = '../data/TestData/jiffy_gg_image'
 
-    galsim.fits.write(img, fname + ".fits")
+    galsim.fits.write(img, fname + '.fits')
 
-    ftpnt = footprints.Footprints(fname + ".h5")
+    ftpnt = footprints.Footprints(fname + '.h5')
 
     ftpnt.save_images([img.array], [noise_var], [dummy_mask], [dummy_background],
-                    segment_index=0, telescope="LSST", filter_name='r')
+                    segment_index=0, telescope='LSST', filter_name='r')
     ftpnt.save_tel_metadata()
