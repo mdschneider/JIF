@@ -45,7 +45,7 @@ K_PARAM_BOUNDS = {
 
 
 class PSFModel(object):
-    def __init__(self, config, active_parameters=[]):
+    def __init__(self, config, active_parameters=[], **kwargs):
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
         self._init_params()
@@ -101,8 +101,8 @@ class ImagePSFModel(PSFModel):
     Prioritize using arguments explicitly supplied to the constructor.
     Only if these are not supplied, check the config file for relevant values.
     '''
-    def __init__(self, config, active_parameters=[], psf_image=None, scale=None):
-        super().__init__(config, active_parameters)
+    def __init__(self, config, active_parameters=[], psf_image=None, scale=None, **kwargs):
+        super().__init__(config, active_parameters, **kwargs)
         self.psf_image = psf_image
         if self.psf_image is None:
             if 'footprint' in config and 'psf_image' in config['footprint']:
@@ -133,8 +133,8 @@ class ImagePSFModel(PSFModel):
 
 class GalsimPSFModel(PSFModel):
     '''Parametric PSF models from GalSim for image forward modeling'''
-    def __init__(self, config, active_parameters=['psf_fwhm']):
-        super().__init__(config, active_parameters)
+    def __init__(self, config, active_parameters=['psf_fwhm'], **kwargs):
+        super().__init__(config, active_parameters, **kwargs)
 
     def _init_params(self):
         self.params = np.array([(0.8, 0.0, 0.0, 1.0, 0.0, 0.0)],
@@ -189,8 +189,8 @@ class GalsimPSFLSST(GalsimPSFModel):
             # shoot_accuracy=1.e-2,    # approximations in photon shooting aim to be this accurate
             minimum_fft_size=32,     # minimum size of ffts
             maximum_fft_size=20480)   # maximum size of ffts
-    def __init__(self, config, active_parameters=['psf_fwhm']):
-        super().__init__(config, active_parameters)
+    def __init__(self, config, active_parameters=['psf_fwhm'], **kwargs):
+        super().__init__(config, active_parameters, **kwargs)
         self.aper = galsim.Aperture(diam=self.tel_diam_m,
                                     # obscuration=0.65,
                                     lam=self.wavelength_nm,
