@@ -359,22 +359,14 @@ def init_roaster(args):
 def run_sampler(args, sampler, p0, nsamples, rstr):
     nburn = max([1, rstr.config['sampling']['nburn']])
     if args.verbose:
-        print('Burning with {:d} steps'.format(nburn))
-    pp, lnp, rstate = sampler.run_mcmc(p0, nburn, progress=args.verbose)
+        print('Burning in')
+    burned_state = sampler.run_mcmc(p0, nburn, progress=args.verbose)
     sampler.reset()
-
-    pps = []
-    lnps = []
     if args.verbose:
         print('Sampling')
-        nsample_range = tqdm(range(nsamples))
-    else:
-        nsample_range = range(nsamples)
-    for istep in nsample_range:
-        pp, lnp, rstate = sampler.run_mcmc(pp, 1, log_prob0=lnp, rstate0=rstate)
-        lnprior = np.array([rstr.lnprior(omega) for omega in pp])
-        pps.append(np.column_stack((pp.copy(), lnprior)))
-        lnps.append(lnp.copy())
+    final_state = sampler.run_mcmc(burned_state, nsamples, progress=args.verbose)
+    pps = sampler.get_chain()
+    lnps = sampler.get_log_prob()
     return pps, lnps
 
 def do_sampling(args, rstr, return_samples=False):
