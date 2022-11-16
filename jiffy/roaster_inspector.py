@@ -66,7 +66,8 @@ class RoasterInspector(object):
         self.args = args
         self.verbose = args.verbose
 
-        self.config = yaml.safe_load(open(args.roaster_config))
+        with open(args.roaster_config) as config_file:
+            self.config = yaml.safe_load(config_file)
 
         self._load_roaster_file(args)
         self._load_roaster_input_data()
@@ -128,10 +129,22 @@ class RoasterInspector(object):
         self.roaster.initialize_param_values(self.config["init"]["init_param_file"])
         self.params_ref = self.roaster.get_params()
 
-        dat, noise_var, mask, bkg, scale, gain = footprints.load_image(self.config["io"]["infile"],
-            telescope=self.config["io"]["telescope"],
-            filter_name=self.config["io"]["filter"],
-            segment=self.args.footprint_number)
+        def _load_array(item):
+            if isinstance(item, str):
+                item = np.load(item)
+            return item
+        if 'footprint' in self.config:
+            dat = _load_array(self.config['footprint']['image'])
+            noise_var = _load_array(self.config['footprint']['variance'])
+            mask = _load_array(self.config['footprint']['mask'])
+            scale = _load_array(self.config['footprint']['scale'])
+            gain = _load_array(self.config['footprint']['gain'])
+            bkg = _load_array(self.config['footprint']['background'])
+        else:
+            dat, noise_var, mask, bkg, scale, gain = footprints.load_image(self.config["io"]["infile"],
+                telescope=self.config["io"]["telescope"],
+                filter_name=self.config["io"]["filter"],
+                segment=self.args.footprint_number)
 
         self.roaster.import_data(dat, noise_var, mask, bkg, scale=scale, gain=gain)
 
