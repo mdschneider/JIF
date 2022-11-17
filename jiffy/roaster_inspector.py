@@ -101,15 +101,14 @@ class RoasterInspector(object):
         return None
 
     def report(self):
+        rhat = gelman_rubin(self.data)
         print("\n")
         for i, p in enumerate(self.paramnames):
-            print("%s = %4.3g +/- %4.3g" % (p, 
+            print("%s = %4.3g +/- %4.3g, G-R: %4.3f" % (p, 
                 np.mean(self.data[-self.args.keeplast:, :, i]),
-                np.std(self.data[-self.args.keeplast:, :, i])))
-        print("\n")
-        rhat = gelman_rubin(self.data[:,:,:-1])
-        print(rhat)
-        print("Gelman-Rubin statistic: {:4.3f}".format(rhat[0]))
+                np.std(self.data[-self.args.keeplast:, :, i]),
+                rhat[i]
+                ))
         print("\n")
 
     def _get_opt_params(self):
