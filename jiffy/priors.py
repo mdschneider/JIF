@@ -29,17 +29,17 @@ class IsolatedFootprintPrior(object):
         self.mean_hlrFlux = np.array([-0.83008735,  0.70397003])
         self.inv_cov_hlrFlux = np.array([[ 3.56382608, -1.54375759],
                                          [-1.54375759,  2.05263523]])
-        self.lognorm_hlrFlux = 0.5 * np.log(np.linalg.det(2 * np.pi * self.inv_cov_hlrFlux))
+        self.lognorm_hlrFlux = -np.log(2 * np.pi) + 0.5 * np.log(np.linalg.det(self.inv_cov_hlrFlux))
 
         with open(e_gm_filename, mode='rb') as e_gm_file:
             self.e_gm = pickle.load(e_gm_file)
-        self.lognorm_e_angle = np.log(2 * np.pi)
+        self.lognorm_e_angle = -np.log(2 * np.pi)
 
         with open(dr_gm_filename, mode='rb') as dr_gm_file:
             self.dr_gm = pickle.load(dr_gm_file)
-        self.lognorm_dr_angle = np.log(2 * np.pi)
+        self.lognorm_dr_angle = -np.log(2 * np.pi)
 
-        self.lognorm_nu = np.log(K_PARAM_BOUNDS['nu'][1] - K_PARAM_BOUNDS['nu'][0])
+        self.lognorm_nu = -np.log(K_PARAM_BOUNDS['nu'][1] - K_PARAM_BOUNDS['nu'][0])
 
     def __call__(self, params):
         nu, hlr, e1, e2, flux, dx, dy = tuple(params)
@@ -53,13 +53,13 @@ class IsolatedFootprintPrior(object):
 
         # Bayesian Gaussian mixture model for ellipticity
         e = np.sqrt(e1**2 + e2**2)
-        lnprior_e = -self.e_gm.score_samples([[e]])[0]
+        lnprior_e = self.e_gm.score_samples([[e]])[0]
         # Flat prior for ellipticity angle
         lnprior_e_angle = self.lognorm_e_angle
 
         # Bayesian Gaussian mixture model for position
         dr = np.sqrt(dx**2 + dy**2)
-        lnprior_dr = -self.dr_gm.score_samples([[dr]])[0]
+        lnprior_dr = self.dr_gm.score_samples([[dr]])[0]
         # Flat prior for position angle
         lnprior_dr_angle = self.lognorm_dr_angle
 
