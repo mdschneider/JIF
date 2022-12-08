@@ -370,7 +370,7 @@ def run_sampler(args, sampler, p0, nsamples, rstr):
     lnps = sampler.get_log_prob()
     return pps, lnps
 
-def do_sampling(args, rstr, return_samples=False):
+def do_sampling(args, rstr, return_samples=False, write_results=True):
     '''
     Execute MCMC sampling for posterior model inference
     '''
@@ -396,7 +396,8 @@ def do_sampling(args, rstr, return_samples=False):
         pps, lnps = cluster_walkers(pps, lnps,
             thresh_multiplier=args.cluster_walkers_thresh)
 
-    write_results(args, pps, lnps, rstr)
+    if write_results:
+        write_to_h5(args, pps, lnps, rstr)
     if return_samples:
         return pps, lnps
     else:
@@ -430,9 +431,9 @@ def cluster_walkers(pps, lnps, thresh_multiplier=1):
     # print("New pps, lnps:", pps.shape, lnps.shape)
     return pps, lnps
 
-def write_results(args, pps, lnps, rstr):
+def write_to_h5(args, pps, lnps, rstr):
     '''
-    Save and HDF5 file with posterior samples from Roaster
+    Save an HDF5 file with posterior samples from Roaster
     '''
     import os
     import h5py
