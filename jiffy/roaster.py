@@ -351,7 +351,8 @@ def init_roaster(args):
             segment=args.footprint_number, filter_name=config['io']['filter'])
     rstr.import_data(dat, noise_var, mask=mask, bkg=bkg, scale=scale, gain=gain)
 
-    rstr.initialize_param_values(config['init']['init_param_file'])
+    if 'init' in config and 'init_param_file' in config['init']:
+        rstr.initialize_param_values(config['init']['init_param_file'])
     if args.initialize_from_image:
         rstr.initialize_from_image(args)
 
