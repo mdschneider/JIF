@@ -340,12 +340,12 @@ def init_roaster(args):
         return item
     if 'footprint' in config:
         fp = config['footprint']
-        dat = _load_array(fp['image']) if 'image' in fp
-        noise_var = _load_array(fp['variance']) if 'variance' in fp
-        mask = _load_array(fp['mask']) if 'mask' in fp
-        scale = _load_array(fp['scale']) if 'scale' in fp
-        gain = _load_array(fp['gain']) if 'gain' in fp
-        bkg = _load_array(fp['background']) if 'background' in fp
+        dat = _load_array(fp['image']) if 'image' in fp else None
+        noise_var = _load_array(fp['variance']) if 'variance' in fp else None
+        mask = _load_array(fp['mask']) if 'mask' in fp else None
+        scale = _load_array(fp['scale']) if 'scale' in fp else None
+        gain = _load_array(fp['gain']) if 'gain' in fp else None
+        bkg = _load_array(fp['background']) if 'background' in fp else None
     elif 'io' in config and 'infile' in config['io']:
         dat, noise_var, mask, bkg, scale, gain = footprints.load_image(config['io']['infile'],
             segment=args.footprint_number, filter_name=config['io']['filter'])
