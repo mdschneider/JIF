@@ -120,6 +120,8 @@ class ImagePSFModel(PSFModel):
         This is the object that can be used in, e.g., GalSim convolutions
         '''
         gs_image = self.get_image()
+        if gs_image is None:
+            return None
         model = galsim.InterpolatedImage(gs_image)
         return model
 
@@ -127,6 +129,8 @@ class ImagePSFModel(PSFModel):
         '''
         Render a GalSim Image() object from the internal model
         '''
+        if self.psf_image is None or self.scale is None:
+            return None
         gs_image = galsim.Image(self.psf_image, scale=self.scale)
         return gs_image
 
