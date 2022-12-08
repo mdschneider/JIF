@@ -333,21 +333,22 @@ def init_roaster(args):
 
     rstr = Roaster(config)
 
+    dat, noise_var, mask, bkg, scale, gain = None, None, None, None, None, None
     def _load_array(item):
         if isinstance(item, str):
             item = np.load(item)
         return item
     if 'footprint' in config:
-        dat = _load_array(config['footprint']['image'])
-        noise_var = _load_array(config['footprint']['variance'])
-        mask = _load_array(config['footprint']['mask'])
-        scale = _load_array(config['footprint']['scale'])
-        gain = _load_array(config['footprint']['gain'])
-        bkg = _load_array(config['footprint']['background'])
-    else:
+        fp = config['footprint']
+        dat = _load_array(fp['image']) if 'image' in fp
+        noise_var = _load_array(fp['variance']) if 'variance' in fp
+        mask = _load_array(fp['mask']) if 'mask' in fp
+        scale = _load_array(fp['scale']) if 'scale' in fp
+        gain = _load_array(fp['gain']) if 'gain' in fp
+        bkg = _load_array(fp['background']) if 'background' in fp
+    elif 'io' in config and 'infile' in config['io']:
         dat, noise_var, mask, bkg, scale, gain = footprints.load_image(config['io']['infile'],
             segment=args.footprint_number, filter_name=config['io']['filter'])
-
     rstr.import_data(dat, noise_var, mask=mask, bkg=bkg, scale=scale, gain=gain)
 
     rstr.initialize_param_values(config['init']['init_param_file'])
