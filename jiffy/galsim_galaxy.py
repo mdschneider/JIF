@@ -74,13 +74,13 @@ class GalsimGalaxyModel(object):
         self._init_params()
 
         # Initialize psf model
-        self._init_psf(config, **kwargs)
+        self.init_psf(config, **kwargs)
 
         self.gsparams = galsim.GSParams(
             maximum_fft_size = 8192
         )
 
-    def _init_psf(self, config, **kwargs):
+    def init_psf(self, config, **kwargs):
         # Initialize the PSF model that will be convolved with the galaxy
         psf_model_class_name = config['model']['psf_class']
         self.psf_model = getattr(galsim_psf, psf_model_class_name)(
