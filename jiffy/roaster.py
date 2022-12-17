@@ -365,7 +365,7 @@ def run_sampler(args, sampler, p0, nsamples, rstr):
     if nburn > 0:
         if args.verbose:
             print('Burning in')
-        burned_in_state = sampler.run_mcmc(p0, nburn, progress=args.verbose)
+        burned_in_state = sampler.run_mcmc(p0, nburn, progress=args.show_progress_bar)
         sampler.reset()
     if args.verbose:
         print('Sampling')
@@ -478,26 +478,29 @@ def main():
 
     parser.add_argument('--config_file', type=str,
                         default='../config/jiffy.yaml',
-                        help="Name of a configuration file listing inputs." +
-                        "If specified, ignore other command line flags.")
+                        help='Name of a configuration file listing inputs.' +
+                        'If specified, ignore other command line flags.')
 
     parser.add_argument('--footprint_number', type=int, default=0,
-                        help="The footprint number to load from input")
+                        help='The footprint number to load from input.')
 
     parser.add_argument('--unparallelize', action='store_true',
-                        help="Disable parallelizing during sampling")
+                        help='Disable parallelizing during sampling.')
 
     parser.add_argument('--verbose', action='store_true',
-                        help="Enable verbose messaging")
+                        help='Enable verbose messaging.')
+
+    parser.add_argument('--show_progress_bar', action='store_true',
+                        help='Show progress bar.')
     
     parser.add_argument('--initialize_from_image', action='store_true',
-                        help="Use image characteristics to set initial parameter values. So far only tested on centered, isolated galaxies.")
+                        help='Use image characteristics to set initial parameter values. So far only tested on centered, isolated galaxies.')
     
     parser.add_argument('--cluster_walkers', action='store_true',
-                        help="Throw away outlier walkers.")
+                        help='Throw away outlier walkers.')
     
     parser.add_argument('--cluster_walkers_thresh', type=float, default=4,
-                        help="Threshold multiplier for throwing away walkers.")
+                        help='Threshold multiplier for throwing away walkers.')
     
     args = parser.parse_args()
 
