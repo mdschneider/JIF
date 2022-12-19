@@ -369,7 +369,7 @@ def run_sampler(args, sampler, p0, nsamples, rstr):
         sampler.reset()
     if args.verbose:
         print('Sampling')
-    final_state = sampler.run_mcmc(burned_in_state, nsamples, progress=args.verbose)
+    final_state = sampler.run_mcmc(burned_in_state, nsamples, progress=args.show_progress_bar)
     pps = sampler.get_chain()
     lnps = sampler.get_log_prob()
     return pps, lnps
@@ -471,7 +471,8 @@ def write_to_h5(args, pps, lnps, rstr):
     hfile.close()
     return None
 
-def main():
+
+def initialize_arg_parser():
     import argparse
     parser = argparse.ArgumentParser(
         description='Draw interim samples of source model parameters via MCMC.')
@@ -501,11 +502,15 @@ def main():
     
     parser.add_argument('--cluster_walkers_thresh', type=float, default=4,
                         help='Threshold multiplier for throwing away walkers.')
-    
+
+    return parser
+
+
+def main():
+    parser = initialize_arg_parser()
     args = parser.parse_args()
 
     rstr = init_roaster(args)
-
     do_sampling(args, rstr)
 
     return 0
