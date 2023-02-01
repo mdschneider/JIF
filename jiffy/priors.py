@@ -20,15 +20,16 @@ class EmptyPrior(object):
 # ---------------------------------------------------------------------------------------
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------
+# Isolated (one true object) footprints in DC2 tract 3830
 class IsolatedFootprintPrior(object):
     def __init__(self, e_gm_filename='e_gmfile.pkl', dr_gm_filename='dr_gmfile.pkl'):
         self.scale = 0.2 # arcsec per pixel
 
         # Mean and inverse covariance matrix of log-hlr (in log-pixels)
         # and log-flux (in log-inst flux)
-        self.mean_hlrFlux = np.array([-0.83008735,  0.70397003])
-        self.inv_cov_hlrFlux = np.array([[ 3.56382608, -1.54375759],
-                                         [-1.54375759,  2.05263523]])
+        self.mean_hlrFlux = np.array([-0.83006938,  0.70396712])
+        self.inv_cov_hlrFlux = np.array([[ 3.56387564, -1.54370072],
+                                         [-1.54370072,  2.05263992]])
         self.lognorm_hlrFlux = -np.log(2 * np.pi) + 0.5 * np.log(np.linalg.det(self.inv_cov_hlrFlux))
 
         with open(e_gm_filename, mode='rb') as e_gm_file:
@@ -43,7 +44,8 @@ class IsolatedFootprintPrior(object):
 
     def __call__(self, params):
         nu, hlr, e1, e2, flux, dx, dy = tuple(params)
-        # The prior parameters correspond to pixel distances, not arcsec
+        # These specific prior functions correspond to pixel distances,
+        # but the MCMC parameters are in arcsec
         hlr, dx, dy = hlr/self.scale, dx/self.scale, dy/self.scale
 
         # 2D Gaussian prior for log-hlr, log-flux
