@@ -57,12 +57,12 @@ class Roaster(object):
             if arg_name[:6] == 'prior_':
                 if arg_name[6:] == 'form':
                     prior_form = self.config['model'][arg_name]
-                elif arg_name[6:] == 'module':
+                if arg_name[6:] == 'module':
                     prior_module = self.config['model'][arg_name]
             elif arg_name[:21] == 'detection_correction_':
                 if arg_name[21:] == 'form':
                     detection_correction_form = self.config['model'][arg_name]
-                elif arg_name[21:] == 'module':
+                if arg_name[21:] == 'module':
                     detection_correction_module = self.config['model'][arg_name]
         prior_kwargs = dict()
         detection_correction_kwargs = dict()
@@ -326,7 +326,7 @@ class Roaster(object):
         if self.detection_correction:
             # Scale up the likelihood to account for the fact that we're only
             # looking at data examples that pass a detection algorithm
-            res += self.detection_correction
+            res += self.detection_correction(params)
         
         return float(res)
 
