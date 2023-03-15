@@ -34,7 +34,7 @@ from tqdm import tqdm
 from multiprocessing import Pool
 import galsim
 import jiffy
-from . import priors
+from . import priors, detections
 
 class Roaster(object):
     '''
@@ -51,18 +51,32 @@ class Roaster(object):
 
         prior_form = None
         prior_module = None
-        prior_kwargs = dict()
+        detection_correction_form = None
+        detection_correction_module = None
         for arg_name in self.config['model']:
             if arg_name[:6] == 'prior_':
                 if arg_name[6:] == 'form':
                     prior_form = self.config['model'][arg_name]
                 elif arg_name[6:] == 'module':
                     prior_module = self.config['model'][arg_name]
+            elif arg_name[:21] == 'detection_correction_':
+                if arg_name[21:] == 'form':
+                    detection_correction_form = self.config['model'][arg_name]
+                elif arg_name[21:] == 'module':
+                    detection_correction_module = self.config['model'][arg_name]
+        prior_kwargs = dict()
+        detection_correction_kwargs = dict()
         if 'prior' in self.config:
             for arg_name in self.config['prior']:
                 prior_kwargs[arg_name] = self.config['prior'][arg_name]
+        if 'detection_correction' in self.config:
+            for arg_name in self.config['detection_correction']:
+                detection_correction_kwargs[arg_name] = self.config['detection_correction'][arg_name]
+        
         self.prior = priors.initialize_prior(prior_form, prior_module, **prior_kwargs)
-
+        self.detection_correction = detections.initialize_detection_correction(
+            detection_correction_form, detection_correction_module, **detection_correction_kwargs)
+        
         np.random.seed(self.config['init']['seed'])
 
         self.num_sources = self.config['model']['num_sources']
@@ -263,14 +277,14 @@ class Roaster(object):
         logden = -0.5 * np.log(2 * np.pi * self.noise_var)
 
         if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
-            # Per-pixel variance plane
+            # Using a per-pixel variance plane
             # Ignore pixels with zero variance - we don't have a good model for those
             valid_pixels = self.noise_var != 0
             if self.mask is not None:
                 valid_pixels &= self.mask.astype(bool)
             lnnorm = np.sum(logden[valid_pixels])
         else:
-            # Constant variance over the whole image
+            # Using a constant variance over the whole image
             if self.mask is None:
                 npix = self.ngrid_x * self.ngrid_y
             elif np.issubdtype(type(self.mask), np.number):
@@ -285,6 +299,7 @@ class Roaster(object):
         '''
         Evaluate the log-likelihood of the pixel data in a footprint
         '''
+        # Assign 0 probability to parameter combinations that do not yield a valid model image
         res = -np.inf
 
         model = self._get_model_image()
@@ -292,7 +307,7 @@ class Roaster(object):
             # Compute log-likelihood assuming independent Gaussian-distributed noise in each pixel
             delta = model.array - self.data
             if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
-                # Per-pixel variance plane
+                # Using a per-pixel variance plane
                 # Ignore pixels with zero variance - we don't have a good model for those
                 valid_pixels = self.noise_var != 0
                 if self.mask is None:
@@ -301,20 +316,28 @@ class Roaster(object):
                     valid_pixels &= self.mask.astype(bool)
                     sum_chi_sq = np.sum(delta[valid_pixels]**2 / (self.noise_var[valid_pixels]))
             else:
-                # Constant variance over the whole image
+                # Using a constant variance over the whole image
                 if self.mask is None:
                     sum_chi_sq = np.sum(delta**2) / self.noise_var
                 else:
                     sum_chi_sq = np.sum(delta[self.mask.astype(bool)]**2) / self.noise_var
             res = -0.5*sum_chi_sq + self.lnnorm
-
+        
+        if self.detection_correction:
+            # Scale up the likelihood to account for the fact that we're only
+            # looking at data examples that pass a detection algorithm
+            res += self.detection_correction
+        
         return float(res)
 
     def __call__(self, params):
+        # Assign 0 probability to invalid parameter combinations
         lnp = -np.inf
 
         valid_params = self.set_params(params)
         if valid_params:
+            # Compute the log-likelihood and log-prior.
+            # Don't bother with the log-evidence because this doesn't depend on specific parameter choices.
             lnp = self.lnlike(params)
             lnp += self.lnprior(params)
 
