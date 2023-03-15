@@ -43,13 +43,15 @@ class IsolatedFootprintDetectionCorrection(object):
                                        0.04636108123825295, 0.04208074621293895, 0.04025619844442545, 0.03581281356628938,
                                        0.03318474436787526, 0.03092606432754239, 0.02778274067041314, 0.02664995321179559,
                                        0.024019552532210272, 0.021412421269366242, 0.020695216056077402])
-        self.log_flux_bins_upper = np.log(self.flux_bins_upper)
         self.neg_log_detected_frac = -np.log(self.detected_frac)
     
-    def __call__(self, log_flux):
-        idx = np.digitize(log_flux, self.log_flux_bins_upper, right=False)
+    def __call__(self, params):
+        nu, hlr, e1, e2, flux, dx, dy = tuple(params)
+        
+        idx = np.digitize(flux, self.flux_bins_upper, right=False)
         idx = min(idx, len(self.detected_frac) - 1)
         neg_log_prob = self.neg_log_detected_frac[idx]
+        
         return neg_log_prob
 
 detection_corrections = {None: False,
