@@ -26,15 +26,18 @@
 '''
 @file jiffy roaster.py
 
-Draw posterior samples of image source model parameters given the
-likelihood functxion of an image footprint
+Draw posterior samples of image source model parameters
 '''
 import numpy as np
 from tqdm import tqdm
 from multiprocessing import Pool
 import galsim
+
 import jiffy
 from . import priors, detections
+
+from scipy.optimize import minimize
+from galsim.errors import GalSimFFTSizeError, GalSimError
 
 class Roaster(object):
     '''
@@ -204,6 +207,70 @@ class Roaster(object):
             else:
                 fval = float(val)
             self.set_param_by_name(paramname, fval)
+        return None
+    
+    # Warning: Currently only works with IsolatedFootprintPrior
+    def map_initialize(self, args):
+        # Initial parameter values for the optimizer
+        # Use sum of footprint image pixel values for flux estimate
+        flux0 = max(self.data.sum(), 0.001)
+        # Find the expected hlr conditioned on the flux level
+        prior_cov_hlrFlux = np.linalg.inv(self.prior.inv_cov_hlrFlux)
+        hlr0 = np.exp(self.prior.mean_hlrFlux[0] +
+                     (prior_cov_hlrFlux[1,0] / prior_cov_hlrFlux[1,1]) *
+                     (np.log(flux0) - self.prior.mean_hlrFlux[1])) # pixels
+        hlr0 = max(hlr0, 0.001) * 0.2 # convert to arcsec
+        # nu, hlr (arcsec), e1, e2_scale, flux, dx (arcsec), dy (arcsec)
+        # e2_scale is defined as: e2 / sqrt(1 - e1**2)
+        x0 = [0., hlr0, 0., 0., flux0, 0, 0]
+        
+        bnds = [# Excessively low nu coupled with high hlr can cause rendering problems
+               (-0.75, 3.99), # nu
+               (0.01, 0.5), # hlr in arcsec
+                # e1**2 + e2**2 should be strictly < 1
+               (-0.99, 0.99), (-0.99, 0.99), # e1, e2_scale
+               (1e-4, None), # flux
+               (None, None), (None, None) # dx, dy
+        ]
+        opts = {'ftol': 1e-8, 'eps': 1e-5}
+        
+        # Find the negative log-posterior for a given parameter tuple
+        def loss(x):
+            nu, hlr, e1, e2_scale, flux, dx, dy = tuple(x)
+            e2 = e2_scale * np.sqrt(1 - e1**2)
+            params = np.array([nu, hlr, e1, e2, flux, dx, dy])
+            lnpost = self(params)
+            return -lnpost
+        
+        fit_succeeded = False
+        try:
+            res = minimize(loss, x0, method='L-BFGS-B',
+                           bounds=bnds, options=opts)
+            if not res.success:
+                res = minimize(loss, x0, method='SLSQP',
+                               bounds=bnds, options=opts)
+            fit_succeeded = res.success
+            if args.verbose and not fit_succeeded:
+                print('Optimizer failed to find MAP.')
+        except GalSimFFTSizeError:
+            if args.verbose:
+                print('GalSimFFTSizeError encountered during MAP fit.')
+        except GalSimError:
+            if args.verbose:
+                print('GalSimError other than GalSimFFTSizeError encountered during MAP fit.')
+        if not fit_succeeded:
+            if args.verbose:
+                print('MAP initialization failed. Trying HSM initialization instead.')
+            self.initialize_from_image(args)
+            return None
+        
+        # Unpack the results
+        nu_opt, hlr_opt, e1_opt, e2_scale_opt, flux_opt, dx_opt, dy_opt = tuple(res.x)
+        e2_opt = e2_scale_opt * np.sqrt(1 - e1_opt**2)
+        params_opt = np.array([nu_opt, hlr_opt, e1_opt, e2_opt, flux_opt, dx_opt, dy_opt])
+        # Initialize the model with these parameters
+        valid_params = self.set_params(params_opt)
+        
         return None
     
     def initialize_from_image(self, args):
@@ -377,7 +444,9 @@ def init_roaster(args):
 
     if 'init' in config and 'init_param_file' in config['init']:
         rstr.initialize_param_values(config['init']['init_param_file'])
-    if args.initialize_from_image:
+    if args.map_initialize(args):
+        rstr.map_initialize(args)
+    elif args.initialize_from_image:
         rstr.initialize_from_image(args)
 
     return rstr
@@ -502,27 +571,30 @@ def initialize_arg_parser():
 
     parser.add_argument('--config_file', type=str,
                         default='../config/jiffy.yaml',
-                        help='Name of a configuration file listing inputs.' +
-                        'If specified, ignore other command line flags.')
+                        help='Name of a configuration file listing inputs.')
 
     parser.add_argument('--footprint_number', type=int, default=0,
                         help='The footprint number to load from input.')
 
     parser.add_argument('--unparallelize', action='store_true',
-                        help='Disable parallelizing during sampling.')
+                        help='Disable parallelizing during sampling.' +
+                        ' Usually need to do this if running multiple separate fits in parallel.')
 
     parser.add_argument('--verbose', action='store_true',
                         help='Enable verbose messaging.')
-
     parser.add_argument('--show_progress_bar', action='store_true',
                         help='Show progress bar.')
     
+    parser.add_argument('--map_initialize', action='store_true',
+                        help='Use MAP fit to set initial parameter values.' +
+                        ' So far only implemented for isolated galaxy footprints.')
     parser.add_argument('--initialize_from_image', action='store_true',
-                        help='Use image characteristics to set initial parameter values. So far only tested on centered, isolated galaxies.')
+                        help='Use image characteristics estimated with HSM to set initial parameter values.' +
+                        ' So far only tested on centered, isolated galaxies.' +
+                        ' Superseded by --map_initialize.')
     
     parser.add_argument('--cluster_walkers', action='store_true',
                         help='Throw away outlier walkers.')
-    
     parser.add_argument('--cluster_walkers_thresh', type=float, default=4,
                         help='Threshold multiplier for throwing away walkers.')
 
