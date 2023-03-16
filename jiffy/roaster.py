@@ -444,7 +444,7 @@ def init_roaster(args):
 
     if 'init' in config and 'init_param_file' in config['init']:
         rstr.initialize_param_values(config['init']['init_param_file'])
-    if args.map_initialize(args):
+    if args.map_initialize:
         rstr.map_initialize(args)
     elif args.initialize_from_image:
         rstr.initialize_from_image(args)
