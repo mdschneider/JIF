@@ -106,6 +106,9 @@ class Roaster(object):
         self.mask = None
         self.bkg = None
         self.lnnorm = self._set_like_lnnorm()
+        
+        # This is decided at the beginning of roasting. True by default until then.
+        self.good_initial_params = True
 
     def get_params(self):
         '''
@@ -242,7 +245,10 @@ class Roaster(object):
             lnpost = self(params)
             return -lnpost
         
+        # Try a MAP fit
+        # Default to x0 if the fit fails
         fit_succeeded = False
+        params_opt = x0
         try:
             res = minimize(loss, x0, method='L-BFGS-B',
                            bounds=bnds, options=opts)
@@ -260,16 +266,19 @@ class Roaster(object):
                 print('GalSimError other than GalSimFFTSizeError encountered during MAP fit.')
         if not fit_succeeded:
             if args.verbose:
-                print('MAP initialization failed. Trying HSM initialization instead.')
-            self.initialize_from_image(args)
-            return None
+                print('MAP initialization failed. Using naive initialization.')
+        else:
+            params_opt = res.x
         
-        # Unpack the results
-        nu_opt, hlr_opt, e1_opt, e2_scale_opt, flux_opt, dx_opt, dy_opt = tuple(res.x)
+        # Unpack the fit results
+        nu_opt, hlr_opt, e1_opt, e2_scale_opt, flux_opt, dx_opt, dy_opt = tuple(params_opt)
         e2_opt = e2_scale_opt * np.sqrt(1 - e1_opt**2)
         params_opt = np.array([nu_opt, hlr_opt, e1_opt, e2_opt, flux_opt, dx_opt, dy_opt])
         # Initialize the model with these parameters
         valid_params = self.set_params(params_opt)
+        
+        self.map_params = params_opt
+        self.map_succeeded = fit_succeeded
         
         return None
     
@@ -316,48 +325,60 @@ class Roaster(object):
         return None
 
     def _get_model_image(self, real_galaxy_catalog=None):
+        # Set up a blank template image
         model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
                                     scale=self.scale, init_value=0.)
+        
+        # Try to draw all the sources on the template image
         for isrc in range(self.num_sources):
             if model_image is None: # Can happen if previous source could not render
-                model_image = self.src_models[isrc].get_image(self.ngrid_x,
-                    self.ngrid_y, scale=self.scale, gain=self.gain,
-                    real_galaxy_catalog=real_galaxy_catalog)
+                # Give up on rendering, as this parameter combination's likelihood cannot be rigorously evaluated
+                break
             else:
                 model_image = self.src_models[isrc].get_image(image=model_image,
                                                               gain=self.gain,
                                                               real_galaxy_catalog=real_galaxy_catalog)
-        if model_image is None:
-            # Image did not render. Make a zero image array for the likelihood
-            model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
-                            scale=self.scale, init_value=0.)
-
+        
         return model_image
 
     def lnprior(self, params):
         '''
         Evaluate the log-prior of the model parameters
         '''
-        return self.prior(params)
+        try:
+            res = self.prior(params)
+        except:
+            # Assign 0 probability to parameter combinations that produce an unhandled exception in prior evaluation
+            return -np.inf
+        
+        return res
 
     def _set_like_lnnorm(self):
+        # This is -inf at locations where noise_var == 0
         logden = -0.5 * np.log(2 * np.pi * self.noise_var)
 
         if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
             # Using a per-pixel variance plane
-            # Ignore pixels with zero variance - we don't have a good model for those
+            # Treat pixels with zero variance as masked
             valid_pixels = self.noise_var != 0
             if self.mask is not None:
                 valid_pixels &= self.mask.astype(bool)
+            if np.sum(valid_pixels) == 0:
+                return np.nan
             lnnorm = np.sum(logden[valid_pixels])
         else:
-            # Using a constant variance over the whole image
-            if self.mask is None:
+            # Using a constant variance over the entire image
+            # Treat zero variance as a mask for the entire image
+            if self.noise_var == 0:
+                return np.nan
+            elif self.mask is None:
                 npix = self.ngrid_x * self.ngrid_y
             elif np.issubdtype(type(self.mask), np.number):
                 npix = self.ngrid_x * self.ngrid_y * mask
             else:
                 npix = np.sum(self.mask)
+            if npix == 0:
+                return np.nan
             lnnorm = npix * logden
 
         return float(lnnorm)
@@ -366,36 +387,52 @@ class Roaster(object):
         '''
         Evaluate the log-likelihood of the pixel data in a footprint
         '''
-        # Assign 0 probability to parameter combinations that do not yield a valid model image
         res = -np.inf
 
-        model = self._get_model_image()
+        try:
+            model = self._get_model_image()
+        except:
+            # Assign 0 probability to parameter combinations that produce an unhandled exception in image rendering
+            return -np.inf
+        
         if model is not None:
             # Compute log-likelihood assuming independent Gaussian-distributed noise in each pixel
             delta = model.array - self.data
             if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
                 # Using a per-pixel variance plane
-                # Ignore pixels with zero variance - we don't have a good model for those
+                # Treat zero variance pixels as masked
                 valid_pixels = self.noise_var != 0
-                if self.mask is None:
-                    sum_chi_sq = np.sum(delta[valid_pixels]**2 / self.noise_var[valid_pixels])
-                else:
+                if self.mask is not None:
                     valid_pixels &= self.mask.astype(bool)
-                    sum_chi_sq = np.sum(delta[valid_pixels]**2 / (self.noise_var[valid_pixels]))
+                if np.sum(valid_pixels) == 0:
+                    return 0
+                sum_chi_sq = np.sum(delta[valid_pixels]**2 / self.noise_var[valid_pixels])
             else:
-                # Using a constant variance over the whole image
+                # Using a constant variance over the entire image
+                # Treat zero variance as a mask for the entire image
+                if self.noise_var == 0:
+                    return 0
                 if self.mask is None:
                     sum_chi_sq = np.sum(delta**2) / self.noise_var
                 else:
+                    if np.sum(self.mask) == 0:
+                        return 0
                     sum_chi_sq = np.sum(delta[self.mask.astype(bool)]**2) / self.noise_var
-            res = -0.5*sum_chi_sq + self.lnnorm
+            
+            res = -0.5 * sum_chi_sq + self.lnnorm
         
         if self.detection_correction:
             # Scale up the likelihood to account for the fact that we're only
             # looking at data examples that pass a detection algorithm
-            res += self.detection_correction(params)
+            try:
+                detection_correction = self.detection_correction(params)
+            except:
+                # Assign 0 probability to parameter combinations that produce an unhandled exception in detection correction evaluation
+                return -np.inf
+            res += detection_correction
         
-        return float(res)
+        res = float(res)
+        return res
 
     def __call__(self, params):
         # Assign 0 probability to invalid parameter combinations
@@ -445,6 +482,8 @@ def init_roaster(args):
     if 'init' in config and 'init_param_file' in config['init']:
         rstr.initialize_param_values(config['init']['init_param_file'])
     if args.map_initialize:
+        self.map_params = None
+        self.map_succeeded = False
         rstr.map_initialize(args)
     elif args.initialize_from_image:
         rstr.initialize_from_image(args)
@@ -472,6 +511,10 @@ def do_sampling(args, rstr, return_samples=False, write_results=True):
     '''
     import emcee
     omega_interim = rstr.get_params()
+    if not np.isfinite(rstr(omega_interim)):
+        rstr.good_initial_params = False
+        if args.verbose:
+            print('Bad initial chain parameters.')
 
     nvars = len(omega_interim)
     nsamples = rstr.config['sampling']['nsamples']
