@@ -153,18 +153,21 @@ class GalsimGalaxyModel(object):
 
         @returns a boolean indicating the validity of the current parameters
         '''
+        # Run a series of validity checks
+        # If any of them fail, immediately return False
         def _inbounds(param, bounds):
             return param >= bounds[0] and param <= bounds[1]
-
-        valid_params = 1
         for pname, _ in self.params.dtype.descr:
+            if not np.isfinite(self.params[pname][0]):
+                return False
             if not _inbounds(self.params[pname][0], K_PARAM_BOUNDS[pname]):
-                valid_params *= 0
+                return False
         for constraint_satisfied in PARAM_CONSTRAINTS:
             if not constraint_satisfied(self.params):
-                valid_params *= 0
-
-        return bool(valid_params)
+                return False
+        
+        # All checks passed
+        return True
 
     def get_psf(self):
         if self.sample_psf:
