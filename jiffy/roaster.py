@@ -216,22 +216,27 @@ class Roaster(object):
     def map_initialize(self, args):
         # Initial parameter values for the optimizer
         # Use sum of footprint image pixel values for flux estimate
-        flux0 = max(self.data.sum(), 0.001)
+        # The minimum true inst flux in my data set is about 0.108
+        flux0 = max(self.data.sum(), 0.1)
         # Find the expected hlr conditioned on the flux level
         prior_cov_hlrFlux = np.linalg.inv(self.prior.inv_cov_hlrFlux)
         hlr0 = np.exp(self.prior.mean_hlrFlux[0] +
                      (prior_cov_hlrFlux[1,0] / prior_cov_hlrFlux[1,1]) *
                      (np.log(flux0) - self.prior.mean_hlrFlux[1])) # pixels
-        hlr0 = max(hlr0, 0.001) * 0.2 # convert to arcsec
+        # The minimum true hlr in my data set is about 0.0275,
+        # which is close to the prior mean (0.0245) for a flux of 0.108.
+        hlr0 = max(hlr0 * 0.2, 0.02) # convert to arcsec
         # nu, hlr (arcsec), e1, e2_scale, flux, dx (arcsec), dy (arcsec)
         # e2_scale is defined as: e2 / sqrt(1 - e1**2)
         x0 = [0., hlr0, 0., 0., flux0, 0, 0]
         
         bnds = [# Excessively low nu coupled with high hlr can cause rendering problems
                (-0.75, 3.99), # nu
-               (0.01, 0.5), # hlr in arcsec
+               # hlr needs to be able to go below any given value of flux
+               (1e-5, 0.5), # hlr in arcsec
                 # e1**2 + e2**2 should be strictly < 1
                (-0.99, 0.99), (-0.99, 0.99), # e1, e2_scale
+               # Negative fluxes aren't physical. Small values may be explored for negative-flux images.
                (1e-4, None), # flux
                (None, None), (None, None) # dx, dy
         ]
