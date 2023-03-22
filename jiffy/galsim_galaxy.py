@@ -37,12 +37,12 @@ from jiffy import galsim_psf
 # Used in validate_params()
 K_PARAM_BOUNDS = {
     'nu': [-0.84, 3.99],
-    'hlr': [0.01, 6.0],
+    'hlr': [0.00001, 6.0],
     'e1': [-0.99, 0.99],
     'e2': [-0.99, 0.99],
     'flux': [0.0001, np.inf],
-    'dx': [-20.0, 20.0],
-    'dy': [-20.0, 20.0]
+    'dx': [-np.inf, np.inf],
+    'dy': [-np.inf, np.inf]
 }
 PARAM_CONSTRAINTS = (
     lambda params: params['e1'][0]**2 + params['e2'][0]**2 < 1,
