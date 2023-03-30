@@ -32,6 +32,7 @@ import numpy as np
 from tqdm import tqdm
 from multiprocessing import Pool
 import galsim
+import emcee
 
 import jiffy
 from . import priors, detections
@@ -510,11 +511,10 @@ def run_sampler(args, sampler, p0, nsamples, rstr):
     lnps = sampler.get_log_prob()
     return pps, lnps
 
-def do_sampling(args, rstr, return_samples=False, write_results=True):
+def do_sampling(args, rstr, return_samples=False, write_results=True, moves=None):
     '''
     Execute MCMC sampling for posterior model inference
     '''
-    import emcee
     omega_interim = rstr.get_params()
     if not np.isfinite(rstr(omega_interim)):
         rstr.good_initial_params = False
@@ -529,11 +529,11 @@ def do_sampling(args, rstr, return_samples=False, write_results=True):
                                  np.ones_like(omega_interim) * 0.01, nwalkers)
 
     if args.unparallelize:
-        sampler = emcee.EnsembleSampler(nwalkers, nvars, rstr)
+        sampler = emcee.EnsembleSampler(nwalkers, nvars, rstr, moves=moves)
         pps, lnps = run_sampler(args, sampler, p0, nsamples, rstr)
     else:
         with Pool() as pool:
-            sampler = emcee.EnsembleSampler(nwalkers, nvars, rstr, pool=pool)
+            sampler = emcee.EnsembleSampler(nwalkers, nvars, rstr, moves=moves, pool=pool)
             pps, lnps = run_sampler(args, sampler, p0, nsamples, rstr)
     
     if args.cluster_walkers:
