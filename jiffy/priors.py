@@ -22,7 +22,8 @@ class EmptyPrior(object):
 # ---------------------------------------------------------------------------------------
 # Isolated (one true object) footprints detected in DC2 tract 3830
 class IsolatedFootprintPrior(object):
-    def __init__(self, args=None, e_gm_filename='e_gmfile.pkl', dr_gm_filename='dr_gmfile.pkl'):
+    def __init__(self, args=None, hlrFlux_gm_filename='hlrflux_gmfile.pkl',
+        e_gm_filename='e_gmfile.pkl', dr_gm_filename='dr_gmfile.pkl'):
         self.scale = 0.2 # arcsec per pixel
 
         # Mean and inverse covariance matrix of log-hlr (in log-pixels)
@@ -30,7 +31,10 @@ class IsolatedFootprintPrior(object):
         self.mean_hlrFlux = np.array([-0.83006938,  0.70396712])
         self.inv_cov_hlrFlux = np.array([[ 3.56387564, -1.54370072],
                                          [-1.54370072,  2.05263992]])
-        self.lognorm_hlrFlux = -np.log(2 * np.pi) + 0.5 * np.log(np.linalg.det(self.inv_cov_hlrFlux))
+        # self.lognorm_hlrFlux = -np.log(2 * np.pi) + 0.5 * np.log(np.linalg.det(self.inv_cov_hlrFlux))
+
+        with open(hlrFlux_gm_filename, mode='rb') as hlrFlux_gm_file:
+            self.hlrFlux_gm = pickle.load(hlrFlux_gm_file)
 
         with open(e_gm_filename, mode='rb') as e_gm_file:
             self.e_gm = pickle.load(e_gm_file)
@@ -48,10 +52,14 @@ class IsolatedFootprintPrior(object):
         # but the MCMC parameters are in arcsec
         hlr, dx, dy = hlr / self.scale, dx / self.scale, dy / self.scale
 
-        # 2D Gaussian prior for log-hlr, log-flux
-        hlrFlux_dev = np.log(np.array([hlr, flux])) - self.mean_hlrFlux
-        lnprior_hlrFlux = self.lognorm_hlrFlux
-        lnprior_hlrFlux -= 0.5 * np.dot(hlrFlux_dev, np.matmul(self.inv_cov_hlrFlux, hlrFlux_dev))
+        # # 2D Gaussian prior for log-hlr, log-flux
+        # hlrFlux_dev = np.log(np.array([hlr, flux])) - self.mean_hlrFlux
+        # lnprior_hlrFlux = self.lognorm_hlrFlux
+        # lnprior_hlrFlux -= 0.5 * np.dot(hlrFlux_dev, np.matmul(self.inv_cov_hlrFlux, hlrFlux_dev))
+
+        # Bayesian Gaussian mixture model for log-hlr, log-flux
+        log_hlrFlux = np.log(np.array([hlr, flux]))
+        lnprior_hlrFlux = self.hlrFlux_gm.score_samples([log_hlrFlux])
 
         # Bayesian Gaussian mixture model for ellipticity
         e = np.sqrt(e1**2 + e2**2)
