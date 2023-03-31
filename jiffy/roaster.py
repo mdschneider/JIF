@@ -30,15 +30,19 @@ Draw posterior samples of image source model parameters
 '''
 import numpy as np
 from tqdm import tqdm
+import yaml
+import configparser
 from multiprocessing import Pool
+
 import galsim
+from galsim.errors import GalSimFFTSizeError, GalSimError
+
 import emcee
+from scipy.optimize import minimize
 
 import jiffy
 from . import priors, detections
-
-from scipy.optimize import minimize
-from galsim.errors import GalSimFFTSizeError, GalSimError
+import footprints
 
 class Roaster(object):
     '''
@@ -46,41 +50,10 @@ class Roaster(object):
 
     Only single epoch images are allowed.
     '''
-    def __init__(self, config='../config/jiffy.yaml'):
-        if isinstance(config, str):
-            import yaml
-            with open(config, 'r') as f:
-                config = yaml.safe_load(f)
-        self.config = config
+    def __init__(self, args):
+        with open(args.config_file, 'r') as config_file:
+            self.config = yaml.safe_load(config_file)
 
-        prior_form = None
-        prior_module = None
-        detection_correction_form = None
-        detection_correction_module = None
-        for arg_name in self.config['model']:
-            if arg_name[:6] == 'prior_':
-                if arg_name[6:] == 'form':
-                    prior_form = self.config['model'][arg_name]
-                if arg_name[6:] == 'module':
-                    prior_module = self.config['model'][arg_name]
-            elif arg_name[:21] == 'detection_correction_':
-                if arg_name[21:] == 'form':
-                    detection_correction_form = self.config['model'][arg_name]
-                if arg_name[21:] == 'module':
-                    detection_correction_module = self.config['model'][arg_name]
-        prior_kwargs = dict()
-        detection_correction_kwargs = dict()
-        if 'prior' in self.config:
-            for arg_name in self.config['prior']:
-                prior_kwargs[arg_name] = self.config['prior'][arg_name]
-        if 'detection_correction' in self.config:
-            for arg_name in self.config['detection_correction']:
-                detection_correction_kwargs[arg_name] = self.config['detection_correction'][arg_name]
-        
-        self.prior = priors.initialize_prior(prior_form, prior_module, **prior_kwargs)
-        self.detection_correction = detections.initialize_detection_correction(
-            detection_correction_form, detection_correction_module, **detection_correction_kwargs)
-        
         np.random.seed(self.config['init']['seed'])
 
         self.num_sources = self.config['model']['num_sources']
@@ -94,8 +67,11 @@ class Roaster(object):
             model_module = __import__(self.config['model']['model_module'])
         else:
             model_module = __import__('jiffy.galsim_galaxy')
-        self.src_models = [getattr(model_module, model_class_name)(config, **model_kwargs)
+        self.src_models = [getattr(model_module, model_class_name)(self.config, **model_kwargs)
                            for i in range(self.num_sources)]
+
+        self.init_prior(args)
+        self.init_detection_correction(args)
 
         # Initialize objects describing the pixel data in a footprint
         self.ngrid_x = 64
@@ -107,9 +83,46 @@ class Roaster(object):
         self.mask = None
         self.bkg = None
         self.lnnorm = self._set_like_lnnorm()
-        
+        self.load_and_import_data()
+
         # This is decided at the beginning of roasting. True by default until then.
         self.good_initial_params = True
+
+    def init_prior(self, args=None):
+        # Parse config
+        prior_form = None
+        prior_module = None
+        for arg_name in self.config['model']:
+            if arg_name[:6] == 'prior_':
+                if arg_name[6:] == 'form':
+                    prior_form = self.config['model'][arg_name]
+                if arg_name[6:] == 'module':
+                    prior_module = self.config['model'][arg_name]
+        prior_kwargs = dict()
+        if 'prior' in self.config:
+            for arg_name in self.config['prior']:
+                prior_kwargs[arg_name] = self.config['prior'][arg_name]
+        
+        # Initialize the prior
+        self.prior = priors.initialize_prior(prior_form, prior_module, args, **prior_kwargs)
+
+    def init_detection_correction(self, args=None):
+        # Parse the config
+        detection_correction_form = None
+        detection_correction_module = None
+        for arg_name in self.config['model']:
+            if arg_name[:21] == 'detection_correction_':
+                if arg_name[21:] == 'form':
+                    detection_correction_form = self.config['model'][arg_name]
+                if arg_name[21:] == 'module':
+                    detection_correction_module = self.config['model'][arg_name]
+        detection_correction_kwargs = dict()
+        if 'detection_correction' in self.config:
+            for arg_name in self.config['detection_correction']:
+                detection_correction_kwargs[arg_name] = self.config['detection_correction'][arg_name]
+        
+        self.detection_correction = detections.initialize_detection_correction(
+            detection_correction_form, detection_correction_module, args, **detection_correction_kwargs)        
 
     def get_params(self):
         '''
@@ -174,7 +187,7 @@ class Roaster(object):
 
     def draw(self):
         '''
-        Draw simulated data from the likelihood function
+        Draw simulated noiseless data from the likelihood function
         '''
         return self.make_data()
 
@@ -191,19 +204,34 @@ class Roaster(object):
         self.gain = gain
         self.lnnorm = self._set_like_lnnorm()
 
+    def load_and_import_data(self):
+        dat, noise_var, mask, bkg, scale, gain = None, None, None, None, None, None
+        def _load_array(item):
+            if isinstance(item, str):
+                item = np.load(item)
+            return item
+        if 'footprint' in self.config:
+            fp = self.config['footprint']
+            dat = _load_array(fp['image']) if 'image' in fp else None
+            noise_var = _load_array(fp['variance']) if 'variance' in fp else None
+            mask = _load_array(fp['mask']) if 'mask' in fp else None
+            scale = _load_array(fp['scale']) if 'scale' in fp else None
+            gain = _load_array(fp['gain']) if 'gain' in fp else None
+            bkg = _load_array(fp['background']) if 'background' in fp else None
+        elif 'io' in self.config and 'infile' in self.config['io']:
+            dat, noise_var, mask, bkg, scale, gain = footprints.load_image(self.config['io']['infile'],
+                segment=args.footprint_number, filter_name=self.config['io']['filter'])
+        if dat is not None:
+            self.import_data(dat, noise_var, mask=mask, bkg=bkg, scale=scale, gain=gain)
+
     def initialize_param_values(self, param_file_name):
         '''
         Initialize model parameter values from config file
         '''
-        try:
-            import configparser
-        except:
-            import ConfigParser as configparser
+        param_config = configparser.RawConfigParser()
+        param_config.read(param_file_name)
 
-        config = configparser.RawConfigParser()
-        config.read(param_file_name)
-
-        params = config.items('parameters')
+        params = param_config.items('parameters')
         for paramname, val in params:
             vals = str.split(val, ' ')
             if len(vals) > 1: ### Assume multiple sources
@@ -456,40 +484,15 @@ class Roaster(object):
 
 def init_roaster(args):
     '''
-    Initialize Roaster object, load data, and setup model
+    Instantiate Roaster object and initialize parameters
     '''
-    import yaml
-    import footprints
+    rstr = Roaster(args)
 
-    with open(args.config_file) as config_file:
-        config = yaml.safe_load(config_file)
-
-    rstr = Roaster(config)
-
-    dat, noise_var, mask, bkg, scale, gain = None, None, None, None, None, None
-    def _load_array(item):
-        if isinstance(item, str):
-            item = np.load(item)
-        return item
-    if 'footprint' in config:
-        fp = config['footprint']
-        dat = _load_array(fp['image']) if 'image' in fp else None
-        noise_var = _load_array(fp['variance']) if 'variance' in fp else None
-        mask = _load_array(fp['mask']) if 'mask' in fp else None
-        scale = _load_array(fp['scale']) if 'scale' in fp else None
-        gain = _load_array(fp['gain']) if 'gain' in fp else None
-        bkg = _load_array(fp['background']) if 'background' in fp else None
-    elif 'io' in config and 'infile' in config['io']:
-        dat, noise_var, mask, bkg, scale, gain = footprints.load_image(config['io']['infile'],
-            segment=args.footprint_number, filter_name=config['io']['filter'])
-    if dat is not None:
-        rstr.import_data(dat, noise_var, mask=mask, bkg=bkg, scale=scale, gain=gain)
-
-    if 'init' in config and 'init_param_file' in config['init']:
-        rstr.initialize_param_values(config['init']['init_param_file'])
+    if 'init' in rstr.config and 'init_param_file' in rstr.config['init']:
+        rstr.initialize_param_values(rstr.config['init']['init_param_file'])
     if args.map_initialize:
-        self.map_params = None
-        self.map_succeeded = False
+        rstr.map_params = None
+        rstr.map_succeeded = False
         rstr.map_initialize(args)
     elif args.initialize_from_image:
         rstr.initialize_from_image(args)
@@ -653,7 +656,7 @@ def main():
     parser = initialize_arg_parser()
     args = parser.parse_args()
 
-    rstr = init_roaster(args)
+    rstr = Roaster(args)
     do_sampling(args, rstr)
 
     return 0

@@ -10,19 +10,19 @@ class EmptyPrior(object):
     This prior form is flat in all parameters (for any given parameterization).
     '''
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         pass
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         return 0.0
 
 
 # ---------------------------------------------------------------------------------------
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------
-# Isolated (one true object) footprints in DC2 tract 3830
+# Isolated (one true object) footprints detected in DC2 tract 3830
 class IsolatedFootprintPrior(object):
-    def __init__(self, e_gm_filename='e_gmfile.pkl', dr_gm_filename='dr_gmfile.pkl'):
+    def __init__(self, args=None, e_gm_filename='e_gmfile.pkl', dr_gm_filename='dr_gmfile.pkl'):
         self.scale = 0.2 # arcsec per pixel
 
         # Mean and inverse covariance matrix of log-hlr (in log-pixels)
@@ -46,12 +46,12 @@ class IsolatedFootprintPrior(object):
         nu, hlr, e1, e2, flux, dx, dy = tuple(params)
         # These specific prior functions correspond to pixel distances,
         # but the MCMC parameters are in arcsec
-        hlr, dx, dy = hlr/self.scale, dx/self.scale, dy/self.scale
+        hlr, dx, dy = hlr / self.scale, dx / self.scale, dy / self.scale
 
         # 2D Gaussian prior for log-hlr, log-flux
         hlrFlux_dev = np.log(np.array([hlr, flux])) - self.mean_hlrFlux
         lnprior_hlrFlux = self.lognorm_hlrFlux
-        lnprior_hlrFlux -= 0.5*np.dot(hlrFlux_dev, np.matmul(self.inv_cov_hlrFlux, hlrFlux_dev))
+        lnprior_hlrFlux -= 0.5 * np.dot(hlrFlux_dev, np.matmul(self.inv_cov_hlrFlux, hlrFlux_dev))
 
         # Bayesian Gaussian mixture model for ellipticity
         e = np.sqrt(e1**2 + e2**2)
@@ -76,7 +76,7 @@ class DefaultPriorSpergel(object):
     """
     A default prior for a single-component Spergel galaxy
     """
-    def __init__(self):
+    def __init__(self, args=None):
         ### Gaussian mixture in 'nu' parameter
         # self.nu_mean_1 = -0.6 ### ~ de Vacouleur profile
         # self.nu_mean_2 = 0.5 ### ~ exponential profile
@@ -158,7 +158,7 @@ priors = {None: EmptyPrior,
           'EmptyPrior': EmptyPrior,
           'IsolatedFootprintPrior': IsolatedFootprintPrior}
 
-def initialize_prior(prior_form=None, prior_module=None, **kwargs):
+def initialize_prior(prior_form=None, prior_module=None, args=None, **kwargs):
     if prior_module is None:
         # prior_form should be one of the names of priors in this file
         prior = priors[prior_form]
@@ -168,4 +168,4 @@ def initialize_prior(prior_form=None, prior_module=None, **kwargs):
         prior = getattr(prior_module, prior_form)
 
     # Initialize an instance of the prior with the given keyword arguments
-    return prior(**kwargs)
+    return prior(args, **kwargs)

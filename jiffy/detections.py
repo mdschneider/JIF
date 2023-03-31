@@ -6,15 +6,18 @@ class EmptyDetectionCorrection(object):
     DetectionCorrection form for the image model parameters
     Applies no correction for all parameters (for any given parameterization).
     '''
-
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         pass
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         return 0.0
 
 class IsolatedFootprintDetectionCorrection(object):
-    def __init__(self):
+    def __init__(self, args=None):
+        # nJy_to_inst_by_patch = np.array([])
+        nJy_to_inst = 1
+        # if args is not None:
+        #     nJy_to_inst = nJy_to_inst_by_patch[args.patch]
         self.flux_bins_upper = np.array([11.527841402053834, 12.589147148132325, 13.72355423927307, 14.884612380981446,
                                          16.09600067138672, 17.40477798461914, 18.91361146545411, 20.47610092163086,
                                          21.477143478393554, 22.54180450439453, 23.71131935119629, 24.93340446472168,
@@ -29,7 +32,8 @@ class IsolatedFootprintDetectionCorrection(object):
                                          536.8243225097649, 621.530991821288, 722.1686499023436, 858.95066619873, 
                                          1039.0751892089845, 1323.2170349121072, 1584.897214355465, 1954.9564749755848,
                                          2508.5373203124877, 3314.6579921874927, 4567.138803710906])
-        self.detected_frac = np.array([0.0007389110182013105, 0.0007851891802036702, 0.0010106735953169163, 0.001017000051464549,
+        self.flux_bins_upper *= nJy_to_inst
+        detected_frac = np.array([0.0007389110182013105, 0.0007851891802036702, 0.0010106735953169163, 0.001017000051464549,
                                        0.0010235495219841231, 0.0012299710175904973, 0.0012792173299028132, 0.001454382992592537,
                                        0.0018617649431903996, 0.0021245124416635966, 0.0023617543592913386, 0.002602798388947123,
                                        0.0030302305480409, 0.0031886509667079896, 0.0038042989243343983, 0.005019089345324304,
@@ -43,13 +47,13 @@ class IsolatedFootprintDetectionCorrection(object):
                                        0.04636108123825295, 0.04208074621293895, 0.04025619844442545, 0.03581281356628938,
                                        0.03318474436787526, 0.03092606432754239, 0.02778274067041314, 0.02664995321179559,
                                        0.024019552532210272, 0.021412421269366242, 0.020695216056077402])
-        self.neg_log_detected_frac = -np.log(self.detected_frac)
+        self.neg_log_detected_frac = -np.log(detected_frac)
     
     def __call__(self, params):
         nu, hlr, e1, e2, flux, dx, dy = tuple(params)
         
         idx = np.digitize(flux, self.flux_bins_upper, right=False)
-        idx = min(idx, len(self.detected_frac) - 1)
+        idx = min(idx, len(self.neg_log_detected_frac) - 1)
         neg_log_prob = self.neg_log_detected_frac[idx]
         
         return neg_log_prob
@@ -59,7 +63,7 @@ detection_corrections = {None: False,
           'EmptyDetectionCorrection': EmptyDetectionCorrection,
           'IsolatedFootprintDetectionCorrection': IsolatedFootprintDetectionCorrection}
 
-def initialize_detection_correction(form=None, module=None, **kwargs):
+def initialize_detection_correction(form=None, module=None, args=None, **kwargs):
     if module is None:
         # form should be one of the names of detection_corrections in this file
         detection_correction = detection_corrections[form]
@@ -68,5 +72,5 @@ def initialize_detection_correction(form=None, module=None, **kwargs):
         # detection_correction_form should be the name of a class in module
         detection_correction = getattr(module, form)
 
-    # Initialize an instance of the prior with the given keyword arguments
-    return detection_correction(**kwargs)
+    # Initialize an instance of the prior with the given arguments
+    return detection_correction(args, **kwargs)
