@@ -260,7 +260,8 @@ class Roaster(object):
         x0 = [0., hlr0, 0., 0., flux0, 0, 0]
         
         bnds = [# Excessively low nu coupled with high hlr can cause rendering problems
-               (-0.75, 3.99), # nu
+                # In DC2, best-fit nu values are inside this range more than 99.9% of the time
+               (-0.71, 0.6), # nu
                # hlr needs to be able to go below any given value of flux
                (1e-5, 0.5), # hlr in arcsec
                 # e1**2 + e2**2 should be strictly < 1
