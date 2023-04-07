@@ -54,8 +54,6 @@ class Roaster(object):
         with open(args.config_file, 'r') as config_file:
             self.config = yaml.safe_load(config_file)
 
-        np.random.seed(self.config['init']['seed'])
-
         self.num_sources = self.config['model']['num_sources']
 
         actv_params = self.config['model']['model_params'].split(' ')
@@ -69,6 +67,15 @@ class Roaster(object):
             model_module = __import__('jiffy.galsim_galaxy')
         self.src_models = [getattr(model_module, model_class_name)(self.config, **model_kwargs)
                            for i in range(self.num_sources)]
+
+        if 'init' in self.config:
+            if 'seed' in self.config['init']:
+                np.random.seed(self.config['init']['seed'])
+            if 'param_values' in self.config['init']:
+                for param_name, param_value in self.config['init']['param_values'].items():
+                    self.set_param_by_name(param_name, param_value)
+        # This is decided at the beginning of roasting. True by default until then.
+        self.good_initial_params = True
 
         self.init_prior(args)
         self.init_detection_correction(args)
@@ -84,9 +91,6 @@ class Roaster(object):
         self.bkg = None
         self.lnnorm = self._set_like_lnnorm()
         self.load_and_import_data()
-
-        # This is decided at the beginning of roasting. True by default until then.
-        self.good_initial_params = True
 
     def init_prior(self, args=None):
         # Parse config
@@ -243,8 +247,7 @@ class Roaster(object):
     
     # Warning: Currently only works with IsolatedFootprintPrior
     def map_initialize(self, args):
-        # Initial parameter values for the optimizer
-        # Use sum of footprint image pixel values for flux estimate
+        # Use sum of footprint image pixel values for initial flux estimate
         # The minimum true inst flux in my data set is about 0.108
         flux0 = max(self.data.sum(), 0.1)
         # Find the expected hlr conditioned on the flux level
@@ -255,11 +258,13 @@ class Roaster(object):
         # The minimum true hlr in my data set is about 0.0275,
         # which is close to the prior mean (0.0245) for a flux of 0.108.
         hlr0 = max(hlr0 * 0.2, 0.02) # convert to arcsec
+
+        # Initial parameter values for the optimizer
         # nu, hlr (arcsec), e1, e2_scale, flux, dx (arcsec), dy (arcsec)
         # e2_scale is defined as: e2 / sqrt(1 - e1**2)
-        x0 = [0., hlr0, 0., 0., flux0, 0, 0]
+        x0_all = [0., hlr0, 0., 0., flux0, 0, 0]
         
-        bnds = [# Excessively low nu coupled with high hlr can cause rendering problems
+        bnds_all = [# Excessively low nu coupled with high hlr can cause rendering problems
                 # In DC2, best-fit nu values are inside this range more than 99.9% of the time
                (-0.71, 0.6), # nu
                # hlr needs to be able to go below any given value of flux
@@ -271,13 +276,32 @@ class Roaster(object):
                (None, None), (None, None) # dx, dy
         ]
         opts = {'ftol': 1e-8, 'eps': 1e-5}
+
+        # Only fit those parameters which are active in the Roaster model
+        x0, bnds = [], []
+        e1_idx, e2_idx = None, None
+        all_param_names = ['nu', 'hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
+        lookup_param_idx = {param_name: idx for idx, param_name in enumerate(all_param_names)}
+        for param_name in self.config['model']['model_params'].split(' '):
+            idx = lookup_param_idx[param_name]
+            x0.append(x0_all[idx])
+            bnds.append(bnds_all[idx])
+            if param_name == 'e1':
+                e1_idx = len(x0) - 1
+            elif param_name == 'e2':
+                e2_idx = len(x0) - 1
         
         # Find the negative log-posterior for a given parameter tuple
         def loss(x):
-            nu, hlr, e1, e2_scale, flux, dx, dy = tuple(x)
-            e2 = e2_scale * np.sqrt(1 - e1**2)
-            params = np.array([nu, hlr, e1, e2, flux, dx, dy])
-            lnpost = self(params)
+            # Convert e2_scale to e2 for log-prob computation
+            if e2_idx is not None:
+                if e1_idx is not None:
+                    x[e2_idx] = x[e2_idx] * np.sqrt(1 - x[e1_idx]**2)
+                else:
+                    e1 = self.src_models[0].get_param_by_name['e1']
+                    x[e2_idx] = x[e2_idx] * np.sqrt(1 - e1**2)
+
+            lnpost = self(x)
             return -lnpost
         
         # Try a MAP fit
@@ -305,10 +329,13 @@ class Roaster(object):
         else:
             params_opt = res.x
         
-        # Unpack the fit results
-        nu_opt, hlr_opt, e1_opt, e2_scale_opt, flux_opt, dx_opt, dy_opt = tuple(params_opt)
-        e2_opt = e2_scale_opt * np.sqrt(1 - e1_opt**2)
-        params_opt = np.array([nu_opt, hlr_opt, e1_opt, e2_opt, flux_opt, dx_opt, dy_opt])
+        # Convert e2_scale to e2
+        if e2_idx is not None:
+            if e1_idx is not None:
+                params_opt[e2_idx] = params_opt[e2_idx] * np.sqrt(1 - params_opt[e1_idx]**2)
+            else:
+                e1 = self.src_models[0].get_param_by_name['e1']
+                params_opt[e2_idx] = params_opt[e2_idx] * np.sqrt(1 - e1**2)
         # Initialize the model with these parameters
         valid_params = self.set_params(params_opt)
         
