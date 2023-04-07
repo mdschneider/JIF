@@ -21,7 +21,89 @@ class EmptyPrior(object):
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------
 # Isolated (one true object) footprints detected in DC2 tract 3830
-class IsolatedFootprintPrior(object):
+class IsolatedFootprintPrior_FixedNu(object):
+    def __init__(self, args=None, **kwargs):
+        galtype = kwargs['type'] # 'bulge' or 'disk'
+        prior_params = {
+            'nu': {'bulge': -0.708, 'disk': 0.5},
+            'nu_frac': {'bulge': 0.5282292589586854,
+                         'disk': 0.47177074104131456},
+            'hlrFlux_gm_filename': {'bulge': 'hlrflux_gmfile_negNu.pkl',
+                                     'disk': 'hlrflux_gmfile_posNu.pkl'},
+            'e_gm_filename':  {'bulge': 'e_gmfile_negNu.pkl',
+                                'disk': 'e_gmfile_posNu.pkl'},
+            'dr_gm_filename': {'bulge': 'dr_gmfile_negNu.pkl',
+                                'disk': 'dr_gmfile_posNu.pkl'},
+            'mean_hlrFlux': {'bulge': np.array([-1.02586301,  0.56355062]),
+                              'disk': np.array([-0.61084441,  0.86118777])},
+            'inv_cov_hlrFlux': {'bulge': np.array([[ 4.04738463, -1.8642854 ],
+                                                   [-1.8642854 ,  2.10040375]]),
+                                 'disk': np.array([[ 3.76129273, -1.17928324],
+                                                   [-1.17928324,  2.08487754]])},
+        }
+
+        self.scale = 0.2 # arcsec per pixel
+
+        # Mean and inverse covariance matrix of log-hlr (in log-pixels)
+        # and log-flux (in log-inst flux),
+        # for use by MAP fitter
+        self.mean_hlrFlux = prior_params['mean_hlrFlux'][galtype]
+        self.inv_cov_hlrFlux = prior_params['inv_cov_hlrFlux'][galtype]
+
+        # Correlated log-hlr and log-flux distribution
+        # from 2D Bayesian Gaussian mixture model fit
+        hlrFlux_gm_filename = prior_params['hlrFlux_gm_filename'][galtype]
+        with open(hlrFlux_gm_filename, mode='rb') as hlrFlux_gm_file:
+            self.hlrFlux_gm = pickle.load(hlrFlux_gm_file)
+
+        # 1D Bayesian Gaussian mixture model fit for e magnitude
+        e_gm_filename = prior_params['e_gm_filename'][galtype]
+        with open(e_gm_filename, mode='rb') as e_gm_file:
+            self.e_gm = pickle.load(e_gm_file)
+        # Uniform angle distribution
+        self.lognorm_e_angle = -np.log(2 * np.pi)
+
+        # 1D Bayesian Gaussian mixture model fit for dr magnitude
+        dr_gm_filename = prior_params['dr_gm_filename'][galtype]
+        with open(dr_gm_filename, mode='rb') as dr_gm_file:
+            self.dr_gm = pickle.load(dr_gm_file)
+        # Uniform angle distribution
+        self.lognorm_dr_angle = -np.log(2 * np.pi)
+
+        nu_frac = prior_params['nu_frac'][galtype]
+        self.lognorm_nu = np.log(nu_frac)
+
+    def __call__(self, params):
+        hlr, e1, e2, flux, dx, dy = tuple(params)
+        # These specific prior functions correspond to pixel distances,
+        # but the MCMC parameters are in arcsec
+        hlr, dx, dy = hlr / self.scale, dx / self.scale, dy / self.scale
+
+        # Bayesian Gaussian mixture model for log-hlr, log-flux
+        log_hlrFlux = np.log(np.array([hlr, flux]))
+        lnprior_hlrFlux = self.hlrFlux_gm.score_samples([log_hlrFlux])
+
+        # Bayesian Gaussian mixture model for ellipticity
+        e = np.sqrt(e1**2 + e2**2)
+        lnprior_e = self.e_gm.score_samples([[e]])[0]
+        # Flat prior for ellipticity angle
+        lnprior_e_angle = self.lognorm_e_angle
+
+        # Bayesian Gaussian mixture model for position
+        dr = np.sqrt(dx**2 + dy**2)
+        lnprior_dr = self.dr_gm.score_samples([[dr]])[0]
+        # Flat prior for position angle
+        lnprior_dr_angle = self.lognorm_dr_angle
+
+        # Discrete prior for nu
+        lnprior_nu = self.lognorm_nu
+
+        lnprior = lnprior_hlrFlux + lnprior_e + lnprior_e_angle + lnprior_dr + lnprior_dr_angle + lnprior_nu
+        return lnprior
+
+
+# Isolated (one true object) footprints detected in DC2 tract 3830
+class IsolatedFootprintPrior_VariableNu(object):
     def __init__(self, args=None, hlrFlux_gm_filename='hlrflux_gmfile.pkl',
         e_gm_filename='e_gmfile.pkl', dr_gm_filename='dr_gmfile.pkl'):
         self.scale = 0.2 # arcsec per pixel
@@ -160,12 +242,20 @@ class DefaultPriorSpergel(object):
         lnp += -0.5 * (dx*dx + dy*dy) / self.pos_var
         return lnp
 
-
+# Allow functions to easily be looked up by name,
+# and define a few useful aliases.
 priors = {None: EmptyPrior,
           'Empty': EmptyPrior,
           'EmptyPrior': EmptyPrior,
-          'IsolatedFootprintPrior': IsolatedFootprintPrior}
+          'IsolatedFootprintPrior_FixedNu': IsolatedFootprintPrior_FixedNu,
+          'IsolatedFootprintPrior_VariableNu': IsolatedFootprintPrior_VariableNu}
 
+'''
+prior_form (str): Name of a prior, to look up in a priors dict like the one above.
+prior_module (str): If specified, look up prior_form in the specified module rather than here.
+args: Parsed command-line args from Roaster initialization
+kwargs (dict): Keyword arguments specified in a config file
+'''
 def initialize_prior(prior_form=None, prior_module=None, args=None, **kwargs):
     if prior_module is None:
         # prior_form should be one of the names of priors in this file
