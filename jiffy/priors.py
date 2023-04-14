@@ -28,12 +28,8 @@ class IsolatedFootprintPrior_FixedNu(object):
             'nu': {'bulge': -0.708, 'disk': 0.5},
             'nu_frac': {'bulge': 0.5282292589586854,
                          'disk': 0.47177074104131456},
-            'hlrFlux_gm_filename': {'bulge': 'hlrflux_gmfile_negNu.pkl',
-                                     'disk': 'hlrflux_gmfile_posNu.pkl'},
-            'e_gm_filename':  {'bulge': 'e_gmfile_negNu.pkl',
-                                'disk': 'e_gmfile_posNu.pkl'},
-            'dr_gm_filename': {'bulge': 'dr_gmfile_negNu.pkl',
-                                'disk': 'dr_gmfile_posNu.pkl'},
+            'gm_filename': {'bulge': 'gmfile_negNu.pkl',
+                             'disk': 'gmfile_posNu.pkl'},
             'mean_hlrFlux': {'bulge': np.array([-1.02586301,  0.56355062]),
                               'disk': np.array([-0.61084441,  0.86118777])},
             'inv_cov_hlrFlux': {'bulge': np.array([[ 4.04738463, -1.8642854 ],
@@ -50,24 +46,15 @@ class IsolatedFootprintPrior_FixedNu(object):
         self.mean_hlrFlux = prior_params['mean_hlrFlux'][galtype]
         self.inv_cov_hlrFlux = prior_params['inv_cov_hlrFlux'][galtype]
 
-        # Correlated log-hlr and log-flux distribution
-        # from 2D Bayesian Gaussian mixture model fit
-        hlrFlux_gm_filename = prior_params['hlrFlux_gm_filename'][galtype]
-        with open(hlrFlux_gm_filename, mode='rb') as hlrFlux_gm_file:
-            self.hlrFlux_gm = pickle.load(hlrFlux_gm_file)
+        # Correlated log-hlr, log-flux, dr, and e distribution
+        # from 4D Bayesian Gaussian mixture model fit
+        gm_filename = prior_params['gm_filename'][galtype]
+        with open(gm_filename, mode='rb') as gm_file:
+            self.gm = pickle.load(gm_file)
 
-        # 1D Bayesian Gaussian mixture model fit for e magnitude
-        e_gm_filename = prior_params['e_gm_filename'][galtype]
-        with open(e_gm_filename, mode='rb') as e_gm_file:
-            self.e_gm = pickle.load(e_gm_file)
-        # Uniform angle distribution
+        # Uniform e angle distribution
         self.lognorm_e_angle = -np.log(2 * np.pi)
-
-        # 1D Bayesian Gaussian mixture model fit for dr magnitude
-        dr_gm_filename = prior_params['dr_gm_filename'][galtype]
-        with open(dr_gm_filename, mode='rb') as dr_gm_file:
-            self.dr_gm = pickle.load(dr_gm_file)
-        # Uniform angle distribution
+        # Uniform centroid angle distribution
         self.lognorm_dr_angle = -np.log(2 * np.pi)
 
         nu_frac = prior_params['nu_frac'][galtype]
@@ -79,26 +66,21 @@ class IsolatedFootprintPrior_FixedNu(object):
         # but the MCMC parameters are in arcsec
         hlr, dx, dy = hlr / self.scale, dx / self.scale, dy / self.scale
 
-        # Bayesian Gaussian mixture model for log-hlr, log-flux
-        log_hlrFlux = np.log(np.array([hlr, flux]))
-        lnprior_hlrFlux = self.hlrFlux_gm.score_samples([log_hlrFlux])
-
-        # Bayesian Gaussian mixture model for ellipticity
+        # 4D Bayesian Gaussian mixture model for log-hlr, log-flux, dr, e
         e = np.sqrt(e1**2 + e2**2)
-        lnprior_e = self.e_gm.score_samples([[e]])[0]
+        dr = np.sqrt(dx**2 + dy**2)
+        features = np.array([np.log(hlr), np.log(flux), dr, e])
+        lnprior_4features = self.gm.score_samples([features])
+
         # Flat prior for ellipticity angle
         lnprior_e_angle = self.lognorm_e_angle
-
-        # Bayesian Gaussian mixture model for position
-        dr = np.sqrt(dx**2 + dy**2)
-        lnprior_dr = self.dr_gm.score_samples([[dr]])[0]
         # Flat prior for position angle
         lnprior_dr_angle = self.lognorm_dr_angle
 
         # Discrete prior for nu
         lnprior_nu = self.lognorm_nu
 
-        lnprior = lnprior_hlrFlux + lnprior_e + lnprior_e_angle + lnprior_dr + lnprior_dr_angle + lnprior_nu
+        lnprior = lnprior_4features + lnprior_e_angle + lnprior_dr_angle + lnprior_nu
         return lnprior
 
 
