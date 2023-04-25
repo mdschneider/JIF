@@ -1,6 +1,6 @@
 import numpy as np
 import pickle
-from jiffy.galsim_galaxy import K_PARAM_BOUNDS
+from jiffy.galsim_galaxy import PARAM_BOUNDS
 
 
 class EmptyPrior(object):
@@ -108,7 +108,7 @@ class IsolatedFootprintPrior_VariableNu(object):
             self.dr_gm = pickle.load(dr_gm_file)
         self.lognorm_dr_angle = -np.log(2 * np.pi)
 
-        self.lognorm_nu = -np.log(K_PARAM_BOUNDS['nu'][1] - K_PARAM_BOUNDS['nu'][0])
+        self.lognorm_nu = -np.log(PARAM_BOUNDS['nu'][1] - PARAM_BOUNDS['nu'][0])
 
     def __call__(self, params):
         nu, hlr, e1, e2, flux, dx, dy = tuple(params)

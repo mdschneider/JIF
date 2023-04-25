@@ -35,7 +35,7 @@ from jiffy import galsim_psf
 
 
 # Used in validate_params()
-K_PARAM_BOUNDS = {
+PARAM_BOUNDS = {
     'nu': [-0.84, 3.99],
     'hlr': [0.00001, 6.0],
     'e1': [-0.99, 0.99],
@@ -160,7 +160,7 @@ class GalsimGalaxyModel(object):
         for pname, _ in self.params.dtype.descr:
             if not np.isfinite(self.params[pname][0]):
                 return False
-            if not _inbounds(self.params[pname][0], K_PARAM_BOUNDS[pname]):
+            if not _inbounds(self.params[pname][0], PARAM_BOUNDS[pname]):
                 return False
         for constraint_satisfied in PARAM_CONSTRAINTS:
             if not constraint_satisfied(self.params):
