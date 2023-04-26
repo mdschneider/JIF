@@ -27,6 +27,7 @@ class IsolatedFootprintDetectionCorrection(object):
             0.016659992290569494, 0.016939397474724126, 0.01724702353864421, 0.016995890558629004,
             0.01640941239398365, 0.016748047053165977, 0.0170282444974016, 0.016393680581311437, 0.016803152099139664])
         nJy_to_inst = nJy_to_inst_by_patch[args.patch] if args is not None else 1
+
         self.flux_bins_upper = np.array([11.527841402053834, 12.589147148132325, 13.72355423927307, 14.884612380981446,
                                          16.09600067138672, 17.40477798461914, 18.91361146545411, 20.47610092163086,
                                          21.477143478393554, 22.54180450439453, 23.71131935119629, 24.93340446472168,
@@ -42,6 +43,7 @@ class IsolatedFootprintDetectionCorrection(object):
                                          1039.0751892089845, 1323.2170349121072, 1584.897214355465, 1954.9564749755848,
                                          2508.5373203124877, 3314.6579921874927, 4567.138803710906])
         self.flux_bins_upper *= nJy_to_inst
+        
         detected_frac = np.array([0.0007389110182013105, 0.0007851891802036702, 0.0010106735953169163, 0.001017000051464549,
                                        0.0010235495219841231, 0.0012299710175904973, 0.0012792173299028132, 0.001454382992592537,
                                        0.0018617649431903996, 0.0021245124416635966, 0.0023617543592913386, 0.002602798388947123,
@@ -58,14 +60,17 @@ class IsolatedFootprintDetectionCorrection(object):
                                        0.024019552532210272, 0.021412421269366242, 0.020695216056077402])
         self.neg_log_detected_frac = -np.log(detected_frac)
     
-    def __call__(self, src_models):
-        flux = src_models[0].params.flux[0]
-        
+    def evaluate(self, flux):
         idx = np.digitize(flux, self.flux_bins_upper, right=False)
         idx = min(idx, len(self.neg_log_detected_frac) - 1)
         neg_log_prob = self.neg_log_detected_frac[idx]
         
         return neg_log_prob
+
+    def __call__(self, src_models):
+        flux = src_models[0].params.flux[0]
+        
+        return self.evaluate(flux)
 
 detection_corrections = {None: False,
           'Empty': EmptyDetectionCorrection,

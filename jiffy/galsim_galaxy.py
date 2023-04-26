@@ -36,10 +36,16 @@ from jiffy import galsim_psf
 
 # Used in validate_params()
 PARAM_BOUNDS = {
+    # Sersic n range allowed by galsim, minus a small safety margin
+    'n': [0.31, 6.19],
+    # Spergel nu range allowed by galsim, minus a small safety margin
     'nu': [-0.84, 3.99],
+    # hlr must be positive for a real source
+    # Overly large hlr values can cause major rendering slowdowns
     'hlr': [0.00001, 6.0],
     'e1': [-0.99, 0.99],
     'e2': [-0.99, 0.99],
+    # Flux must be positive for a real source
     'flux': [0.0001, np.inf],
     'dx': [-np.inf, np.inf],
     'dy': [-np.inf, np.inf]
@@ -49,14 +55,98 @@ PARAM_CONSTRAINTS = (
 )
 
 
+# All light profiles must have at least the following functions defined
+class LightProfile(object):
+    def init_params(self):
+        raise NotImplementedError('Model not defined.')
+
+    def light_profile(self, params, gsparams=None):
+        raise NotImplementedError('Model not defined.')
+
+class CircularProfile(LightProfile):
+    def init_params(self):
+        param_defaults = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+        param_dtypes = [('hlr', '<f8'),
+                        ('e1', '<f8'),
+                        ('e2', '<f8'),
+                        ('flux', '<f8'),
+                        ('dx', '<f8'),
+                        ('dy', '<f8')]
+
+        return param_defaults, param_dtypes
+
+    def circular_profile(self, params, gsparams=None):
+        raise NotImplementedError('Model not defined.')
+
+    def light_profile(self, params, gsparams=None):
+        gal = self.circular_profile(params, gsparams)
+        gal = gal.shear(galsim.Shear(g1=params.e1[0],
+                                     g2=params.e2[0]))
+        gal = gal.shift(params.dx[0], params.dy[0])
+
+        return gal
+
+class Exponential(CircularProfile):
+    def circular_profile(self, params, gsparams=None):
+        return galsim.Exponential(half_light_radius=params.hlr[0],
+                                flux=params.flux[0],
+                                gsparams=gsparams)    
+
+class DeVaucouleurs(CircularProfile):
+    def circular_profile(self, params, gsparams=None):
+        return galsim.DeVaucouleurs(half_light_radius=params.hlr[0],
+                                flux=params.flux[0],
+                                gsparams=gsparams)
+
+class Sersic(CircularProfile):
+    def init_params(self):
+        param_defaults, param_dtypes = super().init_params()
+        param_defaults = (1.0,) + param_defaults
+        param_dtypes = [('n', '<f8')] + param_dtypes
+
+        return param_defaults, param_dtypes
+
+    def circular_profile(self, params, gsparams=None):
+        return galsim.Sersic(params.n[0],
+                                half_light_radius=params.hlr[0],
+                                flux=params.flux[0],
+                                gsparams=gsparams)
+
+class Spergel(CircularProfile):
+    def init_params(self):
+        param_defaults, param_dtypes = super().init_params()
+        param_defaults = (0.5,) + param_defaults
+        param_dtypes = [('nu', '<f8')] + param_dtypes
+
+        return param_defaults, param_dtypes
+
+    def circular_profile(self, params, gsparams=None):
+        return galsim.Spergel(params.nu[0],
+                                half_light_radius=params.hlr[0],
+                                flux=params.flux[0],
+                                gsparams=gsparams)
+
+model_type_by_name = {'Spergel': Spergel,
+                        'Sersic': Sersic,
+                        'Exponential': Exponential,
+                        'Disk': Exponential,
+                        'DeVaucouleurs': DeVaucouleurs,
+                        'Bulge': DeVaucouleurs}
+
 class GalsimGalaxyModel(object):
     '''
     Parametric galaxy model from GalSim for image forward modeling
 
     The galaxy model is fixed as a 'Spergel' profile
+    unless otherwise specified in the config
     '''
     def __init__(self, config,
                  active_parameters=['e1', 'e2'], **kwargs):
+        model_type_name = 'Spergel'
+        if 'model_type' in config['model']:
+            model_type_name = config['model']['model_type']
+        self.model_type = model_type_by_name[model_type_name]()
+
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
 
@@ -71,7 +161,9 @@ class GalsimGalaxyModel(object):
                                 if 'psf' not in p]
 
         # Initialize parameters array
-        self._init_params()
+        param_defaults, param_dtypes = self.model_type.init_params()
+        self.params = np.array([param_defaults], dtype=param_dtypes)
+        self.params = self.params.view(np.recarray)
 
         # Initialize psf model
         self.init_psf(config, **kwargs)
@@ -90,17 +182,6 @@ class GalsimGalaxyModel(object):
         self.static_psf = None
         if not self.sample_psf:
             self.static_psf = self.psf_model.get_model()
-
-    def _init_params(self):
-        self.params = np.array([(0.5, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0)],
-                               dtype=[('nu', '<f8'),
-                                      ('hlr', '<f8'),
-                                      ('e1', '<f8'),
-                                      ('e2', '<f8'),
-                                      ('flux', '<f8'),
-                                      ('dx', '<f8'),
-                                      ('dy', '<f8')])
-        self.params = self.params.view(np.recarray)
 
     def get_params(self):
         p = np.array([pv for pv in self.params[self.actv_params_gal][0]])
@@ -208,15 +289,12 @@ class GalsimGalaxyModel(object):
             print(f'*** Using GalSim RealGalaxy {rgndx}***')
             gal = galsim.RealGalaxy(real_galaxy_catalog,
                                     index=rgndx,
-                                    flux=self.params.flux[0])
+                                    flux=self.params.flux[0],
+                                    gsparams=self.gsparams)
+            gal = gal.shift(self.params.dx[0], self.params.dy[0])
         else:
-            gal = galsim.Spergel(self.params.nu[0],
-                                 half_light_radius=self.params.hlr[0],
-                                 flux=self.params.flux[0],
-                                 gsparams=self.gsparams)
-            gal = gal.shear(galsim.Shear(g1=self.params.e1[0],
-                                         g2=self.params.e2[0]))
-        gal = gal.shift(self.params.dx[0], self.params.dy[0])
+            gal = self.model_type.light_profile(self.params,
+                                                self.gsparams)
         obj = galsim.Convolve(self.get_psf(), gal)
         
         N = obj.getGoodImageSize(scale)

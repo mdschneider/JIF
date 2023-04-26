@@ -20,14 +20,13 @@ class EmptyPrior(object):
 # ---------------------------------------------------------------------------------------
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------
-# Isolated (one true object) footprints detected in DC2 tract 3830
-class IsolatedFootprintPrior_FixedNu(object):
+# Prior for isolated (one true object) footprints detected in DC2 tract 3830
+# Conditioned on the object being a specified type (bulge or disk)
+# Add log_type_frac to log-prior/posterior to jointly model the type probability
+class IsolatedFootprintPrior_FixedNu_DC2(object):
     def __init__(self, args=None, **kwargs):
         galtype = kwargs['type'] # 'bulge' or 'disk'
         prior_params = {
-            'nu': {'bulge': -0.708, 'disk': 0.5},
-            'nu_frac': {'bulge': 0.5282292589586854,
-                         'disk': 0.47177074104131456},
             'gm_filename': {'bulge': 'gmfile_negNu.pkl',
                              'disk': 'gmfile_posNu.pkl'},
             'mean_hlrFlux': {'bulge': np.array([-1.02586301,  0.56355062]),
@@ -36,6 +35,11 @@ class IsolatedFootprintPrior_FixedNu(object):
                                                    [-1.8642854 ,  2.10040375]]),
                                  'disk': np.array([[ 3.76129273, -1.17928324],
                                                    [-1.17928324,  2.08487754]])},
+            # For reference:
+            'nu': {'bulge': -0.708, 'disk': 0.5},
+            'n': {'bulge': 4, 'disk': 1},
+            'type_frac': {'bulge': 0.5282292589586854,
+                         'disk': 0.47177074104131456}
         }
 
         self.scale = 0.2 # arcsec per pixel
@@ -57,13 +61,10 @@ class IsolatedFootprintPrior_FixedNu(object):
         # Uniform centroid angle distribution
         self.lognorm_dr_angle = -np.log(2 * np.pi)
 
-        nu_frac = prior_params['nu_frac'][galtype]
-        self.lognorm_nu = np.log(nu_frac)
+        type_frac = prior_params['type_frac'][galtype]
+        self.log_type_frac = np.log(type_frac)
 
-    def __call__(self, src_models):
-        param_names = ['hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
-        hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
-            for param_name in param_names]
+    def evaluate(self, hlr, e1, e2, flux, dx, dy):
         # These specific prior functions correspond to pixel distances,
         # but the MCMC parameters are in arcsec
         hlr, dx, dy = hlr / self.scale, dx / self.scale, dy / self.scale
@@ -79,15 +80,18 @@ class IsolatedFootprintPrior_FixedNu(object):
         # Flat prior for position angle
         lnprior_dr_angle = self.lognorm_dr_angle
 
-        # Discrete prior for nu
-        lnprior_nu = self.lognorm_nu
-
-        lnprior = lnprior_4features + lnprior_e_angle + lnprior_dr_angle + lnprior_nu
+        lnprior = lnprior_4features + lnprior_e_angle + lnprior_dr_angle
         return lnprior
 
+    def __call__(self, src_models):
+        param_names = ['hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
+        hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
+            for param_name in param_names]
+
+        return self.evaluate(hlr, e1, e2, flux, dx, dy)
 
 # Isolated (one true object) footprints detected in DC2 tract 3830
-class IsolatedFootprintPrior_VariableNu(object):
+class IsolatedFootprintPrior_VariableNu_DC2(object):
     def __init__(self, args=None, hlrFlux_gm_filename='hlrflux_gmfile.pkl',
         e_gm_filename='e_gmfile.pkl', dr_gm_filename='dr_gmfile.pkl'):
         self.scale = 0.2 # arcsec per pixel
@@ -112,10 +116,7 @@ class IsolatedFootprintPrior_VariableNu(object):
 
         self.lognorm_nu = -np.log(PARAM_BOUNDS['nu'][1] - PARAM_BOUNDS['nu'][0])
 
-    def __call__(self, src_models):
-        param_names = ['nu', 'hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
-        nu, hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
-            for param_name in param_names]
+    def evaluate(self, nu, hlr, e1, e2, flux, dx, dy):
         # These specific prior functions correspond to pixel distances,
         # but the MCMC parameters are in arcsec
         hlr, dx, dy = hlr / self.scale, dx / self.scale, dy / self.scale
@@ -146,6 +147,13 @@ class IsolatedFootprintPrior_VariableNu(object):
 
         lnprior = lnprior_hlrFlux + lnprior_e + lnprior_e_angle + lnprior_dr + lnprior_dr_angle + lnprior_nu
         return lnprior
+
+    def __call__(self, src_models):
+        param_names = ['nu', 'hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
+        nu, hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
+            for param_name in param_names]
+
+        return self.evaluate(nu, hlr, e1, e2, flux, dx, dy)
 
 
 class DefaultPriorSpergel(object):
@@ -194,11 +202,7 @@ class DefaultPriorSpergel(object):
     def _lnprior_flux(self, flux):
         return -0.5 * (flux - 1.0)**2 / 0.01
 
-    def __call__(self, src_models):
-        param_names = ['nu', 'hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
-        nu, hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
-            for param_name in param_names]
-
+    def evaluate(nu, hlr, e1, e2, flux, dx, dy):
         lnp = 0.0
         lnp += self._lnprior_nu(nu)
         ### Half-light radius
@@ -219,13 +223,23 @@ class DefaultPriorSpergel(object):
         lnp += -0.5 * (dx*dx + dy*dy) / self.pos_var
         return lnp
 
+    def __call__(self, src_models):
+        param_names = ['nu', 'hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
+        nu, hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
+            for param_name in param_names]
+
+        return self.evaluate(nu, hlr, e1, e2, flux, dx, dy)
+
+
 # Allow functions to easily be looked up by name,
 # and define a few useful aliases.
 priors = {None: EmptyPrior,
           'Empty': EmptyPrior,
           'EmptyPrior': EmptyPrior,
-          'IsolatedFootprintPrior_FixedNu': IsolatedFootprintPrior_FixedNu,
-          'IsolatedFootprintPrior_VariableNu': IsolatedFootprintPrior_VariableNu}
+          'IsolatedFootprintPrior_FixedNu': IsolatedFootprintPrior_FixedNu_DC2,
+          'IsolatedFootprintPrior_FixedNu_DC2': IsolatedFootprintPrior_FixedNu_DC2,
+          'IsolatedFootprintPrior_VariableNu': IsolatedFootprintPrior_VariableNu_DC2,
+          'IsolatedFootprintPrior_VariableNu_DC2': IsolatedFootprintPrior_VariableNu_DC2}
 
 '''
 prior_form (str): Name of a prior, to look up in a priors dict like the one above.
