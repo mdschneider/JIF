@@ -60,8 +60,10 @@ class IsolatedFootprintPrior_FixedNu(object):
         nu_frac = prior_params['nu_frac'][galtype]
         self.lognorm_nu = np.log(nu_frac)
 
-    def __call__(self, params):
-        hlr, e1, e2, flux, dx, dy = tuple(params)
+    def __call__(self, src_models):
+        param_names = ['hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
+        hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
+            for param_name in param_names]
         # These specific prior functions correspond to pixel distances,
         # but the MCMC parameters are in arcsec
         hlr, dx, dy = hlr / self.scale, dx / self.scale, dy / self.scale
@@ -110,8 +112,10 @@ class IsolatedFootprintPrior_VariableNu(object):
 
         self.lognorm_nu = -np.log(PARAM_BOUNDS['nu'][1] - PARAM_BOUNDS['nu'][0])
 
-    def __call__(self, params):
-        nu, hlr, e1, e2, flux, dx, dy = tuple(params)
+    def __call__(self, src_models):
+        param_names = ['nu', 'hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
+        nu, hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
+            for param_name in param_names]
         # These specific prior functions correspond to pixel distances,
         # but the MCMC parameters are in arcsec
         hlr, dx, dy = hlr / self.scale, dx / self.scale, dy / self.scale
@@ -190,37 +194,28 @@ class DefaultPriorSpergel(object):
     def _lnprior_flux(self, flux):
         return -0.5 * (flux - 1.0)**2 / 0.01
 
-    def __call__(self, omega):
+    def __call__(self, src_models):
+        param_names = ['nu', 'hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
+        nu, hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
+            for param_name in param_names]
+
         lnp = 0.0
-        ### 'nu' parameter - peaked at exponential and de Vacouleur profile values
-        omega = np.rec.array([tuple(omega)], 
-                             dtype=[('e1', '<f8'),
-                                    ('e2', '<f8'),
-                                    ('hlr', '<f8'),
-                                    ('flux', '<f8'),
-                                    ('nu', '<f8'),
-                                    ('dx', '<f8'),
-                                    ('dy', '<f8')])
-        # print(omega)
-        # print(omega[0])
-        lnp += self._lnprior_nu(omega[0].nu)
+        lnp += self._lnprior_nu(nu)
         ### Half-light radius
-        lnp += self._lnprior_hlr(omega[0].hlr)
+        lnp += self._lnprior_hlr(hlr)
         ### Flux
-        lnp += self._lnprior_flux(omega[0].flux)
+        lnp += self._lnprior_flux(flux)
         #lnp += self._lnprior_mag(omega[0].mag_sed1)
         #lnp += self._lnprior_mag(omega[0].mag_sed2)
         #lnp += self._lnprior_mag(omega[0].mag_sed3)
         #lnp += self._lnprior_mag(omega[0].mag_sed4)
         ### Ellipticity magnitude
-        e = np.hypot(omega[0].e1, omega[0].e2)
+        e = np.sqrt(e1**2 + e2**2)
         if e > 1:
             return -(np.inf)
         else:
             lnp += (self.e_beta_a-1.)*np.log(e) + (self.e_beta_b-1.)*np.log(1.-e)
         ### Centroid (x,y) perturbations
-        dx = omega[0].dx
-        dy = omega[0].dy
         lnp += -0.5 * (dx*dx + dy*dy) / self.pos_var
         return lnp
 

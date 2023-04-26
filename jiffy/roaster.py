@@ -31,8 +31,13 @@ Draw posterior samples of image source model parameters
 import numpy as np
 from tqdm import tqdm
 import yaml
+import argparse
 import configparser
 from multiprocessing import Pool
+import h5py
+
+import os
+import sys
 
 import galsim
 from galsim.errors import GalSimFFTSizeError, GalSimError
@@ -403,12 +408,12 @@ class Roaster(object):
         
         return model_image
 
-    def lnprior(self, params):
+    def lnprior(self):
         '''
         Evaluate the log-prior of the model parameters
         '''
         try:
-            res = self.prior(params)
+            res = self.prior(self.src_models)
         except:
             # Assign 0 probability to parameter combinations that produce an unhandled exception in prior evaluation
             return -np.inf
@@ -445,7 +450,7 @@ class Roaster(object):
 
         return float(lnnorm)
 
-    def lnlike(self, params):
+    def lnlike(self):
         '''
         Evaluate the log-likelihood of the pixel data in a footprint
         '''
@@ -487,7 +492,7 @@ class Roaster(object):
             # Scale up the likelihood to account for the fact that we're only
             # looking at data examples that pass a detection algorithm
             try:
-                detection_correction = self.detection_correction(params)
+                detection_correction = self.detection_correction(self.src_models)
             except:
                 # Assign 0 probability to parameter combinations that produce an unhandled exception in detection correction evaluation
                 return -np.inf
@@ -500,12 +505,13 @@ class Roaster(object):
         # Assign 0 probability to invalid parameter combinations
         lnp = -np.inf
 
+        # Set the Roaster params to the given values
         valid_params = self.set_params(params)
         if valid_params:
-            # Compute the log-likelihood and log-prior.
-            # Don't bother with the log-evidence because this doesn't depend on specific parameter choices.
-            lnp = self.lnlike(params)
-            lnp += self.lnprior(params)
+            # Compute the log-likelihood and log-prior,
+            # using the newly-set Roaster params.
+            lnp = self.lnlike()
+            lnp += self.lnprior()
 
         return lnp
 
@@ -610,8 +616,6 @@ def write_to_h5(args, pps, lnps, rstr):
     '''
     Save an HDF5 file with posterior samples from Roaster
     '''
-    import os
-    import h5py
     outfile = rstr.config['io']['roaster_outfile'] + '_seg{:d}.h5'.format(args.footprint_number)
     outdir = os.path.dirname(outfile)
     if not os.path.exists(outdir):
@@ -644,7 +648,6 @@ def write_to_h5(args, pps, lnps, rstr):
 
 
 def initialize_arg_parser():
-    import argparse
     parser = argparse.ArgumentParser(
         description='Draw interim samples of source model parameters via MCMC.')
 
@@ -691,5 +694,4 @@ def main():
 
 
 if __name__ == '__main__':
-    import sys
     sys.exit(main())

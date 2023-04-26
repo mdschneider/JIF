@@ -58,8 +58,8 @@ class IsolatedFootprintDetectionCorrection(object):
                                        0.024019552532210272, 0.021412421269366242, 0.020695216056077402])
         self.neg_log_detected_frac = -np.log(detected_frac)
     
-    def __call__(self, params):
-        nu, hlr, e1, e2, flux, dx, dy = tuple(params)
+    def __call__(self, src_models):
+        flux = src_models[0].params.flux[0]
         
         idx = np.digitize(flux, self.flux_bins_upper, right=False)
         idx = min(idx, len(self.neg_log_detected_frac) - 1)
