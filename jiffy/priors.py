@@ -27,19 +27,20 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
     def __init__(self, args=None, **kwargs):
         galtype = kwargs['type'] # 'bulge' or 'disk'
         prior_params = {
-            'gm_filename': {'bulge': 'gmfile_negNu.pkl',
-                             'disk': 'gmfile_posNu.pkl'},
-            'mean_hlrFlux': {'bulge': np.array([-1.02586301,  0.56355062]),
-                              'disk': np.array([-0.61084441,  0.86118777])},
-            'inv_cov_hlrFlux': {'bulge': np.array([[ 4.04738463, -1.8642854 ],
-                                                   [-1.8642854 ,  2.10040375]]),
-                                 'disk': np.array([[ 3.76129273, -1.17928324],
-                                                   [-1.17928324,  2.08487754]])},
+            'gm_filename': {'bulge': 'gmfile_bulge.pkl',
+                             'disk': 'gmfile_disk.pkl'},
+            # For MAP fit initialization
+            'mean_hlrFlux': {'bulge': np.array([-1.17758737,  0.40906309]),
+                              'disk': np.array([-0.60094098,  0.89840566])},
+            'inv_cov_hlrFlux': {'bulge': np.array([[ 4.57797781, -2.05637471],
+                                                   [-2.05637471,  2.31051011]]),
+                                 'disk': np.array([[ 3.86410607, -1.19081864],
+                                                   [-1.19081864,  1.95838151]])},
             # For reference:
             'nu': {'bulge': -0.708, 'disk': 0.5},
             'n': {'bulge': 4, 'disk': 1},
-            'type_frac': {'bulge': 0.5282292589586854,
-                         'disk': 0.47177074104131456}
+            'type_frac': {'bulge': 0.39734645710329014,
+                           'disk': 0.6026535428967099}
         }
 
         self.scale = 0.2 # arcsec per pixel
