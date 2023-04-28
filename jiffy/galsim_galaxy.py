@@ -57,6 +57,9 @@ PARAM_CONSTRAINTS = (
 
 # All light profiles must have at least the following functions defined
 class LightProfile(object):
+    def __init__(self):
+        self.draw_method = None
+
     def init_params(self):
         raise NotImplementedError('Model not defined.')
 
@@ -142,10 +145,15 @@ class GalsimGalaxyModel(object):
     '''
     def __init__(self, config,
                  active_parameters=['e1', 'e2'], **kwargs):
+        self.draw_method = 'auto'
         model_type_name = 'Spergel'
         if 'model_type' in config['model']:
             model_type_name = config['model']['model_type']
         self.model_type = model_type_by_name[model_type_name]()
+        # Override the 'auto' draw method if specified by this model type.
+        # This will in turn be overridden later if the PSF specifies a draw method.
+        if self.model_type.draw_method is not None:
+            self.draw_method = self.model_type.draw_method
 
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
@@ -177,6 +185,12 @@ class GalsimGalaxyModel(object):
         psf_model_class_name = config['model']['psf_class']
         self.psf_model = getattr(galsim_psf, psf_model_class_name)(
             config, active_parameters=self.actv_params_psf, **kwargs)
+        # Override the draw method if necessary for this PSF type.
+        # Important when using PSFs from the observed image of a star,
+        # since these have already been convolved by the pixel,
+        # so don't want to do that again.
+        if self.psf_model.draw_method is not None:
+            self.draw_method = self.psf_model.draw_method
 
         # Store fixed PSF now unless we're sampling in the PSF model parameters
         self.static_psf = None
@@ -304,10 +318,11 @@ class GalsimGalaxyModel(object):
             try:
                 if image is not None:
                     model = obj.drawImage(image=image, gain=gain,
-                                          add_to_image=True)
+                                          add_to_image=True,
+                                          method=self.draw_method)
                 else:
                     model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
-                                          gain=gain)
+                                          gain=gain, method=self.draw_method)
             except galsim.GalSimFFTSizeError:
                 print("Trying to make an image that's too big.")
                 print('Model params:')

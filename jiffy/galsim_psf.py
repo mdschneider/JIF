@@ -46,6 +46,7 @@ K_PARAM_BOUNDS = {
 
 class PSFModel(object):
     def __init__(self, config, active_parameters=[], **kwargs):
+        self.draw_method = None
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
         self._init_params()
@@ -103,6 +104,7 @@ class ImagePSFModel(PSFModel):
     '''
     def __init__(self, config, active_parameters=[], psf_image=None, scale=None, **kwargs):
         super().__init__(config, active_parameters, **kwargs)
+        self.draw_method = 'no_pixel'
         self.psf_image = psf_image
         if self.psf_image is None:
             if 'footprint' in config and 'psf_image' in config['footprint']:
