@@ -39,8 +39,8 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
             # For reference:
             'nu': {'bulge': -0.708, 'disk': 0.5},
             'n': {'bulge': 4, 'disk': 1},
-            'type_frac': {'bulge': 0.39734645710329014,
-                           'disk': 0.6026535428967099}
+            'type_frac': {'bulge': 0.4024540060009977,
+                           'disk': 0.5975459939990023}
         }
 
         self.scale = 0.2 # arcsec per pixel
