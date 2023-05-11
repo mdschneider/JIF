@@ -30,12 +30,12 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
             'gm_filename': {'bulge': 'gmfile_bulge.pkl',
                              'disk': 'gmfile_disk.pkl'},
             # For MAP fit initialization
-            'mean_hlrFlux': {'bulge': np.array([-1.17758737,  0.40906309]),
-                              'disk': np.array([-0.60094098,  0.89840566])},
-            'inv_cov_hlrFlux': {'bulge': np.array([[ 4.57797781, -2.05637471],
-                                                   [-2.05637471,  2.31051011]]),
-                                 'disk': np.array([[ 3.86410607, -1.19081864],
-                                                   [-1.19081864,  1.95838151]])},
+            'mean_hlrFlux': {'bulge': np.array([-1.17158946,  0.36553836]),
+                              'disk': np.array([-0.60005173,  0.8777138 ])},
+            'inv_cov_hlrFlux': {'bulge': np.array([[ 4.54875109, -1.9432882 ],
+                                                    [-1.9432882 ,  2.08570061]]),
+                                 'disk': np.array([[ 3.85430494, -1.14510461],
+                                                    [-1.14510461,  1.82218118]])},
             # For reference:
             'nu': {'bulge': -0.708, 'disk': 0.5},
             'n': {'bulge': 4, 'disk': 1},
@@ -73,7 +73,7 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
         # 4D Bayesian Gaussian mixture model for log-hlr, log-flux, dr, e
         e = np.sqrt(e1**2 + e2**2)
         dr = np.sqrt(dx**2 + dy**2)
-        features = np.array([np.log(hlr), np.log(flux), dr, e])
+        features = np.array([np.log(hlr), np.log(flux + 1), dr, e])
         lnprior_4features = self.gm.score_samples([features])
 
         # Flat prior for ellipticity angle
@@ -92,6 +92,7 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
         return self.evaluate(hlr, e1, e2, flux, dx, dy)
 
 # Isolated (one true object) footprints detected in DC2 tract 3830
+# Note: Has not been updated with latest flux calibrations, used in the FixedNu prior.
 class IsolatedFootprintPrior_VariableNu_DC2(object):
     def __init__(self, args=None, hlrFlux_gm_filename='hlrflux_gmfile.pkl',
         e_gm_filename='e_gmfile.pkl', dr_gm_filename='dr_gmfile.pkl'):

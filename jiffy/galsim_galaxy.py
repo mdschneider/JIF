@@ -45,8 +45,10 @@ PARAM_BOUNDS = {
     'hlr': [0.00001, 6.0],
     'e1': [-0.99, 0.99],
     'e2': [-0.99, 0.99],
-    # Flux must be positive for a real source
-    'flux': [0.0001, np.inf],
+    # nJy flux must be positive for a real source
+    # Using flux calibration from DC2 i-band study,
+    # -0.9999 inst flux units corresponds to mag 29.82
+    'flux': [-0.9999, np.inf],
     'dx': [-np.inf, np.inf],
     'dy': [-np.inf, np.inf]
 }
@@ -296,6 +298,12 @@ class GalsimGalaxyModel(object):
         TYPE
             Description
         '''
+        # If flux is non-positive, treat this as a zero-light profile and terminate early.
+        if self.params.flux[0] <= 0:
+            if image is None:
+                image = galsim.ImageF(ngrid_x, ngrid_y, scale=scale, init_value=0)
+            return image
+
         if real_galaxy_catalog is not None:
             # "Real" galaxies have intrinsic sizes and ellipticities, so
             # do not add any more here.
