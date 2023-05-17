@@ -317,6 +317,8 @@ class Roaster(object):
         except:
             # Assign 0 probability to parameter combinations that produce an unhandled exception in prior evaluation
             return -np.inf
+        if not np.isfinite(res):
+            return -np.inf
         
         return res
 
@@ -357,14 +359,14 @@ class Roaster(object):
         res = -np.inf
 
         try:
-            model = self._get_model_image()
+            model_image = self._get_model_image()
         except:
             # Assign 0 probability to parameter combinations that produce an unhandled exception in image rendering
             return -np.inf
         
-        if model is not None:
+        if model_image is not None:
             # Compute log-likelihood assuming independent Gaussian-distributed noise in each pixel
-            delta = model.array - self.data
+            delta = model_image.array - self.data
             if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
                 # Using a per-pixel variance plane
                 # Treat zero variance pixels as masked
@@ -387,14 +389,19 @@ class Roaster(object):
                     sum_chi_sq = np.sum(delta[self.mask.astype(bool)]**2) / self.noise_var
             
             res = -0.5 * sum_chi_sq + self.lnnorm
+            if not np.isfinite(res):
+                return -np.inf
         
         if self.detection_correction:
             # Scale up the likelihood to account for the fact that we're only
             # looking at data examples that pass a detection algorithm
             try:
-                detection_correction = self.detection_correction(self.src_models)
+                detection_correction = self.detection_correction(
+                    model_image.array, self.src_models, self.noise_var, self.mask)
             except:
                 # Assign 0 probability to parameter combinations that produce an unhandled exception in detection correction evaluation
+                return -np.inf
+            if not np.isfinite(detection_correction):
                 return -np.inf
             res += detection_correction
         
