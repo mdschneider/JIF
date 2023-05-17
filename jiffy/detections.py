@@ -20,31 +20,31 @@ Assumes that variance and mask are provided as image-sized arrays.
 '''
 class IsolatedFootprintDetectionCorrection(object):
     def __init__(self, args=None):
-        # # Flux bins in nJy
-        # self.flux_bins_upper = np.array([11.527841402053834, 12.589147148132325, 13.72355423927307, 14.884612380981446,
-        #                                  16.09600067138672, 17.40477798461914, 18.91361146545411, 20.47610092163086,
-        #                                  21.477143478393554, 22.54180450439453, 23.71131935119629, 24.93340446472168,
-        #                                  26.175127639770505, 27.591835784912114, 29.061195220947265, 30.638700485229492,
-        #                                  32.41033309936523, 34.34035903930664, 36.5208546447754, 38.827496643066404,
-        #                                  41.36696090698241, 44.14577476501465, 47.194010925292964, 50.77131050109864,
-        #                                  54.83609207153321, 59.29889907836913, 64.48213623046875, 70.2841764831543,
-        #                                  77.55862945556642, 86.1080140686035, 96.86723937988296, 109.97297958374023,
-        #                                  126.20048187255851, 149.33343566894533])
-        # # Convert from nJy to instrumental flux, using calibrations from DC2 study
-        # self.flux_bins_upper *= 0.017100155374837712
-        # self.flux_bins_upper += -1.073090269533189
-        # # Lower bound on probability of having sufficient flux to be detected
-        # # Use this whenever erf can't be computed well
-        # detected_frac = np.array([0.0007389110182013105, 0.0007851891802036702, 0.0010106735953169163, 0.001017000051464549,
-        #                            0.0010235495219841231, 0.0012299710175904973, 0.0012792173299028132, 0.001454382992592537,
-        #                            0.0018617649431903996, 0.0021245124416635966, 0.0023617543592913386, 0.002602798388947123,
-        #                            0.0030302305480409, 0.0031886509667079896, 0.0038042989243343983, 0.005019089345324304,
-        #                            0.00641525648926068, 0.007270910714866668, 0.009818681777706076, 0.011819661417832326,
-        #                            0.014812218940266967, 0.020211556269328333, 0.023801183595974985, 0.029870365615255863,
-        #                            0.03627161780031299, 0.04188025740219244, 0.05101675683678421, 0.06081006509381948,
-        #                            0.07036615146818923, 0.07772014621795387, 0.09189516129801277, 0.10343125983915473,
-        #                            0.11477903043863565, 0.12468318654152415])
-        # self.neg_log_detected_frac = -np.log(detected_frac)
+        # Flux bins in nJy
+        self.flux_bins_upper = np.array([11.527841402053834, 12.589147148132325, 13.72355423927307, 14.884612380981446,
+                                         16.09600067138672, 17.40477798461914, 18.91361146545411, 20.47610092163086,
+                                         21.477143478393554, 22.54180450439453, 23.71131935119629, 24.93340446472168,
+                                         26.175127639770505, 27.591835784912114, 29.061195220947265, 30.638700485229492,
+                                         32.41033309936523, 34.34035903930664, 36.5208546447754, 38.827496643066404,
+                                         41.36696090698241, 44.14577476501465, 47.194010925292964, 50.77131050109864,
+                                         54.83609207153321, 59.29889907836913, 64.48213623046875, 70.2841764831543,
+                                         77.55862945556642, 86.1080140686035, 96.86723937988296, 109.97297958374023,
+                                         126.20048187255851, 149.33343566894533])
+        # Convert from nJy to instrumental flux, using calibrations from DC2 study
+        self.flux_bins_upper *= 0.017100155374837712
+        self.flux_bins_upper += -1.073090269533189
+        # Fraction of galaxies in each flux bin that pass all isolated footprint criteria.
+        # This is a lower bound on the probability of having sufficient flux to be detected.
+        detected_frac = np.array([0.0007389110182013105, 0.0007851891802036702, 0.0010106735953169163, 0.001017000051464549,
+                                   0.0010235495219841231, 0.0012299710175904973, 0.0012792173299028132, 0.001454382992592537,
+                                   0.0018617649431903996, 0.0021245124416635966, 0.0023617543592913386, 0.002602798388947123,
+                                   0.0030302305480409, 0.0031886509667079896, 0.0038042989243343983, 0.005019089345324304,
+                                   0.00641525648926068, 0.007270910714866668, 0.009818681777706076, 0.011819661417832326,
+                                   0.014812218940266967, 0.020211556269328333, 0.023801183595974985, 0.029870365615255863,
+                                   0.03627161780031299, 0.04188025740219244, 0.05101675683678421, 0.06081006509381948,
+                                   0.07036615146818923, 0.07772014621795387, 0.09189516129801277, 0.10343125983915473,
+                                   0.11477903043863565, 0.12468318654152415])
+        self.neg_log_detected_frac = -np.log(detected_frac)
 
         # 5sigma threshold for pixels in PSF-convolved image, used by the Pipelines for detection,
         # computed for each patch.
@@ -129,10 +129,10 @@ class IsolatedFootprintDetectionCorrection(object):
 
         return neg_log_prob
 
-    # def find_neg_log_detected_frac(self, flux):
-    #     idx = np.digitize(flux, self.flux_bins_upper, right=False)
-    #     idx = min(idx, len(self.neg_log_detected_frac) - 1)
-    #     return self.neg_log_detected_frac[idx]
+    def find_neg_log_detected_frac(self, flux):
+        idx = np.digitize(flux, self.flux_bins_upper, right=False)
+        idx = min(idx, len(self.neg_log_detected_frac) - 1)
+        return self.neg_log_detected_frac[idx]
 
     # Note: Here we assume variance is known in a given footprint,
     # though some analyses have treated this probabilistically
@@ -156,13 +156,13 @@ class IsolatedFootprintDetectionCorrection(object):
             self.set_convolved_variance(variance, self.psf)
 
         neg_log_prob = self.evaluate(model_image, self.psf)
-        # # Use overall detection fraction (which includes other criteria than just having sufficiently bright pixels)
-        # # as lower bound on the bright-enough-pixel detection probability,
-        # # in case the preceding computation runs into trouble ("trouble" might mean numerical issues from having
-        # # to compute the probability before finding its log, or it might mean reaching a pathological corner of
-        # # parameter space where the approximations we've made here break down).
-        # flux = model.params.flux[0]
-        # neg_log_prob = min(neg_log_prob, self.find_neg_log_detected_frac(flux))
+        # Use overall detection fraction (which includes other criteria than just having sufficiently bright pixels)
+        # as lower bound on the bright-enough-pixel detection probability,
+        # in case the preceding computation runs into trouble ("trouble" might mean numerical issues from having
+        # to compute the probability before finding its log, or it might mean reaching a pathological corner of
+        # parameter space where the approximations we've made here break down).
+        flux = model.params.flux[0]
+        neg_log_prob = min(neg_log_prob, self.find_neg_log_detected_frac(flux))
         return neg_log_prob
 
 detection_corrections = {None: False,
