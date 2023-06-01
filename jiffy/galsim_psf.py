@@ -143,7 +143,7 @@ class GalsimPSFModel(PSFModel):
         super().__init__(config, active_parameters, **kwargs)
 
     def _init_params(self):
-        self.params = np.array([(0.8, 0.0, 0.0, 1.0, 0.0, 0.0)],
+        self.params = np.array([(0.78, 0.0, 0.0, 1.0, 0.0, 0.0)],
                                dtype=[('psf_fwhm', '<f8'),
                                       ('psf_e1', '<f8'),
                                       ('psf_e2', '<f8'),
