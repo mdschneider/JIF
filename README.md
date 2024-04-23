@@ -56,6 +56,4 @@ Install python requirements available with PIP via:
 
 ## Versions
 
-Branch 0.1 contains the specific code used for the [first arXiv draft](https://arxiv.org/abs/2309.10321v1) of "Markov Chain Monte Carlo for Bayesian Parametric Galaxy Modeling in LSST", submitted 19 September 2023
-  ```
-  This will print summary statistics and make some plots in `output/TestData`.
+Branch 0.1 contains the specific code used for the [first arXiv draft](https://arxiv.org/abs/2309.10321v1) of "Markov Chain Monte Carlo for Bayesian Parametric Galaxy Modeling in LSST", submitted 19 September 2023.
