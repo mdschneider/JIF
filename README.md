@@ -54,30 +54,8 @@ Install python requirements available with PIP via:
 - The sources (and source groups) we extract from raw imaging are stored in [HDF5](http://www.hdfgroup.org/HDF5/) file formats, with a custom grouping.
 - For part of the results visualization we use [corner](https://github.com/dfm/corner.py).
 
-## Test Analysis
+## Versions
 
-The following procedure outlines the steps that can be take to create some test data with `galasim_galaxy`, analyze it with `Roaster`, and inspect the results with `RoasterInspector`. This example does not require installation via `setup.py`.
-
-1. Create the directory structure (if not already in place). cd to the parent repository directory (i.e. the one containing jif).
-  ```
-  mkdir -p data/TestData
-  mkdir -p output/TestData
-  ```
-2. Generate the test data with GalSim:
-  ```
-  cd jiffy
-  python galsim_galaxy.py
-  ```
-  This will make the file `test_image_data.h5` in data/TestData
-  
-3. Run the roaster on this data:
-  ```
-  jiffy_roaster --config_file ../config/jiffy.yaml
-  ```
-  This will create an hdf5 results file `../output/TestData/jiffy_roaster_out_seg0.h5`.
-  
-4. Inspect the data with `RoasterInspector`. 
-  ```
-  jiffy_roaster_inspector ../output/TestData/jiffy_roaster_out_seg0.h5 ../config/jiffy.yaml
+Branch 0.1 contains the specific code used for the [first arXiv draft](https://arxiv.org/abs/2309.10321v1) of "Markov Chain Monte Carlo for Bayesian Parametric Galaxy Modeling in LSST", submitted 19 September 2023
   ```
   This will print summary statistics and make some plots in `output/TestData`.
