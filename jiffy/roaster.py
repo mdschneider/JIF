@@ -88,6 +88,8 @@ class Roaster(object):
         self.ngrid_x = 64
         self.ngrid_y = 64
         self.noise_var = 3e-10
+        self.var_slope = None
+        self.var_intercept = None
         self.scale = 0.2
         self.gain = 1.0
         self.data = None
@@ -185,7 +187,12 @@ class Roaster(object):
         '''
         image = self._get_model_image(real_galaxy_catalog=real_galaxy_catalog)
         if noise is None:
-            if np.issubdtype(type(self.noise_var), np.floating):
+            if self.var_slope is not None:
+                var_image = image * self.var_slope
+                if self.var_intercept is not None:
+                    var_image = var_image + self.var_intercept
+                noise = galsim.VariableGaussianNoise(rng=None, var_image=var_image)
+            elif np.issubdtype(type(self.noise_var), np.floating):
                 noise = galsim.GaussianNoise(sigma=np.sqrt(self.noise_var))
             elif issubclass(type(self.noise_var), np.ndarray):
                 noise = galsim.VariableGaussianNoise(rng=None, var_image=self.noise_var)
@@ -199,13 +206,15 @@ class Roaster(object):
         '''
         return self.make_data()
 
-    def import_data(self, pix_dat_array, noise_var, mask=1, bkg=0, scale=0.2, gain=1.0):
+    def import_data(self, pix_dat_array, noise_var, var_slope, var_intercept, mask=1, bkg=0, scale=0.2, gain=1.0):
         '''
         Import the pixel data and noise variance for a footprint
         '''
         self.ngrid_y, self.ngrid_x = pix_dat_array.shape
         self.data = pix_dat_array
         self.noise_var = noise_var
+        self.var_slope = var_slope
+        self.var_intercept = var_intercept
         self.mask = mask
         self.bkg = bkg
         self.scale = scale
@@ -213,7 +222,9 @@ class Roaster(object):
         self.lnnorm = self._set_like_lnnorm()
 
     def load_and_import_data(self):
-        dat, noise_var, mask, bkg, scale, gain = None, None, None, None, None, None
+        dat, noise_var, var_slope, var_intercept = None, None, None, None
+        mask, bkg, scale, gain = None, None, None, None
+        
         def _load_array(item):
             if isinstance(item, str):
                 item = np.load(item)
@@ -222,15 +233,19 @@ class Roaster(object):
             fp = self.config['footprint']
             dat = _load_array(fp['image']) if 'image' in fp else None
             noise_var = _load_array(fp['variance']) if 'variance' in fp else None
+            var_slope = fp['var_slope'] if 'var_slope' in fp else None
+            var_intercept = fp['var_intercept'] if 'var_intercept' in fp else None
             mask = _load_array(fp['mask']) if 'mask' in fp else None
             scale = _load_array(fp['scale']) if 'scale' in fp else None
             gain = _load_array(fp['gain']) if 'gain' in fp else None
             bkg = _load_array(fp['background']) if 'background' in fp else None
-        elif 'io' in self.config and 'infile' in self.config['io']:
+        
+        if 'io' in self.config and 'infile' in self.config['io']:
             dat, noise_var, mask, bkg, scale, gain = footprints.load_image(self.config['io']['infile'],
                 segment=args.footprint_number, filter_name=self.config['io']['filter'])
+        
         if dat is not None:
-            self.import_data(dat, noise_var, mask=mask, bkg=bkg, scale=scale, gain=gain)
+            self.import_data(dat, noise_var, var_slope, var_intercept, mask=mask, bkg=bkg, scale=scale, gain=gain)
 
     def initialize_param_values(self, param_file_name):
         '''
@@ -323,6 +338,25 @@ class Roaster(object):
         return res
 
     def _set_like_lnnorm(self):
+        if self.var_slope is not None:
+            if self.data is None:
+                return None
+            var_image = self.data * self.var_slope
+            if self.var_intercept is not None:
+                var_image = var_image + self.var_intercept
+            
+            # This is -inf at locations where noise_var == 0
+            logden = -0.5 * np.log(2 * np.pi * var_image)
+            
+            valid_pixels = var_image != 0
+            if self.mask is not None:
+                valid_pixels &= self.mask.astype(bool)
+            if np.sum(valid_pixels) == 0:
+                return np.nan
+            
+            lnnorm = np.sum(logden[valid_pixels])
+            return float(lnnorm)
+        
         # This is -inf at locations where noise_var == 0
         logden = -0.5 * np.log(2 * np.pi * self.noise_var)
 
@@ -335,6 +369,7 @@ class Roaster(object):
             if np.sum(valid_pixels) == 0:
                 return np.nan
             lnnorm = np.sum(logden[valid_pixels])
+        
         else:
             # Using a constant variance over the entire image
             # Treat zero variance as a mask for the entire image
@@ -367,7 +402,22 @@ class Roaster(object):
         if model_image is not None:
             # Compute log-likelihood assuming independent Gaussian-distributed noise in each pixel
             delta = model_image.array - self.data
-            if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
+            
+            if self.var_slope is not None:
+                lnnorm = self._set_like_lnnorm()
+                var_image = self.var_slope * model_image.array
+                if self.var_intercept is not None:
+                    var_image = var_image + self.var_intercept
+                # Treat zero variance pixels as masked
+                valid_pixels = var_image != 0
+                if self.mask is not None:
+                    valid_pixels &= self.mask.astype(bool)
+                if np.sum(valid_pixels) == 0:
+                    return 0
+                sum_chi_sq = np.sum(delta[valid_pixels]**2 / var_image[valid_pixels])
+            
+            elif issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
+                lnnorm = self.lnnorm
                 # Using a per-pixel variance plane
                 # Treat zero variance pixels as masked
                 valid_pixels = self.noise_var != 0
@@ -376,7 +426,9 @@ class Roaster(object):
                 if np.sum(valid_pixels) == 0:
                     return 0
                 sum_chi_sq = np.sum(delta[valid_pixels]**2 / self.noise_var[valid_pixels])
+            
             else:
+                lnnorm = self.lnnorm
                 # Using a constant variance over the entire image
                 # Treat zero variance as a mask for the entire image
                 if self.noise_var == 0:
@@ -388,7 +440,7 @@ class Roaster(object):
                         return 0
                     sum_chi_sq = np.sum(delta[self.mask.astype(bool)]**2) / self.noise_var
             
-            res = -0.5 * sum_chi_sq + self.lnnorm
+            res = -0.5 * sum_chi_sq + lnnorm
             if not np.isfinite(res):
                 return -np.inf
         
@@ -397,7 +449,7 @@ class Roaster(object):
             # looking at data examples that pass a detection algorithm
             try:
                 detection_correction = self.detection_correction(
-                    model_image.array, self.src_models, self.noise_var, self.mask)
+                    model_image.array, self.src_models, self.noise_var, self.var_slope, self.var_intercept, self.mask)
             except:
                 # Assign 0 probability to parameter combinations that produce an unhandled exception in detection correction evaluation
                 return -np.inf
