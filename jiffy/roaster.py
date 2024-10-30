@@ -337,11 +337,13 @@ class Roaster(object):
         
         return res
 
-    def _set_like_lnnorm(self):
+    def _set_like_lnnorm(self, model_image=None):
         if self.var_slope is not None:
-            if self.data is None:
+            if model_image is None:
+                model_image = self.data
+            if model_image is None:
                 return None
-            var_image = self.data * self.var_slope
+            var_image = model_image * self.var_slope
             if self.var_intercept is not None:
                 var_image = var_image + self.var_intercept
             
@@ -402,43 +404,36 @@ class Roaster(object):
         if model_image is not None:
             # Compute log-likelihood assuming independent Gaussian-distributed noise in each pixel
             delta = model_image.array - self.data
-            
+
+            variance = self.noise_var
+            lnnorm = self.lnnorm
             if self.var_slope is not None:
-                lnnorm = self._set_like_lnnorm()
-                var_image = self.var_slope * model_image.array
+                lnnorm = self._set_like_lnnorm(model_image)
+                variance = self.var_slope * model_image.array
                 if self.var_intercept is not None:
-                    var_image = var_image + self.var_intercept
-                # Treat zero variance pixels as masked
-                valid_pixels = var_image != 0
-                if self.mask is not None:
-                    valid_pixels &= self.mask.astype(bool)
-                if np.sum(valid_pixels) == 0:
-                    return 0
-                sum_chi_sq = np.sum(delta[valid_pixels]**2 / var_image[valid_pixels])
+                    variance = variance + self.var_intercept
             
-            elif issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
-                lnnorm = self.lnnorm
+            elif issubclass(type(variance), np.ndarray) and variance.size > 1:
                 # Using a per-pixel variance plane
                 # Treat zero variance pixels as masked
-                valid_pixels = self.noise_var != 0
+                valid_pixels = variance != 0
                 if self.mask is not None:
                     valid_pixels &= self.mask.astype(bool)
                 if np.sum(valid_pixels) == 0:
                     return 0
-                sum_chi_sq = np.sum(delta[valid_pixels]**2 / self.noise_var[valid_pixels])
+                sum_chi_sq = np.sum(delta[valid_pixels]**2 / variance[valid_pixels])
             
             else:
-                lnnorm = self.lnnorm
                 # Using a constant variance over the entire image
                 # Treat zero variance as a mask for the entire image
-                if self.noise_var == 0:
+                if variance == 0:
                     return 0
                 if self.mask is None:
-                    sum_chi_sq = np.sum(delta**2) / self.noise_var
+                    sum_chi_sq = np.sum(delta**2) / variance
                 else:
                     if np.sum(self.mask) == 0:
                         return 0
-                    sum_chi_sq = np.sum(delta[self.mask.astype(bool)]**2) / self.noise_var
+                    sum_chi_sq = np.sum(delta[self.mask.astype(bool)]**2) / variance
             
             res = -0.5 * sum_chi_sq + lnnorm
             if not np.isfinite(res):
@@ -449,7 +444,7 @@ class Roaster(object):
             # looking at data examples that pass a detection algorithm
             try:
                 detection_correction = self.detection_correction(
-                    model_image.array, self.src_models, self.noise_var, self.var_slope, self.var_intercept, self.mask)
+                    model_image.array, self.src_models, variance, self.mask)
             except:
                 # Assign 0 probability to parameter combinations that produce an unhandled exception in detection correction evaluation
                 return -np.inf
