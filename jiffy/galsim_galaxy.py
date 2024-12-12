@@ -31,24 +31,26 @@ Wrapper for simple GalSim galaxy models to use in MCMC.
 import os
 import numpy as np
 import galsim
+from galsim.errors import GalSimFFTSizeError
+
 from jiffy import galsim_psf
 
 
 # Used in validate_params()
 PARAM_BOUNDS = {
-    # Sersic n range allowed by galsim, minus a small safety margin
+    # Sersic n range allowed by galsim, minus a small safety margin.
     'n': [0.31, 6.19],
-    # Spergel nu range allowed by galsim, minus a small safety margin
+    # Spergel nu range allowed by galsim, minus a small safety margin.
     'nu': [-0.84, 3.99],
-    # hlr must be positive for a real source
-    # Overly large hlr values can cause major rendering slowdowns
+    # hlr must be positive for a real source.
+    # Overly large hlr values can cause major rendering slowdowns.
     'hlr': [0.00001, 6.0],
     'e1': [-0.99, 0.99],
     'e2': [-0.99, 0.99],
-    # nJy flux must be positive for a real source
-    # Using flux calibration from DC2 i-band study,
-    # -0.9999 inst flux units corresponds to mag 29.82
-    'flux': [-0.9999, np.inf],
+    # nJy flux must be positive for a real source.
+    # Using flux calibration from DP0.2 i-band coadd study,
+    # sources must have instrumental fluxes no lower than -5.
+    'flux': [-5, np.inf],
     'dx': [-np.inf, np.inf],
     'dy': [-np.inf, np.inf]
 }
@@ -87,7 +89,6 @@ class CircularProfile(LightProfile):
         gal = self.circular_profile(params, gsparams)
         gal = gal.shear(galsim.Shear(g1=params.e1[0],
                                      g2=params.e2[0]))
-        gal = gal.shift(params.dx[0], params.dy[0])
 
         return gal
 
@@ -147,16 +148,17 @@ class GalsimGalaxyModel(object):
     '''
     def __init__(self, config,
                  active_parameters=['e1', 'e2'], **kwargs):
-        self.draw_method = 'auto'
         model_type_name = 'Spergel'
         if 'model_type' in config['model']:
             model_type_name = config['model']['model_type']
         self.model_type = model_type_by_name[model_type_name]()
+
+        self.draw_method = 'auto'
         # Override the 'auto' draw method if specified by this model type.
         # This will in turn be overridden later if the PSF specifies a draw method.
         if self.model_type.draw_method is not None:
             self.draw_method = self.model_type.draw_method
-
+        
         self.active_parameters = active_parameters
         self.n_params = len(self.active_parameters)
 
@@ -179,7 +181,7 @@ class GalsimGalaxyModel(object):
         self.init_psf(config, **kwargs)
 
         self.gsparams = galsim.GSParams(
-            maximum_fft_size = 8192
+            maximum_fft_size = 24576
         )
 
     def init_psf(self, config, **kwargs):
@@ -272,71 +274,72 @@ class GalsimGalaxyModel(object):
         else:
             return self.static_psf
 
-    def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0,
-                  real_galaxy_catalog=None):
+    def get_image(self, image=None, ngrid_x=16, ngrid_y=16, scale=0.2, gain=1.0):
         '''
-        Render a GalSim Image() object from the internal model
+        Render a GalSim Image object from the parametric galaxy model.
         
         Parameters
         ----------
-        ngrid_x : int, optional
-            Description
-        ngrid_y : int, optional
-            Description
-        scale : float, optional
-            Description
         image : None, optional
-            Description
+            Preexisting Image base to draw on top of.
+            Must already have the desired wcs or scale.
+            If None, the other parameters are used to construct a new Image.
+        ngrid_x : int, optional
+            A newly-created Image is this many pixels wide, if image=None.
+        ngrid_y : int, optional
+            A newly-created Image is this many pixels high, if image=None.
+        scale : float, optional
+            Used to estimate a good image size.
+            A newly-created Image has this pixel scale, if image=None.
         gain : float, optional
-            Description
-        real_gals : bool, optional
-            Render using a GalSim "RealGalaxy" rather than Spergel profile.
-            Useful for testing model bias. (Default: False)
+            Gain to use for drawing.
         
         Returns
         -------
-        TYPE
-            Description
+        galsim.Image
+            Galsim Image with this this galaxy's rendered image added to it.
         '''
+        model_image = None
+        
         # If flux is non-positive, treat this as a zero-light profile and terminate early.
         if self.params.flux[0] <= 0:
             if image is None:
-                image = galsim.ImageF(ngrid_x, ngrid_y, scale=scale, init_value=0)
-            return image
+                model_image = galsim.ImageF(ngrid_x, ngrid_y, scale=scale, init_value=0)
+            return model_image
 
-        if real_galaxy_catalog is not None:
-            # "Real" galaxies have intrinsic sizes and ellipticities, so
-            # do not add any more here.
-            rgndx = np.random.randint(low=0, high=real_galaxy_catalog.nobjects)
-            print(f'*** Using GalSim RealGalaxy {rgndx}***')
-            gal = galsim.RealGalaxy(real_galaxy_catalog,
-                                    index=rgndx,
-                                    flux=self.params.flux[0],
-                                    gsparams=self.gsparams)
-            gal = gal.shift(self.params.dx[0], self.params.dy[0])
-        else:
-            gal = self.model_type.light_profile(self.params,
-                                                self.gsparams)
+        gal = self.model_type.light_profile(self.params,
+                                            gsparams=self.gsparams)
+        
         obj = galsim.Convolve(self.get_psf(), gal)
         
         N = obj.getGoodImageSize(scale)
         if N > 2048:
-            model = None
-        else:
-            try:
-                if image is not None:
-                    model = obj.drawImage(image=image, gain=gain,
-                                          add_to_image=True,
-                                          method=self.draw_method)
-                else:
-                    model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
-                                          gain=gain, method=self.draw_method)
-            except galsim.GalSimFFTSizeError:
-                print("Trying to make an image that's too big.")
-                print('Model params:')
-                print(self.get_params())
-                model = None
-        return model
+            print(f'Good image size ({N}) is > 2048. No model image returned.')
+            print('Model params:')
+            print(self.get_params())
+            return None
+        
+        offset = galsim.PositionD(self.params.dx[0], self.params.dy[0])
+        try:
+            if image is not None:
+                # Note: `image` must already have the desired wcs or scale.
+                model_image = obj.drawImage(image=image, gain=gain,
+                                            offset=offset,
+                                            add_to_image=True,
+                                            method=self.draw_method)
+            else:
+                model_image = obj.drawImage(nx=ngrid_x, ny=ngrid_y, gain=gain,
+                                            scale=scale, offset=offset,
+                                            method=self.draw_method)
+        except GalSimFFTSizeError as exception:
+            print('GalSimFFTSizeError encountered when trying to draw. No model image returned.')
+            print('Error message:')
+            print(exception.message)
+            print('Model params:')
+            print(self.get_params())
+            return None
+        
+        return model_image
 
 
 if __name__ == '__main__':
@@ -346,7 +349,7 @@ if __name__ == '__main__':
     import footprints
 
     gg = GalsimGalaxyModel()
-    img = gg.get_image(64, 64)
+    img = gg.get_image(ngrid_x=64, ngrid_y=64)
     noise_var = 1.e-8
     noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
     img.addNoise(noise)
