@@ -32,16 +32,19 @@ import numpy as np
 import warnings
 import galsim
 
-K_PARAM_BOUNDS = {
-    'psf_fwhm': [0.02, 200.0], ## in arcseconds
-                               ## Note that very small PSF widths will require 
-                               ## large GalSim FFTs
-    'psf_e1': [-0.6, 0.6],
-    'psf_e2': [-0.6, 0.6],
-    'psf_flux': [0.001, 1000.],
-    'psf_dx': [-100., 100.],
-    'psf_dy': [-100., 100.]
+PARAM_BOUNDS = {
+    # Very small PSF widths require large GalSim FFTs
+    # Overly large profiles can cause major rendering slowdowns
+    'psf_fwhm': [0.02, 5.0], ## in arcseconds
+    'psf_e1': [-0.99, 0.99],
+    'psf_e2': [-0.99, 0.99],
+    'psf_flux': [0.0001, np.inf],
+    'psf_dx': [-np.inf, np.inf],
+    'psf_dy': [-np.inf, np.inf]
 }
+PARAM_CONSTRAINTS = (
+    lambda params: params['psf_e1'][0]**2 + params['psf_e2'][0]**2 < 1,
+)
 
 
 class PSFModel(object):
@@ -88,12 +91,20 @@ class PSFModel(object):
 
         @returns a boolean indicating the validity of the current parameters
         '''
+        # Run a series of validity checks.
+        # If any of them fail, immediately return False.
         def _inbounds(param, bounds):
             return param >= bounds[0] and param <= bounds[1]
-
         for pname, _ in self.params.dtype.descr:
-            if not _inbounds(self.params[pname][0], K_PARAM_BOUNDS[pname]):
+            if not np.isfinite(self.params[pname][0]):
                 return False
+            if not _inbounds(self.params[pname][0], PARAM_BOUNDS[pname]):
+                return False
+        for constraint_satisfied in PARAM_CONSTRAINTS:
+            if not constraint_satisfied(self.params):
+                return False
+
+        # All checks passed
         return True
 
 
@@ -143,7 +154,8 @@ class GalsimPSFModel(PSFModel):
         super().__init__(config, active_parameters, **kwargs)
 
     def _init_params(self):
-        self.params = np.array([(0.77, 0.0, 0.0, 1.0, 0.0, 0.0)],
+        # Default FWHM is for the i-band coadd PSF of DP0.2 bright isolated galaxies
+        self.params = np.array([(0.763046, 0.0, 0.0, 1.0, 0.0, 0.0)],
                                dtype=[('psf_fwhm', '<f8'),
                                       ('psf_e1', '<f8'),
                                       ('psf_e2', '<f8'),
@@ -152,34 +164,34 @@ class GalsimPSFModel(PSFModel):
                                       ('psf_dy', '<f8')])
         self.params = self.params.view(np.recarray)
 
-    def get_model(self, theta=None, with_atmos=True):
+    def get_model(self):
         '''
         Get the GalSim image model
 
         This is the object that can be used in, e.g., GalSim convolutions
         '''
-        # argument theta is not used here
-        psf = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
-        psf_shape = galsim.Shear(e1=self.params.psf_e1[0],
-                                 e2=self.params.psf_e2[0])
-        psf = psf.shear(psf_shape)
-        psf = psf.withFlux(self.params.psf_flux[0])
-        psf = psf.shift(self.params.psf_dx[0], self.params.psf_dy[0])
+        psf = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0],
+                                flux=self.params.psf_flux[0])
+
+        # Avoid GalSim PSF transformations when not needed
+        if self.params.psf_e1[0] != 0 or self.params.psf_e2[0] != 0:
+            psf = psf.shear(galsim.Shear(e1=self.params.psf_e1[0],
+                                         e2=self.params.psf_e2[0]))
+        if self.params.psf_dx[0] != 0 or self.params.psf_dy[0] != 0:
+            psf = psf.shift(self.params.psf_dx[0], self.params.psf_dy[0])
+        
         return psf
 
-    def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0,
-                  theta_x_arcmin=0., theta_y_arcmin=0., with_atmos=True):
+    def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0):
         '''
         Render a GalSim Image() object from the internal model
         '''
-        theta = (theta_x_arcmin*galsim.arcmin, theta_y_arcmin*galsim.arcmin)
-        obj = self.get_model(theta, with_atmos=with_atmos)
+        obj = self.get_model()
         
         if image is not None:
             model = obj.drawImage(image=image, gain=gain, add_to_image=True, method='fft')
         else:
-            model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale,
-                                  gain=gain, method='fft')
+            model = obj.drawImage(nx=ngrid_x, ny=ngrid_y, scale=scale, gain=gain, method='fft')
         return model
 
 
