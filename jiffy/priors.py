@@ -23,27 +23,33 @@ class EmptyPrior(object):
 # Prior for isolated (one true object) footprints detected in DC2 tract 3830
 # Conditioned on the object being a specified type (bulge or disk)
 # Add log_type_frac to log-prior/posterior to jointly model the type probability
+# Updated for DP0.2 analysis, including optional PSF parameters
 class IsolatedFootprintPrior_FixedNu_DC2(object):
     def __init__(self, args=None, **kwargs):
+        # Number to add to flux_inst so that log(flux_inst + flux_inst_offset) is always well-defined
+        self.flux_inst_offset = 5
+        
         galtype = kwargs['type'] # 'bulge' or 'disk'
         prior_params = {
             'gm_filename': {'bulge': 'gmfile_bulge.pkl',
                              'disk': 'gmfile_disk.pkl'},
+            'logprob_e_angle': {'bulge': partial(self.log_sine_prob, phase=3.9, scale=0.037774, level=0.159155),
+                                'disk': lambda a : -np.log(2 * np.pi)},
+            'logprob_dr_angle': {'bulge': partial(self.log_sine_prob, phase=np.pi/2, scale=-0.0198944, level=0.159155),
+                                 'disk': lambda a : -np.log(2 * np.pi)},
             # For MAP fit initialization
-            'mean_hlrFlux': {'bulge': np.array([-1.17158946,  0.36553836]),
-                              'disk': np.array([-0.60005173,  0.8777138 ])},
-            'inv_cov_hlrFlux': {'bulge': np.array([[ 4.54875109, -1.9432882 ],
-                                                    [-1.9432882 ,  2.08570061]]),
-                                 'disk': np.array([[ 3.85430494, -1.14510461],
-                                                    [-1.14510461,  1.82218118]])},
+            'mean_hlrFlux': {'bulge': np.array([-2.90110191,  0.2653783 ]),
+                              'disk': np.array([-2.211403  ,  0.83366477])},
+            'inv_cov_hlrFlux': {'bulge': np.array([[ 5.5390664 , -2.35809197],
+                                                   [-2.35809197,  2.42428197]]),
+                                 'disk': np.array([[ 3.78450651, -1.16082712],
+                                                   [-1.16082712,  2.02404995]])},
             # For reference:
             'nu': {'bulge': -0.708, 'disk': 0.5},
             'n': {'bulge': 4, 'disk': 1},
-            'type_frac': {'bulge': 0.4024540060009977,
-                           'disk': 0.5975459939990023}
+            'type_frac': {'bulge': 0.39758631383088694,
+                           'disk': 0.6024136861691131}
         }
-
-        self.scale = 0.2 # arcsec per pixel
 
         # Mean and inverse covariance matrix of log-hlr (in log-pixels)
         # and log-flux (in log-inst flux),
@@ -58,179 +64,68 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
             self.gm = pickle.load(gm_file)
 
         # Uniform e angle distribution
-        self.lognorm_e_angle = -np.log(2 * np.pi)
+        self.logprob_e_angle = prior_params['logprob_e_angle'][galtype]
         # Uniform centroid angle distribution
-        self.lognorm_dr_angle = -np.log(2 * np.pi)
+        self.logprob_dr_angle = prior_params['logprob_dr_angle'][galtype]        
 
         type_frac = prior_params['type_frac'][galtype]
         self.log_type_frac = np.log(type_frac)
 
-    def evaluate(self, hlr, e1, e2, flux, dx, dy):
-        # These specific prior functions correspond to pixel distances,
-        # but the MCMC parameters are in arcsec
-        hlr, dx, dy = hlr / self.scale, dx / self.scale, dy / self.scale
+        self.psf_fwhm_mean = 0.7630464189398478
+        self.psf_fwhm_var = 3.4294244645920723e-05
+        self.psf_e1_mean = 0.0016812232284244407
+        self.psf_e1_var = 5.101391332227311e-07
+        self.psf_e2_mean = -0.00015326566654888057
+        self.psf_e2_var = 5.809799912978508e-07
 
+    def log_sine_prob(t, phase, scale, level):
+        return np.log(scale * np.sin(t + phase) + level)
+
+    def log_1dgaussian(x, mean, var):
+        return -0.5 * np.log(var * 2 * np.pi) - (x - mean)**2 / (2 * var)
+        
+    def evaluate(self, hlr, e1, e2, flux, dx, dy, psf_fwhm, psf_e1, psf_e2):
         # 4D Bayesian Gaussian mixture model for log-hlr, log-flux, dr, e
         e = np.sqrt(e1**2 + e2**2)
         dr = np.sqrt(dx**2 + dy**2)
-        features = np.array([np.log(hlr), np.log(flux + 1), dr, e])
+        features = np.array([np.log(hlr), np.log(flux + self.flux_inst_offset), dr, e])
         lnprior_4features = self.gm.score_samples([features])
 
-        # Flat prior for ellipticity angle
-        lnprior_e_angle = self.lognorm_e_angle
-        # Flat prior for position angle
-        lnprior_dr_angle = self.lognorm_dr_angle
+        # Prior for ellipticity angle
+        e_angle = np.angle(e1 + e2*1j)
+        lnprior_e_angle = self.logprob_e_angle(e_angle)
+        # Prior for position angle
+        dr_angle = np.arctan2(dy, dx)
+        lnprior_dr_angle = self.logprob_dr_angle(dr_angle)
 
-        lnprior = lnprior_4features + lnprior_e_angle + lnprior_dr_angle
+        # Prior for PSF parameters
+        lnprior_psf_fwhm, lnprior_psf_e1, lnprior_psf_e2 = 0, 0, 0
+        if psf_fwhm is not None:
+            lnprior_psf_fwhm = self.log_1dgaussian(psf_fwhm, self.psf_fwhm_mean, self.psf_fwhm_var)
+        if psf_e1 is not None:
+            lnprior_psf_e1 = self.log_1dgaussian(psf_e1, self.psf_e1_mean, self.psf_e1_var)
+        if psf_e2 is not None:
+            lnprior_psf_e2 = self.log_1dgaussian(psf_e2, self.psf_e2_mean, self.psf_e2_var)
+        lnprior_psf = lnprior_psf_fwhm + lnprior_psf_e1 + lnprior_psf_e2
+
+        # Combined prior
+        lnprior = lnprior_4features + lnprior_e_angle + lnprior_dr_angle + lnprior_psf
         return lnprior
 
     def __call__(self, src_models):
         param_names = ['hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
         hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
             for param_name in param_names]
+        
+        psf_fwhm, psf_e1, psf_e2 = None, None, None
+        if 'psf_fwhm' in src_models[0].actv_params_psf:
+            psf_fwhm = src_models[0].psf_model.params['psf_fwhm'][0]
+        if 'psf_e1' in src_models[0].actv_params_psf:
+            psf_e1 = src_models[0].psf_model.params['psf_e1'][0]
+        if 'psf_e2' in src_models[0].actv_params_psf:
+            psf_e2 = src_models[0].psf_model.params['psf_e2'][0]
 
-        return self.evaluate(hlr, e1, e2, flux, dx, dy)
-
-# Isolated (one true object) footprints detected in DC2 tract 3830
-# Note: Has not been updated with latest flux calibrations, used in the FixedNu prior.
-class IsolatedFootprintPrior_VariableNu_DC2(object):
-    def __init__(self, args=None, hlrFlux_gm_filename='hlrflux_gmfile.pkl',
-        e_gm_filename='e_gmfile.pkl', dr_gm_filename='dr_gmfile.pkl'):
-        self.scale = 0.2 # arcsec per pixel
-
-        # Mean and inverse covariance matrix of log-hlr (in log-pixels)
-        # and log-flux (in log-inst flux)
-        self.mean_hlrFlux = np.array([-0.83006938,  0.70396712])
-        self.inv_cov_hlrFlux = np.array([[ 3.56387564, -1.54370072],
-                                         [-1.54370072,  2.05263992]])
-        # self.lognorm_hlrFlux = -np.log(2 * np.pi) + 0.5 * np.log(np.linalg.det(self.inv_cov_hlrFlux))
-
-        with open(hlrFlux_gm_filename, mode='rb') as hlrFlux_gm_file:
-            self.hlrFlux_gm = pickle.load(hlrFlux_gm_file)
-
-        with open(e_gm_filename, mode='rb') as e_gm_file:
-            self.e_gm = pickle.load(e_gm_file)
-        self.lognorm_e_angle = -np.log(2 * np.pi)
-
-        with open(dr_gm_filename, mode='rb') as dr_gm_file:
-            self.dr_gm = pickle.load(dr_gm_file)
-        self.lognorm_dr_angle = -np.log(2 * np.pi)
-
-        self.lognorm_nu = -np.log(PARAM_BOUNDS['nu'][1] - PARAM_BOUNDS['nu'][0])
-
-    def evaluate(self, nu, hlr, e1, e2, flux, dx, dy):
-        # These specific prior functions correspond to pixel distances,
-        # but the MCMC parameters are in arcsec
-        hlr, dx, dy = hlr / self.scale, dx / self.scale, dy / self.scale
-
-        # # 2D Gaussian prior for log-hlr, log-flux
-        # hlrFlux_dev = np.log(np.array([hlr, flux])) - self.mean_hlrFlux
-        # lnprior_hlrFlux = self.lognorm_hlrFlux
-        # lnprior_hlrFlux -= 0.5 * np.dot(hlrFlux_dev, np.matmul(self.inv_cov_hlrFlux, hlrFlux_dev))
-
-        # Bayesian Gaussian mixture model for log-hlr, log-flux
-        log_hlrFlux = np.log(np.array([hlr, flux]))
-        lnprior_hlrFlux = self.hlrFlux_gm.score_samples([log_hlrFlux])
-
-        # Bayesian Gaussian mixture model for ellipticity
-        e = np.sqrt(e1**2 + e2**2)
-        lnprior_e = self.e_gm.score_samples([[e]])[0]
-        # Flat prior for ellipticity angle
-        lnprior_e_angle = self.lognorm_e_angle
-
-        # Bayesian Gaussian mixture model for position
-        dr = np.sqrt(dx**2 + dy**2)
-        lnprior_dr = self.dr_gm.score_samples([[dr]])[0]
-        # Flat prior for position angle
-        lnprior_dr_angle = self.lognorm_dr_angle
-
-        # Flat prior for nu
-        lnprior_nu = self.lognorm_nu
-
-        lnprior = lnprior_hlrFlux + lnprior_e + lnprior_e_angle + lnprior_dr + lnprior_dr_angle + lnprior_nu
-        return lnprior
-
-    def __call__(self, src_models):
-        param_names = ['nu', 'hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
-        nu, hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
-            for param_name in param_names]
-
-        return self.evaluate(nu, hlr, e1, e2, flux, dx, dy)
-
-
-class DefaultPriorSpergel(object):
-    """
-    A default prior for a single-component Spergel galaxy
-    """
-    def __init__(self, args=None):
-        ### Gaussian mixture in 'nu' parameter
-        # self.nu_mean_1 = -0.6 ### ~ de Vacouleur profile
-        # self.nu_mean_2 = 0.5 ### ~ exponential profile
-        # self.nu_var_1 = 0.05
-        # self.nu_var_2 = 0.01
-        self.nu_mean_1 = 0.0
-        self.nu_mean_2 = 0.0
-        self.nu_var_1 = 0.1
-        self.nu_var_2 = 0.1
-        ### Gamma distribution keeping half-light radius from becoming
-        ### much larger than 1 arcsecond or too close to zero.
-        self.hlr_shape = 2.
-        self.hlr_scale = 0.15
-        ### Gaussian distribution in log flux
-        self.mag_mean = 40.0
-        self.mag_var = 7.0
-        ### Beta distribution in ellipticity magnitude
-        self.e_beta_a = 1.5
-        self.e_beta_b = 5.0
-        ### Gaussian priors in centroid parameters
-        self.pos_var = 0.5
-
-    def _lnprior_nu(self, nu):
-        d1 = (nu - self.nu_mean_1)
-        d2 = (nu - self.nu_mean_2)
-        return -0.5 * (d1*d1/self.nu_var_1 + d2*d2/self.nu_var_2)
-        #return 0.0
-
-    def _lnprior_hlr(self, hlr):
-        if hlr < 0:
-            return -(np.inf)
-        else:
-            return (self.hlr_shape-1.)*np.log(hlr) - (hlr / self.hlr_scale)
-
-    def _lnprior_mag(self, mag):
-        delta = mag - self.mag_mean
-        return -0.5 * delta * delta / self.mag_var
-
-    def _lnprior_flux(self, flux):
-        return -0.5 * (flux - 1.0)**2 / 0.01
-
-    def evaluate(nu, hlr, e1, e2, flux, dx, dy):
-        lnp = 0.0
-        lnp += self._lnprior_nu(nu)
-        ### Half-light radius
-        lnp += self._lnprior_hlr(hlr)
-        ### Flux
-        lnp += self._lnprior_flux(flux)
-        #lnp += self._lnprior_mag(omega[0].mag_sed1)
-        #lnp += self._lnprior_mag(omega[0].mag_sed2)
-        #lnp += self._lnprior_mag(omega[0].mag_sed3)
-        #lnp += self._lnprior_mag(omega[0].mag_sed4)
-        ### Ellipticity magnitude
-        e = np.sqrt(e1**2 + e2**2)
-        if e > 1:
-            return -(np.inf)
-        else:
-            lnp += (self.e_beta_a-1.)*np.log(e) + (self.e_beta_b-1.)*np.log(1.-e)
-        ### Centroid (x,y) perturbations
-        lnp += -0.5 * (dx*dx + dy*dy) / self.pos_var
-        return lnp
-
-    def __call__(self, src_models):
-        param_names = ['nu', 'hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
-        nu, hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
-            for param_name in param_names]
-
-        return self.evaluate(nu, hlr, e1, e2, flux, dx, dy)
+        return self.evaluate(hlr, e1, e2, flux, dx, dy, psf_fwhm, psf_e1, psf_e2)
 
 
 # Allow functions to easily be looked up by name,
@@ -239,9 +134,9 @@ priors = {None: EmptyPrior,
           'Empty': EmptyPrior,
           'EmptyPrior': EmptyPrior,
           'IsolatedFootprintPrior_FixedNu': IsolatedFootprintPrior_FixedNu_DC2,
-          'IsolatedFootprintPrior_FixedNu_DC2': IsolatedFootprintPrior_FixedNu_DC2,
-          'IsolatedFootprintPrior_VariableNu': IsolatedFootprintPrior_VariableNu_DC2,
-          'IsolatedFootprintPrior_VariableNu_DC2': IsolatedFootprintPrior_VariableNu_DC2}
+          'IsolatedFootprintPrior_FixedNu_DC2': IsolatedFootprintPrior_FixedNu_DC2
+         }
+
 
 '''
 prior_form (str): Name of a prior, to look up in a priors dict like the one above.
