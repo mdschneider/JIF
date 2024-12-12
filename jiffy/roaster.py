@@ -85,6 +85,8 @@ class Roaster(object):
         self.init_detection_correction(args)
 
         # Initialize objects describing the pixel data in a footprint
+        self.wcs_matrix = None
+        self.bounds_arr = None
         self.ngrid_x = 64
         self.ngrid_y = 64
         self.noise_var = 3e-10
@@ -177,15 +179,13 @@ class Roaster(object):
             raise ValueError('Unsupported type for input value')
         return None
 
-    def make_data(self, noise=None, real_galaxy_catalog=None):
+    def make_data(self, noise=None):
         '''
         Make fake data from the current stored galaxy model
 
         @param noise Specify custom noise model. Use GaussianNoise if not provided.
-        @param mag Specify a magnitude or magnitudes for the image. Use default 
-            fluxes from parameter config file if not provided.
         '''
-        image = self._get_model_image(real_galaxy_catalog=real_galaxy_catalog)
+        image = self._get_model_image()
         if noise is None:
             if self.var_slope is not None:
                 var_image = image * self.var_slope
@@ -206,12 +206,16 @@ class Roaster(object):
         '''
         return self.make_data()
 
-    def import_data(self, pix_dat_array, noise_var, var_slope, var_intercept, mask=1, bkg=0, scale=0.2, gain=1.0):
+    def import_data(self, pix_dat_array, wcs_matrix, bounds_arr, noise_var,
+                    var_slope, var_intercept, mask=1, bkg=0, scale=0.2, gain=1.0):
         '''
         Import the pixel data and noise variance for a footprint
         '''
-        self.ngrid_y, self.ngrid_x = pix_dat_array.shape
+        if pix_dat_array is not None:
+            self.ngrid_y, self.ngrid_x = pix_dat_array.shape
         self.data = pix_dat_array
+        self.wcs_matrix = wcs_matrix
+        self.bounds_arr = bounds_arr
         self.noise_var = noise_var
         self.var_slope = var_slope
         self.var_intercept = var_intercept
@@ -224,6 +228,7 @@ class Roaster(object):
     def load_and_import_data(self):
         dat, noise_var, var_slope, var_intercept = None, None, None, None
         mask, bkg, scale, gain = None, None, None, None
+        wcs_matrix, bounds_arr = None, None
         
         def _load_array(item):
             if isinstance(item, str):
@@ -232,6 +237,8 @@ class Roaster(object):
         if 'footprint' in self.config:
             fp = self.config['footprint']
             dat = _load_array(fp['image']) if 'image' in fp else None
+            wcs_matrix = _load_array(fp['wcs_matrix']) if 'wcs_matrix' in fp else None
+            bounds_arr = _load_array(fp['bounds']) if 'bounds' in fp else None
             noise_var = _load_array(fp['variance']) if 'variance' in fp else None
             var_slope = fp['var_slope'] if 'var_slope' in fp else None
             var_intercept = fp['var_intercept'] if 'var_intercept' in fp else None
@@ -244,8 +251,8 @@ class Roaster(object):
             dat, noise_var, mask, bkg, scale, gain = footprints.load_image(self.config['io']['infile'],
                 segment=args.footprint_number, filter_name=self.config['io']['filter'])
         
-        if dat is not None:
-            self.import_data(dat, noise_var, var_slope, var_intercept, mask=mask, bkg=bkg, scale=scale, gain=gain)
+        self.import_data(dat, wcs_matrix, bounds_arr, noise_var, var_slope, var_intercept,
+                         mask=mask, bkg=bkg, scale=scale, gain=gain)
 
     def initialize_param_values(self, param_file_name):
         '''
@@ -263,53 +270,26 @@ class Roaster(object):
                 fval = float(val)
             self.set_param_by_name(paramname, fval)
         return None
-        
-    def initialize_from_image(self, args):
-        image = galsim.ImageF(self.data)
-        
-        flux = image.array.sum()
-        if flux < jiffy.galsim_galaxy.K_PARAM_BOUNDS['flux'][0]:
-            if args.verbose:
-                print('Flux initialization from image failed - Total image flux too small.')
-        elif flux > jiffy.galsim_galaxy.K_PARAM_BOUNDS['flux'][1]:
-            if args.verbose:
-                print('Flux initialization from image failed - Total image flux too large.')
-        else:
-            self.set_param_by_name('flux', flux)
-        
-        try:
-            moments = image.FindAdaptiveMom()
-        except galsim.hsm.GalSimHSMError:
-            if args.verbose:
-                print('HSM initialization failed.')
-            return None
 
-        params = {'e1': moments.observed_shape.e1,
-                'e2': moments.observed_shape.e2,
-                # FindAdaptiveMom() returns sigma and centroid in units of pixels,
-                # but the image model expects these to be in units of arc.
-                'hlr': moments.moments_sigma * self.scale,
-                'dx': (moments.moments_centroid.x - image.true_center.x) * self.scale,
-                'dy': (moments.moments_centroid.y - image.true_center.y) * self.scale}
-        for paramname, paramvalue in params.items():
-            if paramvalue < jiffy.galsim_galaxy.K_PARAM_BOUNDS[paramname][0]:
-                if args.verbose:
-                    print('HSM estimate for', paramname, 'too small.')
-                    print('Setting to lowest admissible value.')
-                paramvalue = jiffy.galsim_galaxy.K_PARAM_BOUNDS[paramname][0]
-            elif paramvalue > jiffy.galsim_galaxy.K_PARAM_BOUNDS[paramname][1]:
-                if args.verbose:
-                    print('HSM estimate for', paramname, 'too large.')
-                    print('Setting to highest admissible value.')
-                paramvalue = jiffy.galsim_galaxy.K_PARAM_BOUNDS[paramname][1]
-            self.set_param_by_name(paramname, paramvalue)
-
-        return None
-
-    def _get_model_image(self, real_galaxy_catalog=None):
+    def _get_model_image(self):
         # Set up a blank template image
-        model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
-                                    scale=self.scale, init_value=0.)
+        if self.wcs_matrix is not None:
+            wcs = galsim.JacobianWCS(self.wcs_matrix[0, 0], self.wcs_matrix[0, 1],
+                                     self.wcs_matrix[1, 0], self.wcs_matrix[1, 1])
+            if self.bounds_arr is not None:
+                bounds = galsim.BoundsI(*self.bounds_arr)
+                model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
+                                            wcs=wcs, bounds=bounds, init_value=0.)
+            else:
+                model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
+                                            wcs=wcs, init_value=0.)
+        elif self.bounds_arr is not None:
+            bounds = galsim.BoundsI(*self.bounds_arr)
+            model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
+                                        scale=self.scale, bounds=bounds, init_value=0.)
+        else:
+            model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
+                                        scale=self.scale, init_value=0.)
         
         # Try to draw all the sources on the template image
         for isrc in range(self.num_sources):
@@ -318,8 +298,7 @@ class Roaster(object):
                 break
             else:
                 model_image = self.src_models[isrc].get_image(image=model_image,
-                                                              gain=self.gain,
-                                                              real_galaxy_catalog=real_galaxy_catalog)
+                                                              gain=self.gain)
         
         return model_image
 
@@ -331,8 +310,12 @@ class Roaster(object):
             res = self.prior(self.src_models)
         except:
             # Assign 0 probability to parameter combinations that produce an unhandled exception in prior evaluation
+            print('Unhandled exception encountered in prior evaluation.')
+            print('Assigning 0 prior probability to this parameter combination.')
             return -np.inf
         if not np.isfinite(res):
+            print('Computed prior has the pathological value', res)
+            print('Assigning 0 prior probability to this parameter combination.')
             return -np.inf
         
         return res
@@ -350,11 +333,11 @@ class Roaster(object):
             # This is -inf at locations where noise_var == 0
             logden = -0.5 * np.log(2 * np.pi * var_image)
             
-            valid_pixels = var_image != 0
+            valid_pixels = var_image > 0
             if self.mask is not None:
                 valid_pixels &= self.mask.astype(bool)
             if np.sum(valid_pixels) == 0:
-                return np.nan
+                return 0
             
             lnnorm = np.sum(logden[valid_pixels])
             return float(lnnorm)
@@ -363,20 +346,20 @@ class Roaster(object):
         logden = -0.5 * np.log(2 * np.pi * self.noise_var)
 
         if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
-            # Using a per-pixel variance plane
-            # Treat pixels with zero variance as masked
-            valid_pixels = self.noise_var != 0
+            # Using a per-pixel variance plane.
+            # Treat pixels with nonpositive variance as masked.
+            valid_pixels = self.noise_var > 0
             if self.mask is not None:
                 valid_pixels &= self.mask.astype(bool)
             if np.sum(valid_pixels) == 0:
-                return np.nan
+                return 0
             lnnorm = np.sum(logden[valid_pixels])
         
         else:
             # Using a constant variance over the entire image
-            # Treat zero variance as a mask for the entire image
-            if self.noise_var == 0:
-                return np.nan
+            # Treat nonpositive variance as a mask for the entire image
+            if self.noise_var <= 0:
+                return 0
             elif self.mask is None:
                 npix = self.ngrid_x * self.ngrid_y
             elif np.issubdtype(type(self.mask), np.number):
@@ -384,7 +367,7 @@ class Roaster(object):
             else:
                 npix = np.sum(self.mask)
             if npix == 0:
-                return np.nan
+                return 0
             lnnorm = npix * logden
 
         return float(lnnorm)
@@ -416,7 +399,7 @@ class Roaster(object):
             elif issubclass(type(variance), np.ndarray) and variance.size > 1:
                 # Using a per-pixel variance plane
                 # Treat zero variance pixels as masked
-                valid_pixels = variance != 0
+                valid_pixels = variance > 0
                 if self.mask is not None:
                     valid_pixels &= self.mask.astype(bool)
                 if np.sum(valid_pixels) == 0:
@@ -425,8 +408,8 @@ class Roaster(object):
             
             else:
                 # Using a constant variance over the entire image
-                # Treat zero variance as a mask for the entire image
-                if variance == 0:
+                # Treat nonpositive variance as a mask for the entire image
+                if variance <= 0:
                     return 0
                 if self.mask is None:
                     sum_chi_sq = np.sum(delta**2) / variance
@@ -478,8 +461,6 @@ def init_roaster(args):
 
     if 'init' in rstr.config and 'init_param_file' in rstr.config['init']:
         rstr.initialize_param_values(rstr.config['init']['init_param_file'])
-    if args.initialize_from_image:
-        rstr.initialize_from_image(args)
 
     return rstr
 
@@ -616,11 +597,7 @@ def initialize_arg_parser():
                         help='Enable verbose messaging.')
     parser.add_argument('--show_progress_bar', action='store_true',
                         help='Show progress bar.')
-    
-    parser.add_argument('--initialize_from_image', action='store_true',
-                        help='Use image characteristics estimated with HSM to set initial parameter values.' +
-                        ' So far only tested on centered, isolated galaxies.')
-    
+       
     parser.add_argument('--cluster_walkers', action='store_true',
                         help='Throw away outlier walkers.')
     parser.add_argument('--cluster_walkers_thresh', type=float, default=4,
