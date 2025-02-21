@@ -92,7 +92,8 @@ class IsolatedFootprintDetectionCorrection(object):
 
         self.valid_pixels = None
         self.n_valid_pixels = 0
-        self.psf = None
+        # The Pipelines convolve the image with a Gaussian approximation to the PSF
+        self.psf = self.approximate_gaussian_psf(self.psf_sigma_pixels)
         self.convolved_variance = None
 
     # n_sigma_for_kernel=7.0 comes from the default value of
@@ -117,23 +118,23 @@ class IsolatedFootprintDetectionCorrection(object):
         self.valid_pixels = self.valid_pixels.flatten()
 
         self.n_valid_pixels = np.sum(self.valid_pixels)
-
-    def set_convolved_variance(self, variance, psf):
-        psf_squared = psf**2
-
-        self.convolved_variance = correlate(variance, psf_squared,
-                                            mode='reflect')
-        self.convolved_variance = self.convolved_variance.flatten()
     
-    def evaluate(self, model_image, psf):
+    def evaluate(self, model_image, variance, psf):
         convolved_image = correlate(model_image, psf,
                                     mode='constant', cval=0)
         convolved_image = convolved_image.flatten()
 
-        n_sigma_above_threshold = (convolved_image - self.threshold) / np.sqrt(self.convolved_variance)
+        psf_squared = psf**2
+        convolved_variance = correlate(variance, psf_squared,
+                                        mode='constant', cval=0)
+        convolved_variance = self.convolved_variance.flatten()
+
+        # Find the highest point-source S/N pixel in the image
+        n_sigma_above_threshold = (convolved_image - self.threshold) / np.sqrt(convolved_variance)
         idx = np.argmax(n_sigma_above_threshold[self.valid_pixels])
+        # Find the Gaussian probability of creating a random fluctuation with at least this much S/N
         max_prob = norm.sf(self.threshold, convolved_image[self.valid_pixels][idx],
-            np.sqrt(self.convolved_variance[self.valid_pixels][idx]))
+            np.sqrt(convolved_variance[self.valid_pixels][idx]))
 
         neg_log_prob = -np.log(max_prob)
 
@@ -144,9 +145,6 @@ class IsolatedFootprintDetectionCorrection(object):
         idx = min(idx, len(self.neg_log_detected_frac) - 1)
         return self.neg_log_detected_frac[idx]
 
-    # Note: Here we assume variance is known in a given footprint,
-    # though some analyses have treated this probabilistically
-    # (and therefore as something to sample in each MCMC step).
     def __call__(self, model_image, src_models, variance, mask):
         update_valid_pixels = (self.valid_pixels is None)
         if update_valid_pixels:
@@ -154,25 +152,19 @@ class IsolatedFootprintDetectionCorrection(object):
         # If the entire image is masked, the posterior should equal the prior.
         if self.n_valid_pixels == 0:
             return 0
-
-        update_convolved_variance = False
-        # Assume a single galsim_galaxy.GalsimGalaxyModel source
-        model = src_models[0]
-        if self.convolved_variance is None:
-            update_convolved_variance = True
-            # The Pipelines convolve the image with a Gaussian approximation to the PSF
-            self.psf = self.approximate_gaussian_psf(self.psf_sigma_pixels)
-        if update_convolved_variance:
-            self.set_convolved_variance(variance, self.psf)
-
-        neg_log_prob = self.evaluate(model_image, self.psf)
+        
+        neg_log_prob = self.evaluate(model_image, variance, self.psf)
+        
         # Use overall detection fraction (which includes other criteria than just having sufficiently bright pixels)
         # as lower bound on the bright-enough-pixel detection probability,
         # in case the preceding computation runs into trouble ("trouble" might mean numerical issues from having
         # to compute the probability before finding its log, or it might mean reaching a pathological corner of
         # parameter space where the approximations we've made here break down).
+        # Assume a single galsim_galaxy.GalsimGalaxyModel source
+        model = src_models[0]
         flux = model.params.flux[0]
         neg_log_prob = min(neg_log_prob, self.find_neg_log_detected_frac(flux))
+        
         return neg_log_prob
 
 detection_corrections = {None: False,
