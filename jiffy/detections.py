@@ -4,9 +4,9 @@ import pickle
 from scipy.ndimage import gaussian_filter, correlate
 from scipy.stats import norm
 
+
 class EmptyDetectionCorrection(object):
     '''
-    DetectionCorrection form for the image model parameters
     Applies no correction for all parameters (for any given parameterization).
     '''
     def __init__(self, *args, **kwargs):
@@ -15,9 +15,7 @@ class EmptyDetectionCorrection(object):
     def __call__(self, *args, **kwargs):
         return 0.0
 
-'''
-Assumes that variance and mask are provided as image-sized arrays.
-'''
+
 class IsolatedFootprintDetectionCorrection(object):
     def __init__(self, args=None):
         # Flux bins in nJy
@@ -38,6 +36,7 @@ class IsolatedFootprintDetectionCorrection(object):
         # Convert from nJy to instrumental flux, using calibrations from DC2 study
         self.flux_bins_upper *= 0.016909286233862435
         self.flux_bins_upper += -5.068159542178663
+
         # Fraction of galaxies in each flux bin that pass all isolated footprint criteria.
         # This is a lower bound on the probability of having sufficient flux to be detected.
         detected_frac = np.array([0.0003372251362058207, 0.00037547404629017985, 0.0005079345423100115, 0.0006210550298602316,
@@ -112,29 +111,34 @@ class IsolatedFootprintDetectionCorrection(object):
 
         return gaussian_psf_image
 
-    def set_valid_pixels(self, variance, mask):
-        self.valid_pixels = mask.astype(bool)
-        self.valid_pixels &= (variance != 0)
-        self.valid_pixels = self.valid_pixels.flatten()
+    def evaluate(self, model_image, roaster):
+        valid_pixels = (roaster.variance > 0)
+        if roaster.mask is not None:
+            valid_pixels &= roaster.mask.astype(bool)
+        if np.sum(valid_pixels) == 0:
+            return 0.0
 
-        self.n_valid_pixels = np.sum(self.valid_pixels)
-    
-    def evaluate(self, model_image, variance, psf):
-        convolved_image = correlate(model_image, psf,
+        # Compute a PSF-convolved image, to sharpen PSF-like signals
+        convolved_image = correlate(model_image, self.psf,
                                     mode='constant', cval=0)
-        convolved_image = convolved_image.flatten()
 
-        psf_squared = psf**2
-        convolved_variance = correlate(variance, psf_squared,
+        # Compute the variance of the PSF-convolved image
+        psf_squared = self.psf**2
+        convolved_variance = correlate(roaster.variance, psf_squared,
                                         mode='constant', cval=0)
-        convolved_variance = self.convolved_variance.flatten()
+
+        # Flatten everything
+        valid_pixels = valid_pixels.flatten()
+        convolved_image = convolved_image.flatten()
+        convolved_variance = convolved_variance.flatten()
 
         # Find the highest point-source S/N pixel in the image
         n_sigma_above_threshold = (convolved_image - self.threshold) / np.sqrt(convolved_variance)
-        idx = np.argmax(n_sigma_above_threshold[self.valid_pixels])
+        idx = np.argmax(n_sigma_above_threshold[valid_pixels])
+
         # Find the Gaussian probability of creating a random fluctuation with at least this much S/N
-        max_prob = norm.sf(self.threshold, convolved_image[self.valid_pixels][idx],
-            np.sqrt(convolved_variance[self.valid_pixels][idx]))
+        max_prob = norm.sf(self.threshold, convolved_image[valid_pixels][idx],
+            np.sqrt(convolved_variance[valid_pixels][idx]))
 
         neg_log_prob = -np.log(max_prob)
 
@@ -145,32 +149,43 @@ class IsolatedFootprintDetectionCorrection(object):
         idx = min(idx, len(self.neg_log_detected_frac) - 1)
         return self.neg_log_detected_frac[idx]
 
-    def __call__(self, model_image, src_models, variance, mask):
-        update_valid_pixels = (self.valid_pixels is None)
-        if update_valid_pixels:
-            self.set_valid_pixels(variance, mask)
-        # If the entire image is masked, the posterior should equal the prior.
-        if self.n_valid_pixels == 0:
-            return 0
+    def __call__(self, model_image, roaster):
+        # We are interested in the probability that an object with given true
+        # parameters would be observed by the detection algorithm.
+        # The detection-corrected likelihood is the standard likelihood
+        # divided by the detection probability, so the corrected log-likelihood
+        # is the standard log-likelihood minus the log-probability of detection.
+        # The value we return will be added to the log-likelihood,
+        # so we return the negative log-probability of detection.
+
+        # First we estimate the probability that an object with given true
+        # parameters will produce a PSF-convolved signal bright enough to
+        # pass the detection threshold somewhere in the exposure.
+        neg_log_prob = self.evaluate(model_image, roaster)
         
-        neg_log_prob = self.evaluate(model_image, variance, self.psf)
-        
-        # Use overall detection fraction (which includes other criteria than just having sufficiently bright pixels)
-        # as lower bound on the bright-enough-pixel detection probability,
-        # in case the preceding computation runs into trouble ("trouble" might mean numerical issues from having
-        # to compute the probability before finding its log, or it might mean reaching a pathological corner of
-        # parameter space where the approximations we've made here break down).
-        # Assume a single galsim_galaxy.GalsimGalaxyModel source
-        model = src_models[0]
+        # We use the overall detection fraction
+        # (which includes other criteria than just having sufficiently bright pixels)
+        # as a lower bound on the bright-enough-pixel detection probability,
+        # in case the preceding computation runs into trouble
+        # ("trouble" might mean numerical issues from having to compute the
+        # probability before finding its log, or it might mean reaching a
+        # pathological corner of parameter space where the approximations we've
+        # made here break down).
+        # Assume a single galsim_galaxy.GalsimGalaxyModel source.
+        model = roaster.src_models[0]
         flux = model.params.flux[0]
-        neg_log_prob = min(neg_log_prob, self.find_neg_log_detected_frac(flux))
+        neg_log_detected_frac = self.find_neg_log_detected_frac(flux)
+
+        neg_log_prob = min(neg_log_prob, neg_log_detected_frac)
         
         return neg_log_prob
+
 
 detection_corrections = {None: False,
           'Empty': EmptyDetectionCorrection,
           'EmptyDetectionCorrection': EmptyDetectionCorrection,
           'IsolatedFootprintDetectionCorrection': IsolatedFootprintDetectionCorrection}
+
 
 def initialize_detection_correction(form=None, module=None, args=None, **kwargs):
     if module is None:

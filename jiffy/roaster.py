@@ -45,7 +45,7 @@ from galsim.errors import GalSimFFTSizeError, GalSimError
 import emcee
 
 import jiffy
-from . import priors, detections
+from . import priors, likelihoods, detections
 import footprints
 
 class Roaster(object):
@@ -55,8 +55,48 @@ class Roaster(object):
     Only single epoch images are allowed.
     '''
     def __init__(self, args):
-        with open(args.config_file, 'r') as config_file:
-            self.config = yaml.safe_load(config_file)
+        # Load config
+        self.config = None
+        # Whenever a config object is supplied directly, use that.
+        if 'config' in vars(args):
+            self.config = args.config
+        # If no config object is supplied directly,
+        # read a config file from a given location.
+        if self.config is None and 'config_file' in vars(args):
+            with open(args.config_file, 'r') as config_file:
+                self.config = yaml.safe_load(config_file)
+        assert self.config is not None, 'No config given for new Roaster object.'
+
+        self.init_model()
+        # This is decided at the beginning of roasting. True by default until then.
+        self.good_initial_params = True
+
+        self.init_prior(args)
+        self.init_likelihood(args)
+        self.init_detection_correction(args)
+
+        # Numerical objects describing the pixel data in a footprint
+        self.wcs_matrix = None
+        self.bounds_arr = None
+        self.ngrid_x = None
+        self.ngrid_y = None
+        self.noise_var = None
+        self.variance = None
+        self.scale = 0.2
+        self.gain = 1.0
+        self.data = None
+        self.mask = None
+        self.bkg = None
+        self.loglike_normalization = None
+        # Load the values of these objects from supplied data
+        self.load_and_import_data()
+
+    def init_model(self):
+        # Load basic model characteristics
+        assert 'model' in self.config, 'config is missing "model" section.'
+        for necessary_attribute in ['num_sources', 'model_params', 'model_class']:
+            assert necessary_attribute in self.config['model'], \
+                f'"model" section of config is missing {necessary_attribute}.'
 
         self.num_sources = self.config['model']['num_sources']
 
@@ -69,72 +109,65 @@ class Roaster(object):
             model_module = __import__(self.config['model']['model_module'])
         else:
             model_module = __import__('jiffy.galsim_galaxy')
-        self.src_models = [getattr(model_module, model_class_name)(self.config, **model_kwargs)
-                           for i in range(self.num_sources)]
+        self.src_models = [getattr(model_module, model_class_name)(
+                            self.config, **model_kwargs)
+                            for i in range(self.num_sources)]
 
+        # Load values that control how the MCMC chain evolves
         if 'init' in self.config:
+            # Set seed for random number generation
             if 'seed' in self.config['init']:
                 np.random.seed(self.config['init']['seed'])
+
+            # Load initial parameter values for the MCMC chain
             if 'param_values' in self.config['init']:
+                assert 'init_param_file' not in self.config['init'], \
+                    'Supply only one of param_values or init_param_file in config.'
                 for param_name, param_value in self.config['init']['param_values'].items():
                     self.set_param_by_name(param_name, param_value)
-        # This is decided at the beginning of roasting. True by default until then.
-        self.good_initial_params = True
+            elif 'init_param_file' in self.config['init']:
+                self.initialize_param_values(self.config['init']['init_param_file'])
 
-        self.init_prior(args)
-        self.init_detection_correction(args)
+    # Parse config
+    def parse_init_config(self, label):
+        form = None
+        module = None
+        for arg_name in self.config['model']:
+            P = len(label) + 1
+            if arg_name[:P] == f'{label}_':
+                if arg_name[P:] == 'form':
+                    form = self.config['model'][arg_name]
+                elif arg_name[P:] == 'module':
+                    module = self.config['model'][arg_name]
 
-        # Initialize objects describing the pixel data in a footprint
-        self.wcs_matrix = None
-        self.bounds_arr = None
-        self.ngrid_x = 64
-        self.ngrid_y = 64
-        self.noise_var = 3e-10
-        self.var_slope = None
-        self.var_intercept = None
-        self.scale = 0.2
-        self.gain = 1.0
-        self.data = None
-        self.mask = None
-        self.bkg = None
-        self.lnnorm = self._set_like_lnnorm()
-        self.load_and_import_data()
+        kwargs = dict()
+        if label in self.config:
+            for arg_name in self.config[label]:
+                kwargs[arg_name] = self.config[label][arg_name]
 
+        return form, module, kwargs
+
+    # Construct the function used to compute the log-prior
     def init_prior(self, args=None):
-        # Parse config
-        prior_form = None
-        prior_module = None
-        for arg_name in self.config['model']:
-            if arg_name[:6] == 'prior_':
-                if arg_name[6:] == 'form':
-                    prior_form = self.config['model'][arg_name]
-                if arg_name[6:] == 'module':
-                    prior_module = self.config['model'][arg_name]
-        prior_kwargs = dict()
-        if 'prior' in self.config:
-            for arg_name in self.config['prior']:
-                prior_kwargs[arg_name] = self.config['prior'][arg_name]
+        form, module, kwargs = self.parse_init_config('prior')
         
-        # Initialize the prior
-        self.prior = priors.initialize_prior(prior_form, prior_module, args, **prior_kwargs)
+        self.prior = priors.initialize_prior(
+            form, module, args, **kwargs)
 
+    # Construct the function used to compute the log-likelihood
+    def init_likelihood(self, args=None):
+        form, module, kwargs = self.parse_init_config('likelihood')
+
+        self.likelihood = likelihoods.initialize_likelihood(
+            form, module, args, **kwargs)
+
+    # Construct the function used to compute detection corrections
+    # to the log-likelihood
     def init_detection_correction(self, args=None):
-        # Parse the config
-        detection_correction_form = None
-        detection_correction_module = None
-        for arg_name in self.config['model']:
-            if arg_name[:21] == 'detection_correction_':
-                if arg_name[21:] == 'form':
-                    detection_correction_form = self.config['model'][arg_name]
-                if arg_name[21:] == 'module':
-                    detection_correction_module = self.config['model'][arg_name]
-        detection_correction_kwargs = dict()
-        if 'detection_correction' in self.config:
-            for arg_name in self.config['detection_correction']:
-                detection_correction_kwargs[arg_name] = self.config['detection_correction'][arg_name]
-        
+        form, module, kwargs = self.parse_init_config('detection_correction')
+
         self.detection_correction = detections.initialize_detection_correction(
-            detection_correction_form, detection_correction_module, args, **detection_correction_kwargs)        
+            form, module, args, **kwargs)        
 
     def get_params(self):
         '''
@@ -179,35 +212,8 @@ class Roaster(object):
             raise ValueError('Unsupported type for input value')
         return None
 
-    def make_data(self, noise=None):
-        '''
-        Make fake data from the current stored galaxy model
-
-        @param noise Specify custom noise model. Use GaussianNoise if not provided.
-        '''
-        image = self._get_model_image()
-        if noise is None:
-            if self.var_slope is not None:
-                var_image = image * self.var_slope
-                if self.var_intercept is not None:
-                    var_image = var_image + self.var_intercept
-                noise = galsim.VariableGaussianNoise(rng=None, var_image=var_image)
-            elif np.issubdtype(type(self.noise_var), np.floating):
-                noise = galsim.GaussianNoise(sigma=np.sqrt(self.noise_var))
-            elif issubclass(type(self.noise_var), np.ndarray):
-                noise = galsim.VariableGaussianNoise(rng=None, var_image=self.noise_var)
-        image.addNoise(noise)
-        self.data = image.array
-        return image
-
-    def draw(self):
-        '''
-        Draw simulated noiseless data from the likelihood function
-        '''
-        return self.make_data()
-
     def import_data(self, pix_dat_array, wcs_matrix, bounds_arr, noise_var,
-                    var_slope, var_intercept, mask=1, bkg=0, scale=0.2, gain=1.0):
+                    variance, mask=1, bkg=0, scale=0.2, gain=1.0):
         '''
         Import the pixel data and noise variance for a footprint
         '''
@@ -217,41 +223,39 @@ class Roaster(object):
         self.wcs_matrix = wcs_matrix
         self.bounds_arr = bounds_arr
         self.noise_var = noise_var
-        self.var_slope = var_slope
-        self.var_intercept = var_intercept
+        self.variance = variance
         self.mask = mask
         self.bkg = bkg
         self.scale = scale
         self.gain = gain
-        self.lnnorm = self._set_like_lnnorm()
+
+    def _load_array(item):
+        if isinstance(item, str):
+            item = np.load(item)
+        return item
 
     def load_and_import_data(self):
-        dat, noise_var, var_slope, var_intercept = None, None, None, None
-        mask, bkg, scale, gain = None, None, None, None
         wcs_matrix, bounds_arr = None, None
+        data, noise_var, variance = None, None, None
+        mask, bkg, scale, gain = None, None, None, None
         
-        def _load_array(item):
-            if isinstance(item, str):
-                item = np.load(item)
-            return item
         if 'footprint' in self.config:
             fp = self.config['footprint']
-            dat = _load_array(fp['image']) if 'image' in fp else None
+            data = _load_array(fp['image']) if 'image' in fp else None
             wcs_matrix = _load_array(fp['wcs_matrix']) if 'wcs_matrix' in fp else None
             bounds_arr = _load_array(fp['bounds']) if 'bounds' in fp else None
-            noise_var = _load_array(fp['variance']) if 'variance' in fp else None
-            var_slope = fp['var_slope'] if 'var_slope' in fp else None
-            var_intercept = fp['var_intercept'] if 'var_intercept' in fp else None
+            noise_var = _load_array(fp['noise_var']) if 'noise_var' in fp else None
+            variance = _load_array(fp['variance']) if 'variance' in fp else None
             mask = _load_array(fp['mask']) if 'mask' in fp else None
-            scale = _load_array(fp['scale']) if 'scale' in fp else None
-            gain = _load_array(fp['gain']) if 'gain' in fp else None
-            bkg = _load_array(fp['background']) if 'background' in fp else None
+            scale = _load_array(fp['scale']) if 'scale' in fp else 0.2
+            gain = _load_array(fp['gain']) if 'gain' in fp else 1.0
+            bkg = _load_array(fp['background']) if 'background' in fp else 0.0
         
         if 'io' in self.config and 'infile' in self.config['io']:
-            dat, noise_var, mask, bkg, scale, gain = footprints.load_image(self.config['io']['infile'],
+            data, noise_var, mask, bkg, scale, gain = footprints.load_image(self.config['io']['infile'],
                 segment=args.footprint_number, filter_name=self.config['io']['filter'])
         
-        self.import_data(dat, wcs_matrix, bounds_arr, noise_var, var_slope, var_intercept,
+        self.import_data(data, wcs_matrix, bounds_arr, noise_var, variance,
                          mask=mask, bkg=bkg, scale=scale, gain=gain)
 
     def initialize_param_values(self, param_file_name):
@@ -302,7 +306,7 @@ class Roaster(object):
         
         return model_image
 
-    def lnprior(self):
+    def logprior(self):
         '''
         Evaluate the log-prior of the model parameters
         '''
@@ -320,59 +324,7 @@ class Roaster(object):
         
         return res
 
-    def _set_like_lnnorm(self, model_image=None):
-        if self.var_slope is not None:
-            if model_image is None:
-                model_image = self.data
-            if model_image is None:
-                return None
-            var_image = model_image * self.var_slope
-            if self.var_intercept is not None:
-                var_image = var_image + self.var_intercept
-            
-            # This is -inf at locations where noise_var == 0
-            logden = -0.5 * np.log(2 * np.pi * var_image)
-            
-            valid_pixels = var_image > 0
-            if self.mask is not None:
-                valid_pixels &= self.mask.astype(bool)
-            if np.sum(valid_pixels) == 0:
-                return 0
-            
-            lnnorm = np.sum(logden[valid_pixels])
-            return float(lnnorm)
-        
-        # This is -inf at locations where noise_var == 0
-        logden = -0.5 * np.log(2 * np.pi * self.noise_var)
-
-        if issubclass(type(self.noise_var), np.ndarray) and self.noise_var.size > 1:
-            # Using a per-pixel variance plane.
-            # Treat pixels with nonpositive variance as masked.
-            valid_pixels = self.noise_var > 0
-            if self.mask is not None:
-                valid_pixels &= self.mask.astype(bool)
-            if np.sum(valid_pixels) == 0:
-                return 0
-            lnnorm = np.sum(logden[valid_pixels])
-        
-        else:
-            # Using a constant variance over the entire image
-            # Treat nonpositive variance as a mask for the entire image
-            if self.noise_var <= 0:
-                return 0
-            elif self.mask is None:
-                npix = self.ngrid_x * self.ngrid_y
-            elif np.issubdtype(type(self.mask), np.number):
-                npix = self.ngrid_x * self.ngrid_y * mask
-            else:
-                npix = np.sum(self.mask)
-            if npix == 0:
-                return 0
-            lnnorm = npix * logden
-
-        return float(lnnorm)
-
-    def lnlike(self):
+    def loglike(self):
         '''
         Evaluate the log-likelihood of the pixel data in a footprint
         '''
@@ -381,53 +333,25 @@ class Roaster(object):
         try:
             model_image = self._get_model_image()
         except:
-            # Assign 0 probability to parameter combinations that produce an unhandled exception in image rendering
+            # Assign 0 probability to parameter combinations that produce an
+            # unhandled exception in image rendering.
             return -np.inf
-        
-        if model_image is not None:
-            # Compute log-likelihood assuming independent Gaussian-distributed noise in each pixel
-            delta = model_image.array - self.data
 
-            variance = self.noise_var
-            lnnorm = self.lnnorm
-            if self.var_slope is not None:
-                lnnorm = self._set_like_lnnorm(model_image)
-                variance = self.var_slope * model_image.array
-                if self.var_intercept is not None:
-                    variance = variance + self.var_intercept
-            
-            elif issubclass(type(variance), np.ndarray) and variance.size > 1:
-                # Using a per-pixel variance plane
-                # Treat zero variance pixels as masked
-                valid_pixels = variance > 0
-                if self.mask is not None:
-                    valid_pixels &= self.mask.astype(bool)
-                if np.sum(valid_pixels) == 0:
-                    return 0
-                sum_chi_sq = np.sum(delta[valid_pixels]**2 / variance[valid_pixels])
-            
-            else:
-                # Using a constant variance over the entire image
-                # Treat nonpositive variance as a mask for the entire image
-                if variance <= 0:
-                    return 0
-                if self.mask is None:
-                    sum_chi_sq = np.sum(delta**2) / variance
-                else:
-                    if np.sum(self.mask) == 0:
-                        return 0
-                    sum_chi_sq = np.sum(delta[self.mask.astype(bool)]**2) / variance
-            
-            res = -0.5 * sum_chi_sq + lnnorm
-            if not np.isfinite(res):
-                return -np.inf
+        try:
+            loglike = self.likelihood(model_image.array, self)
+        except:
+            # Assign 0 probability to parameter combinations that produce an unhandled exception in likelihood evaluation
+            return -np.inf
+        if not np.isfinite(loglike):
+            return -np.inf
+        res = loglike
         
         if self.detection_correction:
             # Scale up the likelihood to account for the fact that we're only
             # looking at data examples that pass a detection algorithm
             try:
                 detection_correction = self.detection_correction(
-                    model_image.array, self.src_models, variance, self.mask)
+                    model_image.array, self)
             except:
                 # Assign 0 probability to parameter combinations that produce an unhandled exception in detection correction evaluation
                 return -np.inf
@@ -438,31 +362,22 @@ class Roaster(object):
         res = float(res)
         return res
 
+    # Compute the log of the numerator of the posterior
     def __call__(self, params):
         # Assign 0 probability to invalid parameter combinations
-        lnp = -np.inf
-
-        # Set the Roaster params to the given values
+        logpost = -np.inf
+        # Set the Roaster params to the given values,
+        # and check if they form a valid combination for this model.
         valid_params = self.set_params(params)
+
         if valid_params:
             # Compute the log-likelihood and log-prior,
             # using the newly-set Roaster params.
-            lnp = self.lnlike()
-            lnp += self.lnprior()
+            logpost = self.loglike()
+            logpost += self.logprior()
 
-        return lnp
+        return logpost
 
-
-def init_roaster(args):
-    '''
-    Instantiate Roaster object and initialize parameters
-    '''
-    rstr = Roaster(args)
-
-    if 'init' in rstr.config and 'init_param_file' in rstr.config['init']:
-        rstr.initialize_param_values(rstr.config['init']['init_param_file'])
-
-    return rstr
 
 def run_sampler(args, sampler, p0, nsamples, rstr):
     burned_in_state = p0
@@ -478,6 +393,7 @@ def run_sampler(args, sampler, p0, nsamples, rstr):
     pps = sampler.get_chain()
     lnps = sampler.get_log_prob()
     return pps, lnps
+
 
 def do_sampling(args, rstr, return_samples=False, write_results=True, moves=None):
     '''
@@ -515,6 +431,7 @@ def do_sampling(args, rstr, return_samples=False, write_results=True, moves=None
     else:
         return None
 
+
 def cluster_walkers(pps, lnps, thresh_multiplier=1):
     '''
     Down-select emcee walkers to those with the largest mean posteriors
@@ -542,6 +459,7 @@ def cluster_walkers(pps, lnps, thresh_multiplier=1):
     lnps = lnps[:, ndx[0:nkeep]]
     # print("New pps, lnps:", pps.shape, lnps.shape)
     return pps, lnps
+
 
 def write_to_h5(args, pps, lnps, rstr):
     '''

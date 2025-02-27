@@ -1,6 +1,7 @@
 import numpy as np
 import pickle
 from jiffy.galsim_galaxy import PARAM_BOUNDS
+from functools import partial
 
 
 class EmptyPrior(object):
@@ -114,18 +115,18 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
 
     def __call__(self, src_models):
         param_names = ['hlr', 'e1', 'e2', 'flux', 'dx', 'dy']
-        hlr, e1, e2, flux, dx, dy = [src_models[0].params[param_name][0]
-            for param_name in param_names]
-        
-        psf_fwhm, psf_e1, psf_e2 = None, None, None
-        if 'psf_fwhm' in src_models[0].actv_params_psf:
-            psf_fwhm = src_models[0].psf_model.params['psf_fwhm'][0]
-        if 'psf_e1' in src_models[0].actv_params_psf:
-            psf_e1 = src_models[0].psf_model.params['psf_e1'][0]
-        if 'psf_e2' in src_models[0].actv_params_psf:
-            psf_e2 = src_models[0].psf_model.params['psf_e2'][0]
+        param_names_psf = ['psf_fwhm', 'psf_e1', 'psf_e2']
 
-        return self.evaluate(hlr, e1, e2, flux, dx, dy, psf_fwhm, psf_e1, psf_e2)
+        # Fill kwargs with the model parameter values
+        kwargs = dict()
+        for param_name in param_names:
+            kwargs[param_name] = src_models[0].params[param_name][0]
+        for param_name in param_names_psf:
+            if param_name in src_models[0].actv_params_psf:
+                kwargs[param_name] = src_models[0].psf_model.params[param_name][0]
+
+        # Compute and return the log-prior with these model parameter values
+        return self.evaluate(**kwargs)
 
 
 # Allow functions to easily be looked up by name,
