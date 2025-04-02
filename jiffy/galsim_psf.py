@@ -64,6 +64,13 @@ class PSFModel(object):
             p = []
         return p
 
+    def set_params(self, params):
+        assert len(params) >= self.n_params
+        for ip, pname in enumerate(self.active_parameters):
+            self.params[pname][0] = params[ip]
+        valid_params = self.validate_params()
+        return valid_params
+
     def get_param_by_name(self, paramname):
         '''
         Get a single parameter value using the parameter name as a key.

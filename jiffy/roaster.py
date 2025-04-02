@@ -91,6 +91,7 @@ class Roaster(object):
         # Load the values of these objects from supplied data
         self.load_and_import_data()
 
+
     def init_model(self):
         # Load basic model characteristics
         assert 'model' in self.config, 'config is missing "model" section.'
@@ -128,6 +129,7 @@ class Roaster(object):
             elif 'init_param_file' in self.config['init']:
                 self.initialize_param_values(self.config['init']['init_param_file'])
 
+
     # Parse config
     def parse_init_config(self, label):
         form = None
@@ -146,6 +148,7 @@ class Roaster(object):
                 kwargs[arg_name] = self.config[label][arg_name]
 
         return form, module, kwargs
+
 
     # Construct the function used to compute the log-prior
     def init_prior(self, args=None):
@@ -169,6 +172,7 @@ class Roaster(object):
         self.detection_correction = detections.initialize_detection_correction(
             form, module, args, **kwargs)        
 
+
     def get_params(self):
         '''
         Make a flat array of active model parameters for all sources
@@ -176,6 +180,7 @@ class Roaster(object):
         For use in MCMC sampling
         '''
         return np.array([m.get_params() for m in self.src_models]).ravel()
+
 
     def set_params(self, params):
         '''
@@ -188,6 +193,7 @@ class Roaster(object):
             p_set = params[imin:imax]
             valid_params *= self.src_models[isrc].set_params(p_set)
         return valid_params
+
 
     def set_param_by_name(self, paramname, value):
         '''
@@ -212,8 +218,10 @@ class Roaster(object):
             raise ValueError('Unsupported type for input value')
         return None
 
-    def import_data(self, pix_dat_array, wcs_matrix, bounds_arr, noise_var,
-                    variance, mask=1, bkg=0, scale=0.2, gain=1.0):
+
+    def import_data(self, pix_dat_array, wcs_matrix, bounds_arr,
+                    noise_var=None, variance=None,
+                    mask=1, bkg=0, scale=0.2, gain=1.0):
         '''
         Import the pixel data and noise variance for a footprint
         '''
@@ -228,6 +236,7 @@ class Roaster(object):
         self.bkg = bkg
         self.scale = scale
         self.gain = gain
+
 
     def _load_array(item):
         if isinstance(item, str):
@@ -258,6 +267,7 @@ class Roaster(object):
         self.import_data(data, wcs_matrix, bounds_arr, noise_var, variance,
                          mask=mask, bkg=bkg, scale=scale, gain=gain)
 
+
     def initialize_param_values(self, param_file_name):
         '''
         Initialize model parameter values from config file
@@ -275,36 +285,35 @@ class Roaster(object):
             self.set_param_by_name(paramname, fval)
         return None
 
-    def _get_model_image(self):
-        # Set up a blank template image
+
+    def get_model_image(self):
+        # Set up a blank image template with the correct bounds and wcs,
+        # onto which the model image will be drawn.
         if self.wcs_matrix is not None:
             wcs = galsim.JacobianWCS(self.wcs_matrix[0, 0], self.wcs_matrix[0, 1],
                                      self.wcs_matrix[1, 0], self.wcs_matrix[1, 1])
             if self.bounds_arr is not None:
                 bounds = galsim.BoundsI(*self.bounds_arr)
-                model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
-                                            wcs=wcs, bounds=bounds, init_value=0.)
+                model_image = galsim.ImageF(wcs=wcs, bounds=bounds, init_value=0.)
             else:
                 model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
                                             wcs=wcs, init_value=0.)
         elif self.bounds_arr is not None:
             bounds = galsim.BoundsI(*self.bounds_arr)
-            model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
-                                        scale=self.scale, bounds=bounds, init_value=0.)
+            model_image = galsim.ImageF(scale=self.scale, bounds=bounds, init_value=0.)
         else:
             model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
                                         scale=self.scale, init_value=0.)
         
         # Try to draw all the sources on the template image
         for isrc in range(self.num_sources):
-            if model_image is None: # Can happen if previous source could not render
-                # Give up on rendering, as this parameter combination's likelihood cannot be rigorously evaluated
-                break
-            else:
-                model_image = self.src_models[isrc].get_image(image=model_image,
+            model_image = self.src_models[isrc].get_image(template_image=model_image,
                                                               gain=self.gain)
+            if model_image is None:
+                return None
         
         return model_image
+
 
     def logprior(self):
         '''
@@ -313,68 +322,77 @@ class Roaster(object):
         try:
             res = self.prior(self.src_models)
         except:
-            # Assign 0 probability to parameter combinations that produce an unhandled exception in prior evaluation
-            print('Unhandled exception encountered in prior evaluation.')
-            print('Assigning 0 prior probability to this parameter combination.')
-            return -np.inf
-        if not np.isfinite(res):
-            print('Computed prior has the pathological value', res)
-            print('Assigning 0 prior probability to this parameter combination.')
-            return -np.inf
+            return np.nan
         
         return res
 
+
     def loglike(self):
         '''
-        Evaluate the log-likelihood of the pixel data in a footprint
+        Evaluate the log-likelihood of the pixel data in a footprint,
+        for some assumed image model with assumed model parameter values.
         '''
-        res = -np.inf
-
+        # Render a model image
         try:
-            model_image = self._get_model_image()
-        except:
-            # Assign 0 probability to parameter combinations that produce an
-            # unhandled exception in image rendering.
-            return -np.inf
+            model_image = self.get_model_image()
+        except Exception as exception:
+            return np.nan
+        if model_image is None:
+            return np.nan
 
+        # Compute the log-likelihood, using the rendered model image
         try:
-            loglike = self.likelihood(model_image.array, self)
+            loglike = self.likelihood(model_image, self)
         except:
-            # Assign 0 probability to parameter combinations that produce an unhandled exception in likelihood evaluation
-            return -np.inf
-        if not np.isfinite(loglike):
-            return -np.inf
-        res = loglike
+            return np.nan
         
         if self.detection_correction:
             # Scale up the likelihood to account for the fact that we're only
             # looking at data examples that pass a detection algorithm
             try:
                 detection_correction = self.detection_correction(
-                    model_image.array, self)
+                    model_image, self)
             except:
-                # Assign 0 probability to parameter combinations that produce an unhandled exception in detection correction evaluation
-                return -np.inf
-            if not np.isfinite(detection_correction):
-                return -np.inf
-            res += detection_correction
+                return np.nan
+            loglike += detection_correction
         
-        res = float(res)
-        return res
+        loglike = float(loglike)
+        return loglike
+
 
     # Compute the log of the numerator of the posterior
-    def __call__(self, params):
-        # Assign 0 probability to invalid parameter combinations
-        logpost = -np.inf
+    def logpost(self, params):
         # Set the Roaster params to the given values,
         # and check if they form a valid combination for this model.
         valid_params = self.set_params(params)
+        # We consider "invalid" parameter combinations at this stage
+        # to be out of the support of the prior.
+        if not valid_params:
+            return -np.inf
 
-        if valid_params:
-            # Compute the log-likelihood and log-prior,
-            # using the newly-set Roaster params.
-            logpost = self.loglike()
-            logpost += self.logprior()
+        # Compute the log-prior and log-likelihood,
+        # using the newly-set Roaster params.
+        logpost = self.logprior()
+        if not np.isfinite(logpost):
+            # We consider parameters with non-finite log-prior values
+            # to be out of the support of the prior.
+            # Terminate early without computing the likelihood,
+            # which would waste time and potentially raise errors.
+            return logpost
+        logpost += self.loglike()
+
+        return logpost
+
+
+    def __call__(self, params):
+        '''
+        Ensure the chain produces outputs for all inputs.
+        '''
+        try:
+            logpost = self.logpost(params)
+            logpost = float(logpost)
+        except:
+            logpost = np.nan
 
         return logpost
 
@@ -403,7 +421,7 @@ def do_sampling(args, rstr, return_samples=False, write_results=True, moves=None
     if not np.isfinite(rstr(omega_interim)):
         rstr.good_initial_params = False
         if args.verbose:
-            print('Bad initial chain parameters.')
+            print('Bad (non-finite) initial chain parameters.')
 
     nvars = len(omega_interim)
     nsamples = rstr.config['sampling']['nsamples']

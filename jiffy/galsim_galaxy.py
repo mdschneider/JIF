@@ -48,9 +48,7 @@ PARAM_BOUNDS = {
     'e1': [-0.99, 0.99],
     'e2': [-0.99, 0.99],
     # nJy flux must be positive for a real source.
-    # Using flux calibration from DP0.2 i-band coadd study,
-    # sources must have instrumental fluxes no lower than -5.
-    'flux': [-5, np.inf],
+    'flux': [-np.inf, np.inf],
     'dx': [-np.inf, np.inf],
     'dy': [-np.inf, np.inf]
 }
@@ -139,6 +137,7 @@ model_type_by_name = {'Spergel': Spergel,
                         'DeVaucouleurs': DeVaucouleurs,
                         'Bulge': DeVaucouleurs}
 
+
 class GalsimGalaxyModel(object):
     '''
     Parametric galaxy model from GalSim for image forward modeling
@@ -213,7 +212,7 @@ class GalsimGalaxyModel(object):
             self.params[pname][0] = params[ip]
         valid_params = self.validate_params()
         if self.sample_psf:
-            valid_params *= self.psf_model.set_params(
+            valid_params = valid_params and self.psf_model.set_params(
                 params[len(self.actv_params_gal):])
         return valid_params
 
@@ -274,7 +273,8 @@ class GalsimGalaxyModel(object):
         else:
             return self.static_psf
 
-    def get_image(self, image=None, ngrid_x=16, ngrid_y=16, scale=0.2, gain=1.0):
+    def get_image(self, template_image=None, ngrid_x=None, ngrid_y=None,
+        scale=None, gain=1.0):
         '''
         Render a GalSim Image object from the parametric galaxy model.
         
@@ -298,48 +298,25 @@ class GalsimGalaxyModel(object):
         -------
         galsim.Image
             Galsim Image with this this galaxy's rendered image added to it.
-        '''
-        model_image = None
-        
+        '''        
+        if template_image is None:
+            template_image = galsim.ImageF(
+                ngrid_x, ngrid_y, scale=scale, init_value=0.)
+
         # If flux is non-positive, treat this as a zero-light profile and terminate early.
         if self.params.flux[0] <= 0:
-            if image is None:
-                model_image = galsim.ImageF(ngrid_x, ngrid_y, scale=scale, init_value=0)
-            return model_image
+            return template_image
 
-        gal = self.model_type.light_profile(self.params,
-                                            gsparams=self.gsparams)
-        
-        obj = galsim.Convolve(self.get_psf(), gal)
-        
-        N = obj.getGoodImageSize(scale)
-        if N > 2048:
-            print(f'Good image size ({N}) is > 2048. No model image returned.')
-            print('Model params:')
-            print(self.get_params())
-            return None
-        
+        gal = self.model_type.light_profile(
+            self.params, gsparams=self.gsparams)
+        obj = galsim.Convolve(gal, self.get_psf(), gsparams=self.gsparams)
         offset = galsim.PositionD(self.params.dx[0], self.params.dy[0])
-        try:
-            if image is not None:
-                # Note: `image` must already have the desired wcs or scale.
-                model_image = obj.drawImage(image=image, gain=gain,
-                                            offset=offset,
-                                            add_to_image=True,
-                                            method=self.draw_method)
-            else:
-                model_image = obj.drawImage(nx=ngrid_x, ny=ngrid_y, gain=gain,
-                                            scale=scale, offset=offset,
-                                            method=self.draw_method)
-        except GalSimFFTSizeError as exception:
-            print('GalSimFFTSizeError encountered when trying to draw. No model image returned.')
-            print('Error message:')
-            print(exception.message)
-            print('Model params:')
-            print(self.get_params())
-            return None
+                
+        gal_image = obj.drawImage(
+            image=template_image, gain=gain, offset=offset,
+            add_to_image=True, method=self.draw_method)
         
-        return model_image
+        return gal_image
 
 
 if __name__ == '__main__':

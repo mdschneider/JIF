@@ -79,24 +79,41 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
         self.psf_e2_mean = -0.00015326566654888057
         self.psf_e2_var = 5.809799912978508e-07
 
-    def log_sine_prob(t, phase, scale, level):
+    def log_sine_prob(self, t, phase, scale, level):
         return np.log(scale * np.sin(t + phase) + level)
 
-    def log_1dgaussian(x, mean, var):
+    def log_1dgaussian(self, x, mean, var):
         return -0.5 * np.log(var * 2 * np.pi) - (x - mean)**2 / (2 * var)
         
     def evaluate(self, hlr, e1, e2, flux, dx, dy, psf_fwhm, psf_e1, psf_e2):
-        # 4D Bayesian Gaussian mixture model for log-hlr, log-flux, dr, e
         e = np.sqrt(e1**2 + e2**2)
+        e_angle = np.angle(e1 + e2*1j)
         dr = np.sqrt(dx**2 + dy**2)
+        dr_angle = np.arctan2(dy, dx)
         features = np.array([np.log(hlr), np.log(flux + self.flux_inst_offset), dr, e])
+
+        # Validate that the features fall within this prior's scope
+        all_gal_args = [hlr, e1, e2, flux, dx, dy]
+        all_psf_args = [psf_fwhm, psf_e1, psf_e2]
+        if np.any(np.isnan(all_gal_args)):
+            return np.nan
+        for param in all_psf_args:
+            if param is not None:
+                if np.any(np.isnan(param)):
+                    return np.nan
+                if not np.all(np.isfinite(param)):
+                    return -np.inf
+        if not np.all(np.isfinite(all_gal_args)) or not np.all(np.isfinite(features)):
+            return -np.inf
+        if np.any(e >= 1):
+            return -np.inf
+
+        # 4D Bayesian Gaussian mixture model for log-hlr, log-flux, dr, e
         lnprior_4features = self.gm.score_samples([features])
 
         # Prior for ellipticity angle
-        e_angle = np.angle(e1 + e2*1j)
         lnprior_e_angle = self.logprob_e_angle(e_angle)
         # Prior for position angle
-        dr_angle = np.arctan2(dy, dx)
         lnprior_dr_angle = self.logprob_dr_angle(dr_angle)
 
         # Prior for PSF parameters
@@ -111,6 +128,11 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
 
         # Combined prior
         lnprior = lnprior_4features + lnprior_e_angle + lnprior_dr_angle + lnprior_psf
+
+        all_args = all_gal_args + all_psf_args
+        if np.all([np.issubdtype(type(x), np.number) for x in all_args]):
+            lnprior = float(lnprior)
+
         return lnprior
 
     def __call__(self, src_models):

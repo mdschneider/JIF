@@ -4,6 +4,8 @@ import pickle
 from scipy.ndimage import gaussian_filter, correlate
 from scipy.stats import norm
 
+import galsim
+
 
 class EmptyDetectionCorrection(object):
     '''
@@ -150,6 +152,15 @@ class IsolatedFootprintDetectionCorrection(object):
         return self.neg_log_detected_frac[idx]
 
     def __call__(self, model_image, roaster):
+        # Convert model_image into a numpy array
+        if model_image is None:
+            # Ensure the log-posterior is just the log-prior
+            return 0.0
+        if isinstance(model_image, galsim.Image):
+            model_image = model_image.array
+        elif not isinstance(model_image, np.ndarray):
+            model_image = np.array(model_image)
+
         # We are interested in the probability that an object with given true
         # parameters would be observed by the detection algorithm.
         # The detection-corrected likelihood is the standard likelihood

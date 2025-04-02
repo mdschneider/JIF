@@ -1,4 +1,5 @@
 import numpy as np
+import galsim
 
 
 class EmptyLikelihood(object):
@@ -35,8 +36,14 @@ class GaussianLikelihood(object):
         return roaster.variance
 
     def __call__(self, model_image, roaster):
+        # Convert model_image into a numpy array
         if model_image is None:
+            # Ensure the log-posterior is just the log-prior
             return 0.0
+        if isinstance(model_image, galsim.Image):
+            model_image = model_image.array
+        elif not isinstance(model_image, np.ndarray):
+            model_image = np.array(model_image)
 
         data_image = roaster.data
         variance = self.set_variance(model_image, roaster)
