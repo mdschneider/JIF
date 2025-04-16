@@ -27,9 +27,6 @@ class EmptyPrior(object):
 # Updated for DP0.2 analysis, including optional PSF parameters
 class IsolatedFootprintPrior_FixedNu_DC2(object):
     def __init__(self, args=None, **kwargs):
-        # Number to add to flux_inst so that log(flux_inst + flux_inst_offset) is always well-defined
-        self.flux_inst_offset = 5
-        
         galtype = kwargs['type'] # 'bulge' or 'disk'
         prior_params = {
             'gm_filename': {'bulge': 'gmfile_bulge.pkl',
@@ -39,12 +36,12 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
             'logprob_dr_angle': {'bulge': partial(self.log_sine_prob, phase=np.pi/2, scale=-0.0198944, level=0.159155),
                                  'disk': lambda a : -np.log(2 * np.pi)},
             # For MAP fit initialization
-            'mean_hlrFlux': {'bulge': np.array([-2.90110191,  0.2653783 ]),
-                              'disk': np.array([-2.211403  ,  0.83366477])},
-            'inv_cov_hlrFlux': {'bulge': np.array([[ 5.5390664 , -2.35809197],
-                                                   [-2.35809197,  2.42428197]]),
-                                 'disk': np.array([[ 3.78450651, -1.16082712],
-                                                   [-1.16082712,  2.02404995]])},
+            'mean_hlrFlux': {'bulge': np.array([-2.90110191,  0.36144468]),
+                              'disk': np.array([-2.211403  ,  0.90194077])},
+            'cov_hlrFlux': {'bulge': np.array([[0.30813249, 0.28674538],
+                                               [0.28674538, 0.6420062 ]]),
+                                 'disk': np.array([[0.32064104, 0.1782948 ],
+                                                   [0.1782948 , 0.56214681]])},
             # For reference:
             'nu': {'bulge': -0.708, 'disk': 0.5},
             'n': {'bulge': 4, 'disk': 1},
@@ -56,7 +53,7 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
         # and log-flux (in log-inst flux),
         # for use by MAP fitter
         self.mean_hlrFlux = prior_params['mean_hlrFlux'][galtype]
-        self.inv_cov_hlrFlux = prior_params['inv_cov_hlrFlux'][galtype]
+        self.cov_hlrFlux = prior_params['inv_cov_hlrFlux'][galtype]
 
         # Correlated log-hlr, log-flux, dr, and e distribution
         # from 4D Bayesian Gaussian mixture model fit
@@ -72,27 +69,53 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
         type_frac = prior_params['type_frac'][galtype]
         self.log_type_frac = np.log(type_frac)
 
-        self.psf_fwhm_mean = 0.7630464189398478
-        self.psf_fwhm_var = 3.4294244645920723e-05
-        self.psf_e1_mean = 0.0016812232284244407
-        self.psf_e1_var = 5.101391332227311e-07
-        self.psf_e2_mean = -0.00015326566654888057
-        self.psf_e2_var = 5.809799912978508e-07
+        self.psf_fwhm_mean = 0.763591484431654 # arcsec
+        self.psf_fwhm_std = 0.00582026355508698 # arcsec
+
+        self.psf_e_means_0 = [0.00172415, 0.00211098, 0.00146727, 0.00118756]
+        self.psf_e_means_1 = [-0.00022855, -0.00011055, -0.0007743, 0.00047993]
+        self.psf_e_stds_0 = [0.00025075, 0.00046715, 0.00037621, 0.00054171]
+        self.psf_e_stds_1 = [0.00026504, 0.00052926, 0.00062448, 0.00058792]
+        self.psf_e_weights = [0.41875398, 0.41875476, 0.19374868, 0.19374944]
+        self.psf_e_n_components = len(self.psf_e_weights)
+        self.psf_e_sum_weights = np.sum(psf_e_weights)
+        self.psf_e_means = []
+        self.psf_e_covs = []
+        for idx in self.psf_e_n_components:
+            self.psf_e_means.append([self.psf_e_means_0[idx], self.psf_e_means_1[idx]])
+            std0, std1 = self.psf_e_stds_0[idx], self.psf_e_stds_1[idx]
+            corr = self.psf_e_correlation
+            cov = [[std0**2, corr * std0 * std1],
+                   [corr * std0 * std1, std1**2]]
+            self.psf_e_covs.append(cov)
 
     def log_sine_prob(self, t, phase, scale, level):
         return np.log(scale * np.sin(t + phase) + level)
 
-    def log_1dgaussian(self, x, mean, var):
-        return -0.5 * np.log(var * 2 * np.pi) - (x - mean)**2 / (2 * var)
+    def logprob_psf_fwhm(self, psf_fwhm):
+        return norm.logpdf(psf_fwhm, loc=self.psf_fwhm_mean, scale=psf_fwhm_std)
+
+    def logprob_psf_e1e2(self, psf_e1, psf_e2):
+        pdf = 0
+        for idx in range(self.psf_e_n_components):
+            weight = self.psf_e_weights[idx]
+            mean = self.psf_e_means[idx]
+            cov = self.psf_e_covs[idx]
+            pdf += weight * multivariate_normal.pdf(
+                [psf_e1, psf_e2], mean=mean, cov=cov) / self.psf_e_sum_weights
+
+        return np.log(pdf)
         
     def evaluate(self, hlr, e1, e2, flux, dx, dy, psf_fwhm, psf_e1, psf_e2):
         e = np.sqrt(e1**2 + e2**2)
         e_angle = np.angle(e1 + e2*1j)
         dr = np.sqrt(dx**2 + dy**2)
         dr_angle = np.arctan2(dy, dx)
-        features = np.array([np.log(hlr), np.log(flux + self.flux_inst_offset), dr, e])
+        features = np.array([np.log(hlr), np.log(flux), dr, e])
 
-        # Validate that the features fall within this prior's scope
+        # If anything is nan, return nan.
+        # Otherwise, if anything is infinite, say that it falls outside the prior's support.
+        # For anything explicitly outside the prior's support, return -inf (i.e., log(0)).
         all_gal_args = [hlr, e1, e2, flux, dx, dy]
         all_psf_args = [psf_fwhm, psf_e1, psf_e2]
         if np.any(np.isnan(all_gal_args)):
@@ -103,6 +126,8 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
                     return np.nan
                 if not np.all(np.isfinite(param)):
                     return -np.inf
+        if (psf_e1 is None and psf_e2 is not None) or (psf_e1 is not None and psf_e2 is None):
+            return np.nan
         if not np.all(np.isfinite(all_gal_args)) or not np.all(np.isfinite(features)):
             return -np.inf
         if np.any(e >= 1):
@@ -117,14 +142,12 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
         lnprior_dr_angle = self.logprob_dr_angle(dr_angle)
 
         # Prior for PSF parameters
-        lnprior_psf_fwhm, lnprior_psf_e1, lnprior_psf_e2 = 0, 0, 0
+        lnprior_psf_fwhm, lnprior_psf_e1e2 = 0, 0
         if psf_fwhm is not None:
-            lnprior_psf_fwhm = self.log_1dgaussian(psf_fwhm, self.psf_fwhm_mean, self.psf_fwhm_var)
-        if psf_e1 is not None:
-            lnprior_psf_e1 = self.log_1dgaussian(psf_e1, self.psf_e1_mean, self.psf_e1_var)
-        if psf_e2 is not None:
-            lnprior_psf_e2 = self.log_1dgaussian(psf_e2, self.psf_e2_mean, self.psf_e2_var)
-        lnprior_psf = lnprior_psf_fwhm + lnprior_psf_e1 + lnprior_psf_e2
+            lnprior_psf_fwhm = self.logprob_psf_fwhm(psf_fwhm)
+        if psf_e1 is not None and psf_e2 is not None:
+            lnprior_psf_e1e2 = self.logprob_psf_e1e2(psf_e1, psf_e2)
+        lnprior_psf = lnprior_psf_fwhm + lnprior_psf_e1e2
 
         # Combined prior
         lnprior = lnprior_4features + lnprior_e_angle + lnprior_dr_angle + lnprior_psf
