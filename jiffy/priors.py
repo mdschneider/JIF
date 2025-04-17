@@ -36,8 +36,8 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
             'logprob_dr_angle': {'bulge': partial(self.log_sine_prob, phase=np.pi/2, scale=-0.0198944, level=0.159155),
                                  'disk': lambda a : -np.log(2 * np.pi)},
             # For MAP fit initialization
-            'mean_hlrFlux': {'bulge': np.array([-2.90110191,  0.36144468]),
-                              'disk': np.array([-2.211403  ,  0.90194077])},
+            'mean_hlrFlux': {'bulge': np.array([-2.90110191,  4.41054969]),
+                              'disk': np.array([-2.211403  ,  4.95104578])},
             'cov_hlrFlux': {'bulge': np.array([[0.30813249, 0.28674538],
                                                [0.28674538, 0.6420062 ]]),
                                  'disk': np.array([[0.32064104, 0.1782948 ],
