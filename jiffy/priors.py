@@ -49,8 +49,8 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
                            'disk': 0.6024136861691131}
         }
 
-        # Mean and inverse covariance matrix of log-hlr (in log-pixels)
-        # and log-flux (in log-inst flux),
+        # Mean and inverse covariance matrix of log-hlr (in log-arcsec)
+        # and log-flux (in log-nJy),
         # for use by MAP fitter
         self.mean_hlrFlux = prior_params['mean_hlrFlux'][galtype]
         self.cov_hlrFlux = prior_params['inv_cov_hlrFlux'][galtype]
@@ -89,11 +89,14 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
                    [corr * std0 * std1, std1**2]]
             self.psf_e_covs.append(cov)
 
+
     def log_sine_prob(self, t, phase, scale, level):
         return np.log(scale * np.sin(t + phase) + level)
 
+
     def logprob_psf_fwhm(self, psf_fwhm):
         return norm.logpdf(psf_fwhm, loc=self.psf_fwhm_mean, scale=psf_fwhm_std)
+
 
     def logprob_psf_e1e2(self, psf_e1, psf_e2):
         pdf = 0
@@ -103,9 +106,9 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
             cov = self.psf_e_covs[idx]
             pdf += weight * multivariate_normal.pdf(
                 [psf_e1, psf_e2], mean=mean, cov=cov) / self.psf_e_sum_weights
-
         return np.log(pdf)
-        
+
+
     def evaluate(self, hlr, e1, e2, flux, dx, dy, psf_fwhm, psf_e1, psf_e2):
         e = np.sqrt(e1**2 + e2**2)
         e_angle = np.angle(e1 + e2*1j)
@@ -157,6 +160,7 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
             lnprior = float(lnprior)
 
         return lnprior
+
 
     def __call__(self, src_models):
         param_names = ['hlr', 'e1', 'e2', 'flux', 'dx', 'dy']

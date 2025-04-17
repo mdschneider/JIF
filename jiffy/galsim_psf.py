@@ -32,15 +32,14 @@ import numpy as np
 import warnings
 import galsim
 
+
 PARAM_BOUNDS = {
-    # Very small PSF widths require large GalSim FFTs
-    # Overly large profiles can cause major rendering slowdowns
-    'psf_fwhm': [0.02, 5.0], ## in arcseconds
-    'psf_e1': [-0.99, 0.99],
-    'psf_e2': [-0.99, 0.99],
-    'psf_flux': [0.0001, np.inf],
-    'psf_dx': [-np.inf, np.inf],
-    'psf_dy': [-np.inf, np.inf]
+    # Very small PSF widths require large GalSim FFTs.
+    # Overly large light profiles can cause major rendering slowdowns.
+    'psf_fwhm': [0.2, 2.0], ## arcseconds
+    # Overly elliptical PSFs are unrealistic and could cause rendering issues.
+    'psf_e1': [-0.5, 0.5],
+    'psf_e2': [-0.5, 0.5]
 }
 PARAM_CONSTRAINTS = (
     lambda params: params['psf_e1'][0]**2 + params['psf_e2'][0]**2 < 1,
@@ -54,8 +53,10 @@ class PSFModel(object):
         self.n_params = len(self.active_parameters)
         self._init_params()
 
+
     def _init_params(self):
         self.params = np.array([], dtype=[]).view(np.recarray)
+
 
     def get_params(self):
         if self.n_params > 0:
@@ -64,12 +65,14 @@ class PSFModel(object):
             p = []
         return p
 
+
     def set_params(self, params):
         assert len(params) >= self.n_params
         for ip, pname in enumerate(self.active_parameters):
             self.params[pname][0] = params[ip]
         valid_params = self.validate_params()
         return valid_params
+
 
     def get_param_by_name(self, paramname):
         '''
@@ -78,6 +81,7 @@ class PSFModel(object):
         Can access "active" or "inactive" parameters.
         '''
         return self.params[paramname][0]
+
 
     def set_param_by_name(self, paramname, value):
         '''
@@ -92,6 +96,7 @@ class PSFModel(object):
         '''
         self.params[paramname][0] = value
 
+
     def validate_params(self):
         '''
         Check that all model parameters are within allowed ranges
@@ -100,12 +105,11 @@ class PSFModel(object):
         '''
         # Run a series of validity checks.
         # If any of them fail, immediately return False.
-        def _inbounds(param, bounds):
-            return param >= bounds[0] and param <= bounds[1]
         for pname, _ in self.params.dtype.descr:
-            if not np.isfinite(self.params[pname][0]):
+            pval = self.params[pname][0]
+            if not np.isfinite(pval):
                 return False
-            if not _inbounds(self.params[pname][0], PARAM_BOUNDS[pname]):
+            if not (PARAM_BOUNDS[pname][0] <= pval <= PARAM_BOUNDS[pname][1]):
                 return False
         for constraint_satisfied in PARAM_CONSTRAINTS:
             if not constraint_satisfied(self.params):
@@ -133,6 +137,7 @@ class ImagePSFModel(PSFModel):
             if 'footprint' in config and 'scale' in config['footprint']:
                 self.scale = config['footprint']['scale']
 
+
     def get_model(self):
         '''
         Get the GalSim image model
@@ -144,6 +149,7 @@ class ImagePSFModel(PSFModel):
             return None
         model = galsim.InterpolatedImage(gs_image)
         return model
+
 
     def get_image(self):
         '''
@@ -160,16 +166,18 @@ class GalsimPSFModel(PSFModel):
     def __init__(self, config, active_parameters=['psf_fwhm'], **kwargs):
         super().__init__(config, active_parameters, **kwargs)
 
+
     def _init_params(self):
-        # Default FWHM is for the i-band coadd PSF of DP0.2 bright isolated galaxies
-        self.params = np.array([(0.763046, 0.0, 0.0, 1.0, 0.0, 0.0)],
-                               dtype=[('psf_fwhm', '<f8'),
-                                      ('psf_e1', '<f8'),
-                                      ('psf_e2', '<f8'),
-                                      ('psf_flux', '<f8'),
-                                      ('psf_dx', '<f8'),
-                                      ('psf_dy', '<f8')])
+        # Default FWHM,e1,e2 for i-band coadd PSF of DP0.2 isolated galaxies
+        self.params = np.array(
+            [(0.763591484431654,
+            0.0017125468850318856,
+            -0.00014172768744443405)],
+            dtype=[('psf_fwhm', '<f8'),
+                  ('psf_e1', '<f8'),
+                  ('psf_e2', '<f8')])
         self.params = self.params.view(np.recarray)
+
 
     def get_model(self):
         '''
@@ -177,17 +185,15 @@ class GalsimPSFModel(PSFModel):
 
         This is the object that can be used in, e.g., GalSim convolutions
         '''
-        psf = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0],
-                                flux=self.params.psf_flux[0])
+        psf = galsim.Kolmogorov(fwhm=self.params.psf_fwhm[0])
 
         # Avoid GalSim PSF transformations when not needed
-        if self.params.psf_e1[0] != 0 or self.params.psf_e2[0] != 0:
+        if self.params.psf_e1[0] != 0.0 or self.params.psf_e2[0] != 0.0:
             psf = psf.shear(galsim.Shear(e1=self.params.psf_e1[0],
                                          e2=self.params.psf_e2[0]))
-        if self.params.psf_dx[0] != 0 or self.params.psf_dy[0] != 0:
-            psf = psf.shift(self.params.psf_dx[0], self.params.psf_dy[0])
         
         return psf
+
 
     def get_image(self, ngrid_x=16, ngrid_y=16, scale=0.2, image=None, gain=1.0):
         '''
@@ -227,12 +233,12 @@ class GalsimPSFLSST(GalsimPSFModel):
                                     # oversampling=1.0,
                                     gsparams=self.gsparams)
 
+
     def _init_params(self):
         # Parameter names / types
         atmos_types = [('psf_fwhm', '<f8'),
                        ('psf_e1',   '<f8'),
                        ('psf_e2',   '<f8'),
-                       ('psf_flux', '<f8'),
                        ('psf_dx',   '<f8'),
                        ('psf_dy',   '<f8')]
         optics_aberr_types = [('psf_a_{:d}'.format(i), '<f8')
@@ -243,12 +249,13 @@ class GalsimPSFLSST(GalsimPSFModel):
         self.aberrations = galsim.lsst.lsst_psfs._init_optics_dz_coeffs()
 
         # Initialize PSF model parameter values
-        atmos_vals = (0.6, 0.0, 0.0, 1.0, 0.0, 0.0)
+        atmos_vals = (0.6, 0.0, 0.0, 0.0, 0.0)
         optics_vals = tuple(0.0 for i in range(1, 41))
 
         self.params = np.array([atmos_vals + optics_vals],
                                dtype=param_types)
         self.params = self.params.view(np.recarray)
+
 
     def _get_phase_screens(self):
         # optics PSF
@@ -258,12 +265,14 @@ class GalsimPSFLSST(GalsimPSFModel):
         screens = galsim.PhaseScreenList(op_model)
         return screens
 
+
     def get_wavefront(self, theta=(0.*galsim.arcmin, 0.*galsim.arcmin)):
         screens = self._get_phase_screens()
         wf = screens.wavefront(self.aper.u, self.aper.v, t=0, theta=theta)
         wf_out = np.zeros_like(wf)
         wf_out[self.aper.illuminated] = wf[self.aper.illuminated]
         return wf_out
+
 
     def get_model(self, theta=(0.*galsim.arcmin, 0.*galsim.arcmin), with_atmos=True):
         screens = self._get_phase_screens()
@@ -282,33 +291,3 @@ class GalsimPSFLSST(GalsimPSFModel):
             psf = optics
         psf = psf.shift(self.params.psf_dx[0], self.params.psf_dy[0])
         return psf
-
-
-def main():
-    '''
-    Make a default test footprint file
-    '''
-    import footprints
-
-    gp = GalsimPSFModel()
-    img = gp.get_image(32, 32)
-    noise_var = 1.e-6
-    noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
-    img.addNoise(noise)
-
-    dummy_mask = 1.0
-    dummy_background = 0.0
-
-    fname = '../data/TestData/jiffy_psf_image'
-
-    galsim.fits.write(img, fname + '.fits')
-
-    ftpnt = footprints.Footprints(fname + '.h5')
-
-    ftpnt.save_images([img.array], [noise_var], [dummy_mask], [dummy_background],
-                      segment_index=0, telescope='LSST', filter_name='r')
-    ftpnt.save_tel_metadata()
-
-
-if __name__ == '__main__':
-    main()

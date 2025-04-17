@@ -35,9 +35,6 @@ class IsolatedFootprintDetectionCorrection(object):
                                          485.8312133789061, 549.661381835937, 636.5133251953132, 744.6211181640588,
                                          895.7324267578117, 1100.019970703126, 1272.3333769531168, 1543.3866142578129,
                                          1915.0106503906247, 2469.883574218744, 3371.430322265627])
-        # Convert from nJy to instrumental flux, using calibrations from DC2 study
-        self.flux_bins_upper *= 0.016909286233862435
-        self.flux_bins_upper += -5.068159542178663
 
         # Fraction of galaxies in each flux bin that pass all isolated footprint criteria.
         # This is a lower bound on the probability of having sufficient flux to be detected.
@@ -75,7 +72,7 @@ class IsolatedFootprintDetectionCorrection(object):
         self.threshold = thresholds_by_patch[args.patch]
 
         # Values from psf.computeShape(psf.getAveragePosition()).getDeterminantRadius()
-        # in the Pipelines, computed for each patch.
+        # in the Pipelines, computed for each patch, in units of pixels.
         psf_sigma_pixels_by_patch = [1.729669842605186, 1.7181720639972147, 1.725759208900632, 1.7085647889876263,
                                      1.7232989543966706, 1.7021791104147888, 1.704162454575403, 1.7210361856157548,
                                      1.727087891347213, 1.7102169731522257, 1.7185169676055985, 1.7185975956446722,
@@ -88,7 +85,7 @@ class IsolatedFootprintDetectionCorrection(object):
                                      1.7136327767087582, 1.7103210875509547, 1.6895746981611557, 1.7174042752899277,
                                      1.7050120781898868, 1.7180974888727945, 1.7194154878871428, 1.7180596364640004,
                                      1.7305753239535984, 1.7196090126232195, 1.7019594518653811, 1.7135161695595709,
-                                     1.7171457989216676]
+                                     1.7171457989216676] # pixels
         self.psf_sigma_pixels = psf_sigma_pixels_by_patch[args.patch]
 
         self.valid_pixels = None
@@ -96,6 +93,7 @@ class IsolatedFootprintDetectionCorrection(object):
         # The Pipelines convolve the image with a Gaussian approximation to the PSF
         self.psf = self.approximate_gaussian_psf(self.psf_sigma_pixels)
         self.convolved_variance = None
+
 
     # n_sigma_for_kernel=7.0 comes from the default value of
     # sourceDetectionTask.config.nSigmaForKernel in the Pipelines
@@ -113,7 +111,10 @@ class IsolatedFootprintDetectionCorrection(object):
 
         return gaussian_psf_image
 
+
     def evaluate(self, model_image, roaster):
+        # Likelihood should be called before this,
+        # so that set_variance() sets the correct model variance.
         valid_pixels = (roaster.variance > 0)
         if roaster.mask is not None:
             valid_pixels &= roaster.mask.astype(bool)
@@ -146,10 +147,12 @@ class IsolatedFootprintDetectionCorrection(object):
 
         return neg_log_prob
 
+
     def find_neg_log_detected_frac(self, flux):
         idx = np.digitize(flux, self.flux_bins_upper, right=False)
         idx = min(idx, len(self.neg_log_detected_frac) - 1)
         return self.neg_log_detected_frac[idx]
+
 
     def __call__(self, model_image, roaster):
         # Convert model_image into a numpy array
@@ -184,7 +187,7 @@ class IsolatedFootprintDetectionCorrection(object):
         # made here break down).
         # Assume a single galsim_galaxy.GalsimGalaxyModel source.
         model = roaster.src_models[0]
-        flux = model.params.flux[0]
+        flux = model.params.flux[0] # nJy
         neg_log_detected_frac = self.find_neg_log_detected_frac(flux)
 
         neg_log_prob = min(neg_log_prob, neg_log_detected_frac)

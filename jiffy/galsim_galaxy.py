@@ -45,14 +45,16 @@ PARAM_BOUNDS = {
     # hlr must be positive for a real source.
     # Overly large hlr values can cause major rendering slowdowns.
     'hlr': [0.00001, 6.0],
+    # e1, e2 must have absolute values < 1
     'e1': [-0.99, 0.99],
     'e2': [-0.99, 0.99],
-    # nJy flux must be positive for a real source.
-    'flux': [-np.inf, np.inf],
+    # nJy flux must be nonnegative.
+    'flux': [0, np.inf],
     'dx': [-np.inf, np.inf],
     'dy': [-np.inf, np.inf]
 }
 PARAM_CONSTRAINTS = (
+    # e must be < 1
     lambda params: params['e1'][0]**2 + params['e2'][0]**2 < 1,
 )
 
@@ -62,11 +64,14 @@ class LightProfile(object):
     def __init__(self):
         self.draw_method = None
 
+
     def init_params(self):
         raise NotImplementedError('Model not defined.')
 
+
     def light_profile(self, params, gsparams=None):
         raise NotImplementedError('Model not defined.')
+
 
 class CircularProfile(LightProfile):
     def init_params(self):
@@ -77,18 +82,19 @@ class CircularProfile(LightProfile):
                         ('flux', '<f8'),
                         ('dx', '<f8'),
                         ('dy', '<f8')]
-
         return param_defaults, param_dtypes
+
 
     def circular_profile(self, params, gsparams=None):
         raise NotImplementedError('Model not defined.')
+
 
     def light_profile(self, params, gsparams=None):
         gal = self.circular_profile(params, gsparams)
         gal = gal.shear(galsim.Shear(g1=params.e1[0],
                                      g2=params.e2[0]))
-
         return gal
+
 
 class Exponential(CircularProfile):
     def circular_profile(self, params, gsparams=None):
@@ -96,19 +102,21 @@ class Exponential(CircularProfile):
                                 flux=params.flux[0],
                                 gsparams=gsparams)    
 
+
 class DeVaucouleurs(CircularProfile):
     def circular_profile(self, params, gsparams=None):
         return galsim.DeVaucouleurs(half_light_radius=params.hlr[0],
                                 flux=params.flux[0],
                                 gsparams=gsparams)
 
+
 class Sersic(CircularProfile):
     def init_params(self):
         param_defaults, param_dtypes = super().init_params()
         param_defaults = (1.0,) + param_defaults
         param_dtypes = [('n', '<f8')] + param_dtypes
-
         return param_defaults, param_dtypes
+
 
     def circular_profile(self, params, gsparams=None):
         return galsim.Sersic(params.n[0],
@@ -116,19 +124,21 @@ class Sersic(CircularProfile):
                                 flux=params.flux[0],
                                 gsparams=gsparams)
 
+
 class Spergel(CircularProfile):
     def init_params(self):
         param_defaults, param_dtypes = super().init_params()
         param_defaults = (0.5,) + param_defaults
         param_dtypes = [('nu', '<f8')] + param_dtypes
-
         return param_defaults, param_dtypes
+
 
     def circular_profile(self, params, gsparams=None):
         return galsim.Spergel(params.nu[0],
                                 half_light_radius=params.hlr[0],
                                 flux=params.flux[0],
                                 gsparams=gsparams)
+
 
 model_type_by_name = {'Spergel': Spergel,
                         'Sersic': Sersic,
@@ -183,6 +193,7 @@ class GalsimGalaxyModel(object):
             maximum_fft_size = 24576
         )
 
+
     def init_psf(self, config, **kwargs):
         # Initialize the PSF model that will be convolved with the galaxy
         psf_model_class_name = config['model']['psf_class']
@@ -200,11 +211,13 @@ class GalsimGalaxyModel(object):
         if not self.sample_psf:
             self.static_psf = self.psf_model.get_model()
 
+
     def get_params(self):
         p = np.array([pv for pv in self.params[self.actv_params_gal][0]])
         if self.sample_psf:
             p = np.append(p, self.psf_model.get_params())
         return p
+
 
     def set_params(self, params):
         assert len(params) >= self.n_params
@@ -215,6 +228,7 @@ class GalsimGalaxyModel(object):
             valid_params = valid_params and self.psf_model.set_params(
                 params[len(self.actv_params_gal):])
         return valid_params
+
 
     def get_param_by_name(self, paramname):
         '''
@@ -227,6 +241,7 @@ class GalsimGalaxyModel(object):
         else:
             p = self.params[paramname][0]
         return p
+
 
     def set_param_by_name(self, paramname, value):
         '''
@@ -245,6 +260,7 @@ class GalsimGalaxyModel(object):
             self.params[paramname][0] = value
         return None
 
+
     def validate_params(self):
         '''
         Check that all model parameters are within allowed ranges
@@ -253,12 +269,11 @@ class GalsimGalaxyModel(object):
         '''
         # Run a series of validity checks
         # If any of them fail, immediately return False
-        def _inbounds(param, bounds):
-            return param >= bounds[0] and param <= bounds[1]
         for pname, _ in self.params.dtype.descr:
-            if not np.isfinite(self.params[pname][0]):
+            pval = self.params[pname][0]
+            if not np.isfinite(pval):
                 return False
-            if not _inbounds(self.params[pname][0], PARAM_BOUNDS[pname]):
+            if not (PARAM_BOUNDS[pname][0] <= pval <= PARAM_BOUNDS[pname][1]):
                 return False
         for constraint_satisfied in PARAM_CONSTRAINTS:
             if not constraint_satisfied(self.params):
@@ -267,79 +282,49 @@ class GalsimGalaxyModel(object):
         # All checks passed
         return True
 
+
     def get_psf(self):
         if self.sample_psf:
             return self.psf_model.get_model()
         else:
             return self.static_psf
 
-    def get_image(self, template_image=None, ngrid_x=None, ngrid_y=None,
-        scale=None, gain=1.0):
+
+    def get_image(self, template_image, gain=1.0, bias=0.0, photo_calib=1.0):
         '''
         Render a GalSim Image object from the parametric galaxy model.
         
         Parameters
         ----------
-        image : None, optional
+        template_image : galsim.Image
             Preexisting Image base to draw on top of.
             Must already have the desired wcs or scale.
-            If None, the other parameters are used to construct a new Image.
-        ngrid_x : int, optional
-            A newly-created Image is this many pixels wide, if image=None.
-        ngrid_y : int, optional
-            A newly-created Image is this many pixels high, if image=None.
-        scale : float, optional
-            Used to estimate a good image size.
-            A newly-created Image has this pixel scale, if image=None.
         gain : float, optional
             Gain to use for drawing.
+        bias : float, optional
+            Bias to add to each image pixel.
+        photo_calib : float, optional
+            Number by which to multiply the model's flux parameter,
+            to get instrumental (image) flux
         
         Returns
         -------
         galsim.Image
             Galsim Image with this this galaxy's rendered image added to it.
         '''        
-        if template_image is None:
-            template_image = galsim.ImageF(
-                ngrid_x, ngrid_y, scale=scale, init_value=0.)
-
-        # If flux is non-positive, treat this as a zero-light profile and terminate early.
+        # If model flux is non-positive,
+        # treat this as a zero-light profile and terminate early.
         if self.params.flux[0] <= 0:
             return template_image
 
         gal = self.model_type.light_profile(
             self.params, gsparams=self.gsparams)
-        obj = galsim.Convolve(gal, self.get_psf(), gsparams=self.gsparams)
+        gal = gal.withFlux(photo_calib * params.flux[0])
+        gal = galsim.Convolve(gal, self.get_psf(), gsparams=self.gsparams)
         offset = galsim.PositionD(self.params.dx[0], self.params.dy[0])
                 
-        gal_image = obj.drawImage(
+        gal_image = gal.drawImage(
             image=template_image, gain=gain, offset=offset,
             add_to_image=True, method=self.draw_method)
         
         return gal_image
-
-
-if __name__ == '__main__':
-    '''
-    Make a default test footprint file
-    '''
-    import footprints
-
-    gg = GalsimGalaxyModel()
-    img = gg.get_image(ngrid_x=64, ngrid_y=64)
-    noise_var = 1.e-8
-    noise = galsim.GaussianNoise(sigma=np.sqrt(noise_var))
-    img.addNoise(noise)
-
-    dummy_mask = 1.0
-    dummy_background = 0.0
-
-    fname = '../data/TestData/jiffy_gg_image'
-
-    galsim.fits.write(img, fname + '.fits')
-
-    ftpnt = footprints.Footprints(fname + '.h5')
-
-    ftpnt.save_images([img.array], [noise_var], [dummy_mask], [dummy_background],
-                    segment_index=0, telescope='LSST', filter_name='r')
-    ftpnt.save_tel_metadata()

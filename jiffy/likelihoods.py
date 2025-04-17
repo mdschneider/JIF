@@ -6,6 +6,7 @@ class EmptyLikelihood(object):
     def __init__(self, *args, **kwargs):
         pass
 
+
     def __call__(self, *args, **kwargs):
         return 0.0
 
@@ -14,26 +15,30 @@ class GaussianLikelihood(object):
     def __init__(self, args=None):
         pass
 
-    def evaluate(self, data_image, model_image, variance, mask):
-        valid_pixels = (variance > 0)
-        if mask is not None:
-            valid_pixels &= mask.astype(bool)
+
+    def evaluate(self, model_image, roaster):
+        valid_pixels = (roaster.variance > 0)
+        valid_pixels &= model_image >= roaster.bias
+        if roaster.mask is not None:
+            valid_pixels &= roaster.mask.astype(bool)
 
         if np.sum(valid_pixels) == 0:
             return 0.0
 
-        logden = -0.5 * np.log(2 * np.pi * variance)
+        logden = -0.5 * np.log(2 * np.pi * roaster.variance)
         loglike_normalization = np.sum(logden[valid_pixels])
 
-        delta = data_image - model_image
-        sum_chi_sq = np.sum(delta[valid_pixels]**2 / variance[valid_pixels])
+        delta = roaster.data - model_image
+        sum_chi_sq = np.sum(delta[valid_pixels]**2 / roaster.variance[valid_pixels])
 
         res = -0.5 * sum_chi_sq + loglike_normalization
 
         return res
 
+
     def set_variance(self, model_image, roaster):
-        return roaster.variance
+        pass
+
 
     def __call__(self, model_image, roaster):
         # Convert model_image into a numpy array
@@ -45,11 +50,9 @@ class GaussianLikelihood(object):
         elif not isinstance(model_image, np.ndarray):
             model_image = np.array(model_image)
 
-        data_image = roaster.data
         variance = self.set_variance(model_image, roaster)
-        mask = roaster.mask
 
-        res = self.evaluate(data_image, model_image, variance, mask)
+        res = self.evaluate(model_image, roaster)
 
         return res
 
@@ -87,11 +90,9 @@ class LinearGaussianLikelihood(GaussianLikelihood):
         self.var_slope = var_slopes_by_patch[args.patch]
         self.var_intercept = var_intercepts_by_patch[args.patch]
 
-    def set_variance(self, model_image, roaster):
-        variance = self.var_slope * model_image + self.var_intercept
 
-        roaster.variance = variance
-        return variance
+    def set_variance(self, model_image, roaster):
+        roaster.variance = self.var_slope * model_image + self.var_intercept
 
 
 likelihoods = {None: False,
@@ -101,6 +102,7 @@ likelihoods = {None: False,
     'LinearGaussianLikelihood': LinearGaussianLikelihood,
     'Gaussian': GaussianLikelihood,
     'GaussianLikelihood': GaussianLikelihood}
+
 
 def initialize_likelihood(form=None, module=None, args=None, **kwargs):
     if module is None:

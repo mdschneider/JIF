@@ -46,7 +46,7 @@ import emcee
 
 import jiffy
 from . import priors, likelihoods, detections
-import footprints
+
 
 class Roaster(object):
     '''
@@ -76,18 +76,17 @@ class Roaster(object):
         self.init_detection_correction(args)
 
         # Numerical objects describing the pixel data in a footprint
-        self.wcs_matrix = None
-        self.bounds_arr = None
+        self.data = None
         self.ngrid_x = None
         self.ngrid_y = None
-        self.noise_var = None
+        self.mask = None
         self.variance = None
+        self.wcs_matrix = None
+        self.bounds = None
+        self.bias = 0.0
         self.scale = 0.2
         self.gain = 1.0
-        self.data = None
-        self.mask = None
-        self.bkg = None
-        self.loglike_normalization = None
+        self.photo_calib = 1.0 # inst flux / nJy
         # Load the values of these objects from supplied data
         self.load_and_import_data()
 
@@ -157,12 +156,14 @@ class Roaster(object):
         self.prior = priors.initialize_prior(
             form, module, args, **kwargs)
 
+
     # Construct the function used to compute the log-likelihood
     def init_likelihood(self, args=None):
         form, module, kwargs = self.parse_init_config('likelihood')
 
         self.likelihood = likelihoods.initialize_likelihood(
             form, module, args, **kwargs)
+
 
     # Construct the function used to compute detection corrections
     # to the log-likelihood
@@ -219,53 +220,42 @@ class Roaster(object):
         return None
 
 
-    def import_data(self, pix_dat_array, wcs_matrix, bounds_arr,
-                    noise_var=None, variance=None,
-                    mask=1, bkg=0, scale=0.2, gain=1.0):
+    def import_data(self, data=None,
+        variance=None, mask=None,
+        wcs_matrix=None, bounds=None,
+        bias=0, scale=0.2, gain=1.0, photo_calib=1.0):
         '''
         Import the pixel data and noise variance for a footprint
         '''
-        if pix_dat_array is not None:
-            self.ngrid_y, self.ngrid_x = pix_dat_array.shape
-        self.data = pix_dat_array
+        if data is not None:
+            self.ngrid_y, self.ngrid_x = data.shape
+        self.data = data
         self.wcs_matrix = wcs_matrix
-        self.bounds_arr = bounds_arr
-        self.noise_var = noise_var
+        self.bounds = bounds
         self.variance = variance
         self.mask = mask
-        self.bkg = bkg
+        self.bias = bias
         self.scale = scale
         self.gain = gain
+        self.photo_calib = photo_calib
 
-
-    def _load_array(item):
-        if isinstance(item, str):
-            item = np.load(item)
-        return item
 
     def load_and_import_data(self):
-        wcs_matrix, bounds_arr = None, None
-        data, noise_var, variance = None, None, None
-        mask, bkg, scale, gain = None, None, None, None
+        kwargs = {'data': None,
+            'variance': None, 'mask': None,
+            'wcs_matrix': None, 'bounds': None,
+            'bias': 0.0, 'scale': 0.2, 'gain': 1.0, 'photo_calib': 1.0}
         
         if 'footprint' in self.config:
             fp = self.config['footprint']
-            data = _load_array(fp['image']) if 'image' in fp else None
-            wcs_matrix = _load_array(fp['wcs_matrix']) if 'wcs_matrix' in fp else None
-            bounds_arr = _load_array(fp['bounds']) if 'bounds' in fp else None
-            noise_var = _load_array(fp['noise_var']) if 'noise_var' in fp else None
-            variance = _load_array(fp['variance']) if 'variance' in fp else None
-            mask = _load_array(fp['mask']) if 'mask' in fp else None
-            scale = _load_array(fp['scale']) if 'scale' in fp else 0.2
-            gain = _load_array(fp['gain']) if 'gain' in fp else 1.0
-            bkg = _load_array(fp['background']) if 'background' in fp else 0.0
-        
-        if 'io' in self.config and 'infile' in self.config['io']:
-            data, noise_var, mask, bkg, scale, gain = footprints.load_image(self.config['io']['infile'],
-                segment=args.footprint_number, filter_name=self.config['io']['filter'])
-        
-        self.import_data(data, wcs_matrix, bounds_arr, noise_var, variance,
-                         mask=mask, bkg=bkg, scale=scale, gain=gain)
+            for key in kwargs:
+                if key in fp:
+                    if isinstance(fp[key], str):
+                        kwargs[key] = np.load(fp[key])
+                    else:
+                        kwargs[key] = fp[key]
+                
+        self.import_data(**kwargs)
 
 
     def initialize_param_values(self, param_file_name):
@@ -292,23 +282,23 @@ class Roaster(object):
         if self.wcs_matrix is not None:
             wcs = galsim.JacobianWCS(self.wcs_matrix[0, 0], self.wcs_matrix[0, 1],
                                      self.wcs_matrix[1, 0], self.wcs_matrix[1, 1])
-            if self.bounds_arr is not None:
-                bounds = galsim.BoundsI(*self.bounds_arr)
-                model_image = galsim.ImageF(wcs=wcs, bounds=bounds, init_value=0.)
+            if self.bounds is not None:
+                bounds = galsim.BoundsI(*self.bounds)
+                model_image = galsim.ImageF(wcs=wcs, bounds=bounds, init_value=self.bias)
             else:
                 model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
-                                            wcs=wcs, init_value=0.)
-        elif self.bounds_arr is not None:
-            bounds = galsim.BoundsI(*self.bounds_arr)
-            model_image = galsim.ImageF(scale=self.scale, bounds=bounds, init_value=0.)
+                                            wcs=wcs, init_value=self.bias)
+        elif self.bounds is not None:
+            bounds = galsim.BoundsI(*self.bounds)
+            model_image = galsim.ImageF(scale=self.scale, bounds=bounds, init_value=self.bias)
         else:
             model_image = galsim.ImageF(self.ngrid_x, self.ngrid_y,
-                                        scale=self.scale, init_value=0.)
+                                        scale=self.scale, init_value=self.bias)
         
         # Try to draw all the sources on the template image
         for isrc in range(self.num_sources):
-            model_image = self.src_models[isrc].get_image(template_image=model_image,
-                                                              gain=self.gain)
+            model_image = self.src_models[isrc].get_image(
+                template_image=model_image, gain=self.gain, photo_calib=self.photo_calib)
             if model_image is None:
                 return None
         
