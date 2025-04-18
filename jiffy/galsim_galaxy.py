@@ -311,7 +311,7 @@ class GalsimGalaxyModel(object):
         -------
         galsim.Image
             Galsim Image with this this galaxy's rendered image added to it.
-        '''        
+        '''
         # If model flux is non-positive,
         # treat this as a zero-light profile and terminate early.
         if self.params.flux[0] <= 0:
@@ -319,10 +319,10 @@ class GalsimGalaxyModel(object):
 
         gal = self.model_type.light_profile(
             self.params, gsparams=self.gsparams)
-        gal = gal.withFlux(photo_calib * params.flux[0])
+        gal = gal.withFlux(photo_calib * self.params.flux[0])
         gal = galsim.Convolve(gal, self.get_psf(), gsparams=self.gsparams)
         offset = galsim.PositionD(self.params.dx[0], self.params.dy[0])
-                
+
         gal_image = gal.drawImage(
             image=template_image, gain=gain, offset=offset,
             add_to_image=True, method=self.draw_method)

@@ -2,6 +2,7 @@ import numpy as np
 import pickle
 from jiffy.galsim_galaxy import PARAM_BOUNDS
 from functools import partial
+from scipy.stats import norm, multivariate_normal
 
 
 class EmptyPrior(object):
@@ -53,7 +54,7 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
         # and log-flux (in log-nJy),
         # for use by MAP fitter
         self.mean_hlrFlux = prior_params['mean_hlrFlux'][galtype]
-        self.cov_hlrFlux = prior_params['inv_cov_hlrFlux'][galtype]
+        self.cov_hlrFlux = prior_params['cov_hlrFlux'][galtype]
 
         # Correlated log-hlr, log-flux, dr, and e distribution
         # from 4D Bayesian Gaussian mixture model fit
@@ -72,16 +73,17 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
         self.psf_fwhm_mean = 0.763591484431654 # arcsec
         self.psf_fwhm_std = 0.00582026355508698 # arcsec
 
+        self.psf_e_correlation = 0.07745036650645518
         self.psf_e_means_0 = [0.00172415, 0.00211098, 0.00146727, 0.00118756]
         self.psf_e_means_1 = [-0.00022855, -0.00011055, -0.0007743, 0.00047993]
         self.psf_e_stds_0 = [0.00025075, 0.00046715, 0.00037621, 0.00054171]
         self.psf_e_stds_1 = [0.00026504, 0.00052926, 0.00062448, 0.00058792]
         self.psf_e_weights = [0.41875398, 0.41875476, 0.19374868, 0.19374944]
         self.psf_e_n_components = len(self.psf_e_weights)
-        self.psf_e_sum_weights = np.sum(psf_e_weights)
+        self.psf_e_sum_weights = np.sum(self.psf_e_weights)
         self.psf_e_means = []
         self.psf_e_covs = []
-        for idx in self.psf_e_n_components:
+        for idx in range(self.psf_e_n_components):
             self.psf_e_means.append([self.psf_e_means_0[idx], self.psf_e_means_1[idx]])
             std0, std1 = self.psf_e_stds_0[idx], self.psf_e_stds_1[idx]
             corr = self.psf_e_correlation
@@ -95,7 +97,7 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
 
 
     def logprob_psf_fwhm(self, psf_fwhm):
-        return norm.logpdf(psf_fwhm, loc=self.psf_fwhm_mean, scale=psf_fwhm_std)
+        return norm.logpdf(psf_fwhm, loc=self.psf_fwhm_mean, scale=self.psf_fwhm_std)
 
 
     def logprob_psf_e1e2(self, psf_e1, psf_e2):
@@ -150,13 +152,11 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
             lnprior_psf_fwhm = self.logprob_psf_fwhm(psf_fwhm)
         if psf_e1 is not None and psf_e2 is not None:
             lnprior_psf_e1e2 = self.logprob_psf_e1e2(psf_e1, psf_e2)
-        lnprior_psf = lnprior_psf_fwhm + lnprior_psf_e1e2
 
         # Combined prior
-        lnprior = lnprior_4features + lnprior_e_angle + lnprior_dr_angle + lnprior_psf
-
-        all_args = all_gal_args + all_psf_args
-        if np.all([np.issubdtype(type(x), np.number) for x in all_args]):
+        lnprior = (lnprior_4features + lnprior_e_angle + lnprior_dr_angle
+            + lnprior_psf_fwhm + lnprior_psf_e1e2)
+        if np.all([np.issubdtype(type(x), np.number) for x in all_gal_args]):
             lnprior = float(lnprior)
 
         return lnprior

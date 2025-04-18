@@ -220,24 +220,12 @@ class Roaster(object):
         return None
 
 
-    def import_data(self, data=None,
-        variance=None, mask=None,
-        wcs_matrix=None, bounds=None,
-        bias=0, scale=0.2, gain=1.0, photo_calib=1.0):
-        '''
-        Import the pixel data and noise variance for a footprint
-        '''
-        if data is not None:
-            self.ngrid_y, self.ngrid_x = data.shape
-        self.data = data
-        self.wcs_matrix = wcs_matrix
-        self.bounds = bounds
-        self.variance = variance
-        self.mask = mask
-        self.bias = bias
-        self.scale = scale
-        self.gain = gain
-        self.photo_calib = photo_calib
+    def import_data(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        if 'data' in kwargs and kwargs['data'] is not None:
+            self.ngrid_y, self.ngrid_x = kwargs['data'].shape
 
 
     def load_and_import_data(self):
@@ -254,7 +242,7 @@ class Roaster(object):
                         kwargs[key] = np.load(fp[key])
                     else:
                         kwargs[key] = fp[key]
-                
+        
         self.import_data(**kwargs)
 
 
@@ -344,9 +332,9 @@ class Roaster(object):
                     model_image, self)
             except:
                 return np.nan
+
             loglike += detection_correction
         
-        loglike = float(loglike)
         return loglike
 
 
@@ -362,14 +350,17 @@ class Roaster(object):
 
         # Compute the log-prior and log-likelihood,
         # using the newly-set Roaster params.
-        logpost = self.logprior()
-        if not np.isfinite(logpost):
+        logprior = self.logprior()
+        if not np.isfinite(logprior):
             # We consider parameters with non-finite log-prior values
             # to be out of the support of the prior.
             # Terminate early without computing the likelihood,
             # which would waste time and potentially raise errors.
-            return logpost
-        logpost += self.loglike()
+            return logprior
+
+        loglike = self.loglike()
+
+        logpost = logprior + loglike
 
         return logpost
 
