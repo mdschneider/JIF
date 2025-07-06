@@ -38,6 +38,7 @@ import h5py
 
 import os
 import sys
+import time
 
 import galsim
 from galsim.errors import GalSimFFTSizeError, GalSimError
@@ -350,7 +351,10 @@ class Roaster(object):
 
         # Compute the log-prior and log-likelihood,
         # using the newly-set Roaster params.
-        logprior = self.logprior()
+        try:
+            logprior = self.logprior()
+        except:
+            logprior = np.nan
         if not np.isfinite(logprior):
             # We consider parameters with non-finite log-prior values
             # to be out of the support of the prior.
@@ -358,7 +362,10 @@ class Roaster(object):
             # which would waste time and potentially raise errors.
             return logprior
 
-        loglike = self.loglike()
+        try:
+            loglike = self.loglike()
+        except:
+            loglike = np.nan
 
         logpost = logprior + loglike
 
@@ -378,23 +385,97 @@ class Roaster(object):
         return logpost
 
 
-def run_sampler(args, sampler, p0, nsamples, rstr):
-    burned_in_state = p0
+def run_mcmc_time_limited(sampler, time_limit, initial_state, nsteps, **kwargs):
+    '''
+    Based on emcee's ``EnsembleSampler.run_mcmc()`` function, which is just a
+    simple wrapper to iterate ``EnsembleSampler.sample()`` for nsteps.
+    Modified here to accommodate a time limit constraint.
+    
+    Args:
+        sampler: An ``EnsembleSampler`` instance.
+        time_limit: Number of seconds allowed in which to run all requested
+            MCMC sampling (float).
+        initial_state: The initial state or position vector. Can also be
+            ``None`` to resume from where ``run_mcmc`` left off the
+            last time it executed.
+        nsteps: The number of steps to run.
+
+    Other parameters are directly passed to `sample`.
+
+    This method returns the most recent result from `sample`,
+    along with the total sampling time and number of sampling steps taken.
+
+    '''
+    if initial_state is None:
+        if sampler._previous_state is None:
+            raise ValueError(
+                "Cannot have `initial_state=None` if run_mcmc has never "
+                "been called."
+            )
+        initial_state = sampler._previous_state
+
+    results = None
+    run_time = 0
+    n_steps_run = 0
+
+    t0 = time.time()
+    for results in sampler.sample(initial_state, iterations=nsteps, **kwargs):
+        n_steps_run += 1
+        run_time = time.time() - t0
+        if run_time >= time_limit:
+            break
+
+    # Store so that the ``initial_state=None`` case will work
+    sampler._previous_state = results
+
+    return results, run_time, n_steps_run
+
+
+def run_sampler(args, sampler, initial_state, nsamples, rstr):
     nburn = rstr.config['sampling']['nburn']
+
+    time_limit = args.time_limit
+    if time_limit < 0:
+        time_limit = np.inf
+
+    accumulated_run_time = 0
+    accumulated_n_steps_run = 0
+
+    # Burn in, if called for.
     if nburn > 0:
         if args.verbose:
             print('Burning in')
-        burned_in_state = sampler.run_mcmc(p0, nburn, progress=args.show_progress_bar)
+        initial_state, run_time, n_steps_run = run_mcmc_time_limited(
+            sampler, time_limit - accumulated_run_time, initial_state, nburn,
+            progress=args.show_progress_bar)
+
+        accumulated_run_time += run_time
+        accumulated_n_steps_run += n_steps_run
+
         sampler.reset()
-    if args.verbose:
-        print('Sampling')
-    final_state = sampler.run_mcmc(burned_in_state, nsamples, progress=args.show_progress_bar)
+
+    # Run the main MCMC sampling sequence.
+    if accumulated_run_time >= time_limit:
+        if args.verbose:
+            print('WARNING: Time limit reached during burn in. No samples retained.')
+    else:
+        if args.verbose:
+            print('Sampling')
+        final_state, run_time, n_steps_run = run_mcmc_time_limited(
+            sampler, time_limit - accumulated_run_time, initial_state, nsamples,
+            progress=args.show_progress_bar)
+
+        accumulated_run_time += run_time
+        if (accumulated_run_time > time_limit) and args.verbose:
+            print('Time limit exceeded during sampling.')
+        accumulated_n_steps_run += n_steps_run
+
     pps = sampler.get_chain()
     lnps = sampler.get_log_prob()
-    return pps, lnps
+    return pps, lnps, accumulated_run_time, accumulated_n_steps_run
 
 
-def do_sampling(args, rstr, return_samples=False, write_results=True, moves=None):
+def do_sampling(args, rstr, write_results=True, moves=None):
     '''
     Execute MCMC sampling for posterior model inference
     '''
@@ -413,11 +494,13 @@ def do_sampling(args, rstr, return_samples=False, write_results=True, moves=None
 
     if args.unparallelize:
         sampler = emcee.EnsembleSampler(nwalkers, nvars, rstr, moves=moves)
-        pps, lnps = run_sampler(args, sampler, p0, nsamples, rstr)
+        pps, lnps, accumulated_run_time, accumulated_n_steps_run = run_sampler(
+            args, sampler, p0, nsamples, rstr)
     else:
         with Pool() as pool:
             sampler = emcee.EnsembleSampler(nwalkers, nvars, rstr, moves=moves, pool=pool)
-            pps, lnps = run_sampler(args, sampler, p0, nsamples, rstr)
+            pps, lnps, accumulated_run_time, accumulated_n_steps_run = run_sampler(
+                args, sampler, p0, nsamples, rstr)
     
     if args.cluster_walkers:
         pps, lnps = cluster_walkers(pps, lnps,
@@ -425,10 +508,8 @@ def do_sampling(args, rstr, return_samples=False, write_results=True, moves=None
 
     if write_results:
         write_to_h5(args, pps, lnps, rstr)
-    if return_samples:
-        return pps, lnps
-    else:
-        return None
+
+    return pps, lnps, accumulated_run_time, accumulated_n_steps_run
 
 
 def cluster_walkers(pps, lnps, thresh_multiplier=1):
@@ -514,6 +595,9 @@ def initialize_arg_parser():
                         help='Enable verbose messaging.')
     parser.add_argument('--show_progress_bar', action='store_true',
                         help='Show progress bar.')
+
+    parser.add_argument('--time_limit', type=float, default=-1,
+                        help='Maximum time allowed for sampling (in seconds).')
        
     parser.add_argument('--cluster_walkers', action='store_true',
                         help='Throw away outlier walkers.')

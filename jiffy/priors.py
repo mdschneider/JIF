@@ -19,6 +19,87 @@ class EmptyPrior(object):
         return 0.0
 
 
+class IsolatedFootprintPrior_justPSF_DC2(object):
+    def __init__(self, args=None, **kwargs):
+        self.psf_fwhm_mean = 0.763591484431654 # arcsec
+        self.psf_fwhm_std = 0.00582026355508698 # arcsec
+
+        self.psf_e_correlation = 0.07745036650645518
+        self.psf_e_means_0 = [0.00172415, 0.00211098, 0.00146727, 0.00118756]
+        self.psf_e_means_1 = [-0.00022855, -0.00011055, -0.0007743, 0.00047993]
+        self.psf_e_stds_0 = [0.00025075, 0.00046715, 0.00037621, 0.00054171]
+        self.psf_e_stds_1 = [0.00026504, 0.00052926, 0.00062448, 0.00058792]
+        self.psf_e_weights = [0.41875398, 0.41875476, 0.19374868, 0.19374944]
+        self.psf_e_n_components = len(self.psf_e_weights)
+        self.psf_e_sum_weights = np.sum(self.psf_e_weights)
+        self.psf_e_means = []
+        self.psf_e_covs = []
+        for idx in range(self.psf_e_n_components):
+            self.psf_e_means.append([self.psf_e_means_0[idx], self.psf_e_means_1[idx]])
+            std0, std1 = self.psf_e_stds_0[idx], self.psf_e_stds_1[idx]
+            corr = self.psf_e_correlation
+            cov = [[std0**2, corr * std0 * std1],
+                   [corr * std0 * std1, std1**2]]
+            self.psf_e_covs.append(cov)
+
+
+    def logprob_psf_fwhm(self, psf_fwhm):
+        return norm.logpdf(psf_fwhm, loc=self.psf_fwhm_mean, scale=self.psf_fwhm_std)
+
+
+    def logprob_psf_e1e2(self, psf_e1, psf_e2):
+        pdf = 0
+        for idx in range(self.psf_e_n_components):
+            weight = self.psf_e_weights[idx]
+            mean = self.psf_e_means[idx]
+            cov = self.psf_e_covs[idx]
+            pdf += weight * multivariate_normal.pdf(
+                [psf_e1, psf_e2], mean=mean, cov=cov) / self.psf_e_sum_weights
+        return np.log(pdf)
+
+
+    def evaluate(self, psf_fwhm, psf_e1, psf_e2):
+        # If anything is nan, return nan.
+        # Otherwise, if anything is infinite, say that it falls outside the prior's support.
+        # For anything explicitly outside the prior's support, return -inf (i.e., log(0)).
+        all_psf_args = [psf_fwhm, psf_e1, psf_e2]
+        for param in all_psf_args:
+            if param is not None:
+                if np.any(np.isnan(param)):
+                    return np.nan
+                if not np.all(np.isfinite(param)):
+                    return -np.inf
+        if (psf_e1 is None and psf_e2 is not None) or (psf_e1 is not None and psf_e2 is None):
+            return np.nan
+
+        # Prior for PSF parameters
+        lnprior_psf_fwhm, lnprior_psf_e1e2 = 0, 0
+        if psf_fwhm is not None:
+            lnprior_psf_fwhm = self.logprob_psf_fwhm(psf_fwhm)
+        if psf_e1 is not None and psf_e2 is not None:
+            lnprior_psf_e1e2 = self.logprob_psf_e1e2(psf_e1, psf_e2)
+
+        # Combined prior
+        lnprior = lnprior_psf_fwhm + lnprior_psf_e1e2
+        if np.all([np.issubdtype(type(x), np.number) for x in all_psf_args]):
+            lnprior = float(lnprior)
+
+        return lnprior
+
+
+    def __call__(self, src_models):
+        param_names_psf = ['psf_fwhm', 'psf_e1', 'psf_e2']
+
+        # Fill kwargs with the model parameter values
+        kwargs = dict()
+        for param_name in param_names_psf:
+            if param_name in src_models[0].actv_params_psf:
+                kwargs[param_name] = src_models[0].psf_model.params[param_name][0]
+
+        # Compute and return the log-prior with these model parameter values
+        return self.evaluate(**kwargs)
+
+
 # ---------------------------------------------------------------------------------------
 # Prior distributions for interim sampling of galaxy model parameters
 # ---------------------------------------------------------------------------------------
@@ -183,6 +264,8 @@ class IsolatedFootprintPrior_FixedNu_DC2(object):
 priors = {None: EmptyPrior,
           'Empty': EmptyPrior,
           'EmptyPrior': EmptyPrior,
+          'IsolatedFootprintPrior_justPSF': IsolatedFootprintPrior_justPSF_DC2,
+          'IsolatedFootprintPrior_justPSF_DC2': IsolatedFootprintPrior_justPSF_DC2,
           'IsolatedFootprintPrior_FixedNu': IsolatedFootprintPrior_FixedNu_DC2,
           'IsolatedFootprintPrior_FixedNu_DC2': IsolatedFootprintPrior_FixedNu_DC2
          }
